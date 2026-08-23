@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
@@ -37,20 +38,26 @@ export function AuthPage() {
     }
   }
 
-  async function handleGoogleSignIn() {
-    setError(null);
-    setLoading(true);
-    try {
-      const { error: googleError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.location.origin },
-      });
-      if (googleError) throw googleError;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
-      setLoading(false);
-    }
+ async function handleGoogleSignIn() {
+  setError(null);
+  setLoading(true);
+
+  try {
+    const redirectTo = Capacitor.isNativePlatform()
+      ? 'com.vow.app://callback'
+      : window.location.origin;
+
+    const { error: googleError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    });
+
+    if (googleError) throw googleError;
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
+    setLoading(false);
   }
+}
 
   return (
     <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12">
