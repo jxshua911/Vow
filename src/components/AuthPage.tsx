@@ -1,3 +1,4 @@
+import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
