@@ -9,13 +9,25 @@ export async function initNativeAuthListener() {
       return;
     }
 
-    const urlObj = new URL(url);
-    const code = urlObj.searchParams.get('code');
+    try {
+      const urlObj = new URL(url);
+      const code = urlObj.searchParams.get('code');
 
-    if (!code) {
-      return;
+      if (!code) {
+        console.error('[VOW OAuth] Callback received without authorization code.');
+        return;
+      }
+
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+      if (error) {
+        console.error('[VOW OAuth] Failed to exchange code for session:', error);
+        return;
+      }
+
+      console.log('[VOW OAuth] Session established successfully.');
+    } catch (error) {
+      console.error('[VOW OAuth] Callback handling failed:', error);
     }
-
-    await supabase.auth.exchangeCodeForSession(code);
   });
 }
