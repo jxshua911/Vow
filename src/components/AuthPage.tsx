@@ -26,39 +26,64 @@ export function AuthPage() {
 
     try {
       if (mode === 'signup') {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
         if (signUpError) throw signUpError;
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        const { error: signInError } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+
         if (signInError) throw signInError;
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Something went wrong. Please try again.',
+      );
     } finally {
       setLoading(false);
     }
   }
 
- async function handleGoogleSignIn() {
-  setError(null);
-  setLoading(true);
+  async function handleGoogleSignIn() {
+    setError(null);
+    setLoading(true);
 
-  try {
-    const redirectTo = Capacitor.isNativePlatform()
-      ? 'com.vow.app://callback'
-      : window.location.origin;
+    try {
+      const redirectTo = Capacitor.isNativePlatform()
+        ? 'com.vow.app://callback'
+        : window.location.origin;
 
-    const { error: googleError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo },
-    });
+      const { data, error: googleError } =
+        await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo,
+            skipBrowserRedirect: Capacitor.isNativePlatform(),
+          },
+        });
 
-    if (googleError) throw googleError;
-  } catch (err) {
-    setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
-    setLoading(false);
+      if (googleError) throw googleError;
+
+      if (Capacitor.isNativePlatform() && data?.url) {
+        await Browser.open({ url: data.url });
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Google sign-in failed. Please try again.',
+      );
+      setLoading(false);
+    }
   }
-}
 
   return (
     <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12">
@@ -71,7 +96,7 @@ export function AuthPage() {
           </p>
         </div>
 
-        {/* Mode toggle — clean, no border overlap */}
+        {/* Mode toggle */}
         <div className="flex border border-vow-border mb-8">
           <button
             onClick={() => switchMode('signup')}
@@ -83,6 +108,7 @@ export function AuthPage() {
           >
             Create account
           </button>
+
           <button
             onClick={() => switchMode('signin')}
             className={`flex-1 py-3 text-sm transition-colors border-l border-vow-border ${
@@ -108,7 +134,9 @@ export function AuthPage() {
         {/* Divider */}
         <div className="flex items-center gap-4 mb-6">
           <div className="flex-1 h-px bg-vow-border" />
-          <span className="text-xs text-vow-muted uppercase tracking-wide">or</span>
+          <span className="text-xs text-vow-muted uppercase tracking-wide">
+            or
+          </span>
           <div className="flex-1 h-px bg-vow-border" />
         </div>
 
@@ -116,8 +144,10 @@ export function AuthPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="vow-label block mb-2">Email</label>
+
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" />
+
               <input
                 type="email"
                 required
@@ -131,8 +161,10 @@ export function AuthPage() {
 
           <div>
             <label className="vow-label block mb-2">Password</label>
+
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" />
+
               <input
                 type="password"
                 required
@@ -146,7 +178,13 @@ export function AuthPage() {
           </div>
 
           {error && (
-            <p className="text-sm text-vow-ink leading-relaxed" style={{ borderLeft: '2px solid #111', paddingLeft: '0.75rem' }}>
+            <p
+              className="text-sm text-vow-ink leading-relaxed"
+              style={{
+                borderLeft: '2px solid #111',
+                paddingLeft: '0.75rem',
+              }}
+            >
               {error}
             </p>
           )}
@@ -156,7 +194,12 @@ export function AuthPage() {
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-vow-ink text-vow-bg text-sm font-medium py-3 hover:opacity-85 transition-opacity disabled:opacity-40"
           >
-            {loading ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Sign in'}
+            {loading
+              ? 'Please wait...'
+              : mode === 'signup'
+                ? 'Create account'
+                : 'Sign in'}
+
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
