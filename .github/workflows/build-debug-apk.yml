@@ -1,6 +1,9 @@
 name: Build Android Debug APK
 
 on:
+  push:
+    branches:
+      - capacitor-mobile
   workflow_dispatch: {}
 
 jobs:
@@ -22,6 +25,9 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Build web app
         env:
