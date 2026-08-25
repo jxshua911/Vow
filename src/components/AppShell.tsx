@@ -1,14 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import {
-  LayoutDashboard,
-  Target,
-  BookOpen,
-  ClipboardList,
-  User,
-  LogOut,
-  Plus,
-} from 'lucide-react';
+import { LogOut, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 export type View = 'dashboard' | 'goals' | 'journal' | 'review' | 'profile';
@@ -19,24 +11,128 @@ interface AppShellProps {
   children: ReactNode;
 }
 
+const navItems: {
+  view: View;
+  label: string;
+  icon: ReactNode;
+}[] = [
+  {
+    view: 'dashboard',
+    label: 'Dashboard',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        className="w-[21px] h-[21px]"
+        aria-hidden="true"
+      >
+        <rect x="4" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="14" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="4" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="14" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    ),
+  },
+  {
+    view: 'goals',
+    label: 'Goals',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        className="w-[21px] h-[21px]"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="12" cy="12" r="1.25" fill="currentColor" />
+      </svg>
+    ),
+  },
+  {
+    view: 'journal',
+    label: 'Journal',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        className="w-[21px] h-[21px]"
+        aria-hidden="true"
+      >
+        <path
+          d="M6 4.5H16.5C17.9 4.5 19 5.6 19 7V19.5H8.5C7.1 19.5 6 18.4 6 17V4.5Z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M6 17C6 15.6 7.1 14.5 8.5 14.5H19"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <path
+          d="M10 8H15M10 11H15"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    view: 'review',
+    label: 'Review',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        className="w-[21px] h-[21px]"
+        aria-hidden="true"
+      >
+        <path
+          d="M19 12A7 7 0 1 1 17 7"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M17 4.5V7.5H14"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    view: 'profile',
+    label: 'Profile',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        className="w-[21px] h-[21px]"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
+        <path
+          d="M5.5 19C6.4 15.8 8.6 14 12 14C15.4 14 17.6 15.8 18.5 19"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+];
+
 export function AppShell({
   currentView,
   onNavigate,
   children,
 }: AppShellProps) {
   const { session } = useAuth();
-
-  const navItems: {
-    view: View;
-    label: string;
-    icon: typeof Target;
-  }[] = [
-    { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { view: 'goals', label: 'Goals', icon: Target },
-    { view: 'journal', label: 'Journal', icon: BookOpen },
-    { view: 'review', label: 'Review', icon: ClipboardList },
-    { view: 'profile', label: 'Profile', icon: User },
-  ];
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -61,7 +157,16 @@ export function AppShell({
                   : 'text-vow-muted hover:text-vow-ink'
               }`}
             >
-              <item.icon className="w-4 h-4" />
+              <span
+                className={`flex items-center justify-center transition-opacity ${
+                  currentView === item.view
+                    ? 'opacity-100'
+                    : 'opacity-70'
+                }`}
+              >
+                {item.icon}
+              </span>
+
               {item.label}
             </button>
           ))}
@@ -82,41 +187,49 @@ export function AppShell({
         </div>
       </aside>
 
-      {/* Mobile header */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-vow-bg border-b border-vow-border flex items-center px-5">
+      {/* Mobile top bar */}
+      <header
+        className="md:hidden fixed top-0 left-0 right-0 z-40 bg-vow-bg border-b border-vow-border px-6 flex items-center"
+        style={{
+          height: 'calc(3.5rem + env(safe-area-inset-top))',
+          paddingTop: 'env(safe-area-inset-top)',
+        }}
+      >
         <h1 className="vow-heading text-xl text-vow-ink">VOW</h1>
       </header>
 
-      {/* Main content */}
-      <main className="md:ml-56 min-h-screen pt-14 md:pt-0 pb-20 md:pb-0">
-        <div className="px-5 md:px-12 py-7 md:py-12 max-w-4xl">
-          {children}
-        </div>
-      </main>
-
       {/* Mobile bottom navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-vow-bg border-t border-vow-border">
-        <div className="grid grid-cols-5 h-16">
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-vow-bg border-t border-vow-border"
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
+        <div className="grid grid-cols-5 min-h-16">
           {navItems.map((item) => {
-            const Icon = item.icon;
             const active = currentView === item.view;
 
             return (
               <button
                 key={item.view}
                 onClick={() => onNavigate(item.view)}
-                className={`flex flex-col items-center justify-center gap-1 transition-colors ${
-                  active ? 'text-vow-ink' : 'text-vow-muted'
+                className={`flex flex-col items-center justify-center gap-1 px-1 transition-colors ${
+                  active
+                    ? 'text-vow-ink'
+                    : 'text-vow-muted hover:text-vow-ink'
                 }`}
+                aria-label={item.label}
               >
-                <Icon
-                  className={`w-5 h-5 ${
-                    active ? 'stroke-[2.25]' : 'stroke-[1.5]'
+                <span
+                  className={`flex items-center justify-center transition-transform ${
+                    active ? 'scale-105' : ''
                   }`}
-                />
+                >
+                  {item.icon}
+                </span>
 
                 <span
-                  className={`text-[10px] leading-none ${
+                  className={`text-[10px] tracking-wide ${
                     active ? 'font-medium' : ''
                   }`}
                 >
@@ -127,6 +240,19 @@ export function AppShell({
           })}
         </div>
       </nav>
+
+      {/* Main content */}
+      <main
+        className="md:ml-56 min-h-screen"
+        style={{
+          paddingTop: 'calc(3.5rem + env(safe-area-inset-top))',
+          paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))',
+        }}
+      >
+        <div className="px-6 md:px-12 py-8 md:py-12 max-w-4xl">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }
@@ -143,14 +269,12 @@ export function PageHeader({
   return (
     <div className="flex items-start justify-between mb-8 pb-6 border-b border-vow-border">
       <div>
-        <h1 className="vow-heading text-3xl text-vow-ink mb-1">
+        <h1 className="vow-heading text-2xl md:text-3xl text-vow-ink mb-1">
           {title}
         </h1>
 
         {subtitle && (
-          <p className="text-vow-muted text-sm">
-            {subtitle}
-          </p>
+          <p className="text-vow-muted text-sm">{subtitle}</p>
         )}
       </div>
 
