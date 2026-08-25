@@ -4,10 +4,19 @@ import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
 import { isThisWeek, formatTime, formatRelative, dayName } from '@/lib/dates';
 import { PageHeader } from './AppShell';
-import { CheckCircle2, Circle, SkipForward, Move, ArrowRight, Calendar } from 'lucide-react';
+import { CheckCircle2, Circle, SkipForward, Move, Calendar } from 'lucide-react';
 import type { View } from './AppShell';
 
 interface DashboardProps { onNavigate: (view: View) => void; }
+
+function getFirstName(session: ReturnType<typeof useAuth>['session']) {
+  const metadata = session?.user?.user_metadata as Record<string, unknown> | undefined;
+  const fullName = typeof metadata?.full_name === 'string' ? metadata.full_name : typeof metadata?.name === 'string' ? metadata.name : '';
+  const firstName = fullName.trim().split(/\s+/)[0];
+  if (firstName) return firstName;
+  const emailName = session?.user?.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+  return emailName ? emailName.split(/\s+/)[0] : 'there';
+}
 
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { session } = useAuth();
@@ -36,11 +45,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   for (const s of sortedByDate) { if (s.status === 'completed') streak++; else break; }
   const now = new Date();
   const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 5);
-  if (loading) return <div><PageHeader title="Dashboard" /><div className="text-vow-muted text-sm">Loading...</div></div>;
+  const firstName = getFirstName(session);
+  if (loading) return <div><PageHeader title={`Welcome back, ${firstName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
   const statusIcons: Record<string, typeof CheckCircle2> = { completed: CheckCircle2, scheduled: Circle, skipped: SkipForward, moved: Move };
 
   return <div>
-    <PageHeader title="Dashboard" subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`} />
+    <PageHeader title={`Welcome back, ${firstName}`} subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`} />
     <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-10 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="This week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} /><StatCell label="Completion" value={`${completionPct}%`} /><StatCell label="Streak" value={`${streak}`} subtitle={streak === 0 ? 'Broken — honest count' : undefined} /></div>
     <div className="grid md:grid-cols-2 gap-12">
       <div>
