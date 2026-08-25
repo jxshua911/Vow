@@ -1,18 +1,15 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { PageHeader } from './AppShell';
 import { getNotificationPermission, requestNotificationPermission, scheduleTestNotification } from '@/lib/notifications';
 
 export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
-  const { data: session } = { data: null as any };
+  const { session } = useAuth();
   const [notificationStatus, setNotificationStatus] = useState<string>('checking');
   const [requesting, setRequesting] = useState(false);
-  const [email, setEmail] = useState<string>('');
 
-  useEffect(() => {
-    getNotificationPermission().then(setNotificationStatus);
-    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user?.email || ''));
-  }, []);
+  useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
 
   async function handleEnableNotifications() {
     setRequesting(true);
@@ -37,7 +34,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
         <div className="border border-vow-border p-5">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 border border-vow-border flex items-center justify-center text-lg" aria-hidden="true">○</div>
-            <div className="min-w-0"><p className="text-xs text-vow-muted uppercase tracking-wide mb-1">Account</p><p className="text-sm text-vow-ink truncate">{email}</p></div>
+            <div className="min-w-0"><p className="text-xs text-vow-muted uppercase tracking-wide mb-1">Account</p><p className="text-sm text-vow-ink truncate">{session?.user?.email}</p></div>
           </div>
         </div>
         <div className="border border-vow-border p-5">
