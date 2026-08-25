@@ -1,3 +1,4 @@
+import { CalendarPage } from './components/Calendar';
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
