@@ -4,6 +4,7 @@ import { LocalNotifications, type PermissionStatus } from '@capacitor/local-noti
 
 export type NotificationPermission = PermissionStatus['display'];
 const CHANNEL_ID = 'vow-reminders';
+const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
 
 export async function setupNotifications(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
@@ -42,6 +43,7 @@ export async function scheduleTestNotification(): Promise<void> {
       title: 'VOW',
       body: 'Notifications are working. Keep your word.',
       channelId: CHANNEL_ID,
+      smallIcon: VOW_NOTIFICATION_ICON,
       schedule: { at: new Date(Date.now() + 5000) },
     }],
   });
