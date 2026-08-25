@@ -1,4 +1,3 @@
-import { CalendarPage } from './components/Calendar';
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -10,6 +9,7 @@ import { GoalsPage } from '@/components/Goals';
 import { JournalPage } from '@/components/Journal';
 import { ReviewPage } from '@/components/WeeklyReview';
 import { ProfilePage } from '@/components/Profile';
+import { CalendarPage } from '@/components/Calendar';
 import type { UserSettings } from '@/types/database';
 
 const SPLASH_MIN_MS = 2800;
@@ -119,6 +119,7 @@ function AppContent() {
     content = (
       <AppShell currentView={view} onNavigate={setView}>
         {view === 'dashboard' && <Dashboard onNavigate={setView} />}
+        {view === 'calendar' && <CalendarPage />}
         {view === 'goals' && <GoalsPage />}
         {view === 'journal' && <JournalPage />}
         {view === 'review' && <ReviewPage />}
