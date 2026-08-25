@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    background-color: #F7F7F5;
+    color: #111111;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 400;
+  }
+  ::selection {
+    background: #111111;
+    color: #F7F7F5;
+  }
+  input, textarea, select, button {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  .vow-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6B6B6B;
+  }
+  .vow-input {
+    width: 100%;
+    background: transparent;
+    border: 1px solid #E2E2DF;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: #111111;
+    transition: border-color 0.15s ease;
+  }
+  .vow-input:focus {
+    outline: none;
+    border-color: #111111;
+  }
+  .vow-input::placeholder {
+    color: #B0B0B0;
+  }
+}
+
+@layer utilities {
+  .vow-heading {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .vow-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: #111111;
+    color: #F7F7F5;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 0.6875rem 1.25rem;
+    transition: opacity 0.15s ease;
+  }
+  .vow-btn-primary:hover {
+    opacity: 0.85;
+  }
+  .vow-btn-primary:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .vow-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    color: #111111;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 0.6875rem 1.25rem;
+    border: 1px solid #E2E2DF;
+    transition: border-color 0.15s ease;
+  }
+  .vow-btn-ghost:hover {
+    border-color: #111111;
+  }
+  .vow-card {
+    background: #F7F7F5;
+    border: 1px solid #E2E2DF;
+  }
+  .vow-divider {
+    border-color: #E2E2DF;
+  }
+
+  .vow-splash-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: #fbf4eb;
+    pointer-events: auto;
+    opacity: 1;
+    transition: opacity 480ms ease;
+  }
+
+  .vow-splash-overlay.vow-splash-fading {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .vow-splash-logo {
+    width: min(100vw, 900px);
+    height: auto;
+    animation: vow-splash-in 350ms ease both;
+  }
+}
+
+@keyframes vow-splash-in {
+  from {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

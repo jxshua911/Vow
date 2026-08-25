@@ -1,0 +1,204 @@
+import { useEffect, useState, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import type { Goal, Session, JournalEntry } from '@/types/database';
+import { isThisWeek, formatTime, formatRelative, dayName } from '@/lib/dates';
+import { PageHeader } from './AppShell';
+import { CheckCircle2, Circle, SkipForward, Move, ArrowRight, Calendar, BookOpen } from 'lucide-react';
+import type { View } from './AppShell';
+
+interface DashboardProps {
+  onNavigate: (view: View) => void;
+}
+
+export function Dashboard({ onNavigate }: DashboardProps) {
+  const { session } = useAuth();
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [recentJournal, setRecentJournal] = useState<JournalEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!session) return;
+    const [goalsRes, sessionsRes, journalRes] = await Promise.all([
+      supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+      supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true }),
+      supabase.from('journal_entries').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(3),
+    ]);
+    setGoals(goalsRes.data || []);
+    setSessions(sessionsRes.data || []);
+    setRecentJournal(journalRes.data || []);
+    setLoading(false);
+  }, [session]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
+  const thisWeekSessions = sessions.filter((s) => isThisWeek(s.scheduled_at));
+  const completedThisWeek = thisWeekSessions.filter((s) => s.status === 'completed');
+  const completionPct = thisWeekSessions.length > 0
+    ? Math.round((completedThisWeek.length / thisWeekSessions.length) * 100)
+    : 0;
+
+  const sortedByDate = [...sessions].sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+  let streak = 0;
+  for (const s of sortedByDate) {
+    if (s.status === 'completed') streak++;
+    else if (s.status === 'skipped' || s.status === 'moved') break;
+    else break;
+  }
+
+  const now = new Date();
+  const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 5);
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Dashboard" />
+        <div className="text-vow-muted text-sm">Loading...</div>
+      </div>
+    );
+  }
+
+  const statusIcons: Record<string, typeof CheckCircle2> = {
+    completed: CheckCircle2,
+    scheduled: Circle,
+    skipped: SkipForward,
+    moved: Move,
+  };
+
+  return (
+    <div>
+      <PageHeader
+        title="Dashboard"
+        subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`}
+      />
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-10 border border-vow-border">
+        <StatCell label="Active goals" value={activeGoals.length} />
+        <StatCell label="This week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} />
+        <StatCell label="Completion" value={`${completionPct}%`} />
+        <StatCell label="Streak" value={`${streak}`} subtitle={streak === 0 ? 'Broken — honest count' : undefined} />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-12">
+        {/* Upcoming sessions */}
+        <div>
+          <h2 className="vow-label mb-4">Upcoming sessions</h2>
+          {upcoming.length === 0 ? (
+            <div className="border border-vow-border p-8 text-center">
+              <Calendar className="w-7 h-7 text-vow-border mx-auto mb-3" strokeWidth={1} />
+              <p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p>
+              <button
+                onClick={() => onNavigate('goals')}
+                className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity"
+              >
+                Schedule sessions
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-px border border-vow-border">
+              {upcoming.map((s) => {
+                const StatusIcon = statusIcons[s.status] || Circle;
+                const goal = goals.find((g) => g.id === s.goal_id);
+                return (
+                  <div key={s.id} className="bg-vow-bg px-4 py-3 flex items-center gap-3">
+                    <StatusIcon className="w-4 h-4 flex-shrink-0 text-vow-muted" strokeWidth={1.5} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-vow-ink truncate">{s.title}</div>
+                      <div className="text-xs text-vow-muted">{goal?.title || ''}</div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs text-vow-ink font-medium">{formatRelative(s.scheduled_at)}</div>
+                      <div className="text-xs text-vow-muted">{formatTime(s.scheduled_at)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Active goals + journal */}
+        <div className="space-y-10">
+          <div>
+            <h2 className="vow-label mb-4">Active goals</h2>
+            {activeGoals.length === 0 ? (
+              <div className="border border-vow-border p-8 text-center">
+                <p className="text-vow-muted text-sm">No active goals yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-px border border-vow-border">
+                {activeGoals.map((g) => {
+                  const goalSessions = sessions.filter((s) => s.goal_id === g.id);
+                  const completed = goalSessions.filter((s) => s.status === 'completed').length;
+                  const total = goalSessions.length;
+                  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => onNavigate('goals')}
+                      className="w-full text-left bg-vow-bg px-4 py-3 hover:opacity-70 transition-opacity"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm text-vow-ink truncate flex-1">{g.outcome}</div>
+                        <div className="text-xs text-vow-muted ml-2">{pct}%</div>
+                      </div>
+                      <div className="h-px bg-vow-border relative">
+                        <div className="absolute inset-y-0 left-0 bg-vow-ink transition-all duration-500" style={{ width: `${pct}%`, height: '1px' }} />
+                      </div>
+                      <div className="text-xs text-vow-muted mt-1.5">
+                        {g.weekly_commitment_target} sessions/week — {completed}/{total} all-time
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Recent journal */}
+          <div>
+            <h2 className="vow-label mb-4">Recent journal</h2>
+            {recentJournal.length === 0 ? (
+              <div className="border border-vow-border p-8 text-center">
+                <BookOpen className="w-7 h-7 text-vow-border mx-auto mb-3" strokeWidth={1} />
+                <p className="text-vow-muted text-sm mb-3">No entries yet.</p>
+                <button
+                  onClick={() => onNavigate('journal')}
+                  className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity"
+                >
+                  Write something
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-px border border-vow-border">
+                {recentJournal.map((j) => (
+                  <button
+                    key={j.id}
+                    onClick={() => onNavigate('journal')}
+                    className="w-full text-left bg-vow-bg px-4 py-3 hover:opacity-70 transition-opacity"
+                  >
+                    <div className="text-xs text-vow-muted mb-1">{formatRelative(j.created_at)}</div>
+                    <div className="text-sm text-vow-ink line-clamp-2">{j.body}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCell({ label, value, subtitle }: { label: string; value: string | number; subtitle?: string }) {
+  return (
+    <div className="bg-vow-bg px-4 py-5">
+      <div className="text-3xl vow-heading text-vow-ink">{value}</div>
+      <div className="vow-label mt-1.5">{label}</div>
+      {subtitle && <div className="text-xs text-vow-muted mt-0.5">{subtitle}</div>}
+    </div>
+  );
+}

@@ -1,0 +1,34 @@
+{
+	"appId": "com.vow.app",
+	"appName": "VOW",
+	"webDir": "dist",
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 0,
+			"launchAutoHide": true,
+			"backgroundColor": "#F7F7F5",
+			"androidScaleType": "CENTER_CROP",
+			"showSpinner": false,
+			"splashFullScreen": true,
+			"splashImmersive": true
+		},
+		"StatusBar": {
+			"style": "LIGHT",
+			"backgroundColor": "#F7F7F5"
+		},
+		"Keyboard": {
+			"resize": "body",
+			"resizeOnFullScreen": true
+		}
+	},
+	"ios": {
+		"contentInset": "automatic"
+	},
+	"packageClassList": [
+		"AppPlugin",
+		"CAPBrowserPlugin",
+		"KeyboardPlugin",
+		"SplashScreenPlugin",
+		"StatusBarPlugin"
+	]
+}
