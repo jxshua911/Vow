@@ -55,6 +55,8 @@ function AppContent() {
       return;
     }
 
+    setSettingsLoading(true);
+
     supabase
       .from('user_settings')
       .select('*')
@@ -100,9 +102,7 @@ function AppContent() {
   if (loading || (session && settingsLoading)) {
     content = (
       <div className="min-h-screen bg-vow-bg flex items-center justify-center">
-        <div className="text-vow-muted text-sm">
-          Loading...
-        </div>
+        <div className="text-vow-muted text-sm">Loading...</div>
       </div>
     );
   } else if (!session) {
@@ -116,29 +116,12 @@ function AppContent() {
     );
   } else {
     content = (
-      <AppShell
-        currentView={view}
-        onNavigate={setView}
-      >
-        {view === 'dashboard' && (
-          <Dashboard onNavigate={setView} />
-        )}
-
-        {view === 'goals' && (
-          <GoalsPage />
-        )}
-
-        {view === 'journal' && (
-          <JournalPage />
-        )}
-
-        {view === 'review' && (
-          <ReviewPage />
-        )}
-
-        {view === 'profile' && (
-          <ProfilePage />
-        )}
+      <AppShell currentView={view} onNavigate={setView}>
+        {view === 'dashboard' && <Dashboard onNavigate={setView} />}
+        {view === 'goals' && <GoalsPage />}
+        {view === 'journal' && <JournalPage />}
+        {view === 'review' && <ReviewPage />}
+        {view === 'profile' && <ProfilePage />}
       </AppShell>
     );
   }
@@ -146,10 +129,7 @@ function AppContent() {
   return (
     <>
       {content}
-
-      {splashMounted && (
-        <SplashOverlay fadingOut={splashFadingOut} />
-      )}
+      {splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}
     </>
   );
 }
