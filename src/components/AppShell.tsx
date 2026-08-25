@@ -3,7 +3,13 @@ import { useAuth } from '@/lib/auth';
 import { LogOut, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export type View = 'dashboard' | 'goals' | 'journal' | 'review' | 'profile';
+export type View =
+  | 'dashboard'
+  | 'calendar'
+  | 'goals'
+  | 'journal'
+  | 'review'
+  | 'profile';
 
 interface AppShellProps {
   currentView: View;
@@ -26,10 +32,76 @@ const navItems: {
         className="w-[21px] h-[21px]"
         aria-hidden="true"
       >
-        <rect x="4" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-        <rect x="14" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-        <rect x="4" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-        <rect x="14" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+        <rect
+          x="4"
+          y="4"
+          width="6"
+          height="6"
+          rx="1"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="14"
+          y="4"
+          width="6"
+          height="6"
+          rx="1"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="4"
+          y="14"
+          width="6"
+          height="6"
+          rx="1"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="14"
+          y="14"
+          width="6"
+          height="6"
+          rx="1"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+      </svg>
+    ),
+  },
+  {
+    view: 'calendar',
+    label: 'Calendar',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        className="w-[21px] h-[21px]"
+        aria-hidden="true"
+      >
+        <rect
+          x="4"
+          y="5.5"
+          width="16"
+          height="14"
+          rx="1.5"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <path
+          d="M8 3.5V7.5M16 3.5V7.5M4 9.5H20"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M8 13H8.01M12 13H12.01M16 13H16.01M8 16.5H8.01M12 16.5H12.01"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
       </svg>
     ),
   },
@@ -43,8 +115,20 @@ const navItems: {
         className="w-[21px] h-[21px]"
         aria-hidden="true"
       >
-        <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.5" />
+        <circle
+          cx="12"
+          cy="12"
+          r="8"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <circle
+          cx="12"
+          cy="12"
+          r="4"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
         <circle cx="12" cy="12" r="1.25" fill="currentColor" />
       </svg>
     ),
@@ -115,7 +199,13 @@ const navItems: {
         className="w-[21px] h-[21px]"
         aria-hidden="true"
       >
-        <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
+        <circle
+          cx="12"
+          cy="8"
+          r="3"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
         <path
           d="M5.5 19C6.4 15.8 8.6 14 12 14C15.4 14 17.6 15.8 18.5 19"
           stroke="currentColor"
@@ -143,7 +233,9 @@ export function AppShell({
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-56 border-r border-vow-border bg-vow-bg">
         <div className="px-6 py-8 border-b border-vow-border">
-          <h1 className="vow-heading text-2xl text-vow-ink">VOW</h1>
+          <h1 className="vow-heading text-2xl text-vow-ink">
+            VOW
+          </h1>
         </div>
 
         <nav className="flex-1 px-3 py-6 space-y-px">
@@ -195,7 +287,9 @@ export function AppShell({
           paddingTop: 'env(safe-area-inset-top)',
         }}
       >
-        <h1 className="vow-heading text-xl text-vow-ink">VOW</h1>
+        <h1 className="vow-heading text-xl text-vow-ink">
+          VOW
+        </h1>
       </header>
 
       {/* Mobile bottom navigation */}
@@ -205,7 +299,7 @@ export function AppShell({
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
-        <div className="grid grid-cols-5 min-h-16">
+        <div className="grid grid-cols-6 min-h-16">
           {navItems.map((item) => {
             const active = currentView === item.view;
 
