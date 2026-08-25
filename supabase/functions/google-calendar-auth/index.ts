@@ -3,185 +3,141 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const NATIVE_REDIRECT = "com.vow.app://calendar-callback";
+const WEB_REDIRECT = "https://vow.bolt.host/calendar/oauth/callback";
+const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function redirectUrl(base: string, params: Record<string, string>) {
+  const url = new URL(base);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  return url.toString();
+}
+
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const clientId = Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET");
+  const googleRedirectUri = Deno.env.get("GOOGLE_CALENDAR_REDIRECT_URI");
+
+  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey || !clientId || !clientSecret || !googleRedirectUri) {
+    return json({ error: "OAuth configuration is missing" }, 500);
   }
 
+  const admin = createClient(supabaseUrl, serviceRoleKey);
+  const requestUrl = new URL(req.url);
+
   try {
-    const authHeader = req.headers.get("Authorization");
+    if (req.method === "POST") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) return json({ error: "Missing authorization header" }, 401);
 
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        {
-          status: 401,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: userError } = await userClient.auth.getUser();
+      if (userError || !user) return json({ error: "Not authenticated" }, 401);
+
+      const body = await req.json().catch(() => ({}));
+      if (body.action !== "start") return json({ error: "Unknown action" }, 400);
+
+      const redirectUri = body.redirectUri;
+      if (redirectUri !== NATIVE_REDIRECT && redirectUri !== WEB_REDIRECT) {
+        return json({ error: "Invalid application redirect URI" }, 400);
+      }
+
+      const state = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+      const { error: saveError } = await admin.from("google_calendar_connections").upsert({
+        user_id: user.id,
+        oauth_state: state,
+        oauth_state_expires_at: expiresAt,
+        oauth_redirect_uri: redirectUri,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+      if (saveError) throw saveError;
+
+      const authorizationUrl = new URL(GOOGLE_AUTHORIZE_URL);
+      authorizationUrl.search = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: googleRedirectUri,
+        response_type: "code",
+        access_type: "offline",
+        prompt: "consent",
+        scope: "https://www.googleapis.com/auth/calendar.events",
+        state,
+      }).toString();
+
+      return json({ authorizationUrl: authorizationUrl.toString() });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const code = requestUrl.searchParams.get("code");
+    const state = requestUrl.searchParams.get("state");
+    const googleError = requestUrl.searchParams.get("error");
 
-    if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
-      throw new Error("Supabase environment variables are missing");
-    }
+    if (googleError) return new Response("Google Calendar authorization was cancelled.", { status: 400, headers: { "Content-Type": "text/plain" } });
+    if (!code || !state) return new Response("Missing OAuth code or state.", { status: 400, headers: { "Content-Type": "text/plain" } });
 
-    const userClient = createClient(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        global: {
-          headers: {
-            Authorization: authHeader,
-          },
-        },
-      },
-    );
+    const { data: connection, error: lookupError } = await admin
+      .from("google_calendar_connections")
+      .select("user_id, oauth_state, oauth_state_expires_at, oauth_redirect_uri")
+      .eq("oauth_state", state)
+      .maybeSingle();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
+    if (lookupError) throw lookupError;
+    if (!connection || connection.oauth_state !== state) return new Response("Invalid OAuth state.", { status: 400, headers: { "Content-Type": "text/plain" } });
+    if (!connection.oauth_state_expires_at || new Date(connection.oauth_state_expires_at).getTime() <= Date.now()) return new Response("OAuth state expired. Please try again.", { status: 400, headers: { "Content-Type": "text/plain" } });
 
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Not authenticated" }),
-        {
-          status: 401,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-
-    const { code } = await req.json();
-
-    if (!code) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization code" }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-
-    const clientId = Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID");
-    const clientSecret = Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET");
-    const redirectUri = Deno.env.get("GOOGLE_CALENDAR_REDIRECT_URI");
-
-    if (!clientId || !clientSecret || !redirectUri) {
-      throw new Error("Google Calendar OAuth configuration is missing");
-    }
-
-    const tokenResponse = await fetch(
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
-      },
-    );
+    const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: googleRedirectUri,
+        grant_type: "authorization_code",
+      }),
+    });
 
     const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok) return new Response("Google token exchange failed.", { status: 400, headers: { "Content-Type": "text/plain" } });
 
-    if (!tokenResponse.ok) {
-      return new Response(
-        JSON.stringify({
-          error: "Google token exchange failed",
-          details: tokenData,
-        }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
+    const expiresAt = tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null;
+    const { error: saveError } = await admin.from("google_calendar_connections").upsert({
+      user_id: connection.user_id,
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token ?? null,
+      expires_at: expiresAt,
+      scope: tokenData.scope ?? null,
+      oauth_state: null,
+      oauth_state_expires_at: null,
+      oauth_redirect_uri: null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    if (saveError) throw saveError;
 
-    const admin = createClient(
-      supabaseUrl,
-      serviceRoleKey,
-    );
-
-    const expiresAt = tokenData.expires_in
-      ? new Date(
-          Date.now() + tokenData.expires_in * 1000,
-        ).toISOString()
-      : null;
-
-    const { error: saveError } = await admin
-      .from("google_calendar_connections")
-      .upsert(
-        {
-          user_id: user.id,
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token ?? null,
-          expires_at: expiresAt,
-          scope: tokenData.scope ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "user_id",
-        },
-      );
-
-    if (saveError) {
-      throw saveError;
-    }
-
-    return new Response(
-      JSON.stringify({ success: true }),
-      {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
+    return Response.redirect(
+      redirectUrl(connection.oauth_redirect_uri || NATIVE_REDIRECT, { success: "true" }),
+      302,
     );
   } catch (error) {
-    console.error(error);
-
-    return new Response(
-      JSON.stringify({
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unexpected error",
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    console.error("[VOW Calendar OAuth]", error);
+    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
   }
 });
