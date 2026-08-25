@@ -1,6 +1,11 @@
 name: Deploy Supabase Edge Functions
 
 on:
+  push:
+    branches:
+      - capacitor-mobile
+    paths:
+      - 'supabase/functions/**'
   workflow_dispatch: {}
 
 jobs:
@@ -18,5 +23,10 @@ jobs:
 
       - name: Deploy Google Calendar auth function
         run: supabase functions deploy google-calendar-auth --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Google Calendar events function
+        run: supabase functions deploy google-calendar-events --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
