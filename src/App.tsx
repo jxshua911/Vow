@@ -8,6 +8,7 @@ import { Dashboard } from '@/components/Dashboard';
 import { GoalsPage } from '@/components/Goals';
 import { JournalPage } from '@/components/Journal';
 import { ReviewPage } from '@/components/WeeklyReview';
+import { ProfilePage } from '@/components/Profile';
 import type { UserSettings } from '@/types/database';
 
 const SPLASH_MIN_MS = 2800;
@@ -39,7 +40,11 @@ function AppContent() {
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS);
+    const timer = window.setTimeout(
+      () => setSplashMinElapsed(true),
+      SPLASH_MIN_MS
+    );
+
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -63,6 +68,7 @@ function AppContent() {
 
   function handleOnboardingComplete() {
     setSettingsLoading(true);
+
     supabase
       .from('user_settings')
       .select('*')
@@ -79,34 +85,60 @@ function AppContent() {
   useEffect(() => {
     if (splashMinElapsed && contentReady && !splashFadingOut) {
       setSplashFadingOut(true);
+
       const timer = window.setTimeout(
         () => setSplashMounted(false),
-        SPLASH_FADE_OUT_MS,
+        SPLASH_FADE_OUT_MS
       );
+
       return () => window.clearTimeout(timer);
     }
   }, [splashMinElapsed, contentReady, splashFadingOut]);
 
   let content: React.ReactNode;
+
   if (loading || (session && settingsLoading)) {
     content = (
       <div className="min-h-screen bg-vow-bg flex items-center justify-center">
-        <div className="text-vow-muted text-sm">Loading...</div>
+        <div className="text-vow-muted text-sm">
+          Loading...
+        </div>
       </div>
     );
   } else if (!session) {
     content = <AuthPage />;
   } else if (!settings || !settings.onboarding_complete) {
     content = (
-      <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />
+      <Onboarding
+        userId={session.user.id}
+        onComplete={handleOnboardingComplete}
+      />
     );
   } else {
     content = (
-      <AppShell currentView={view} onNavigate={setView}>
-        {view === 'dashboard' && <Dashboard onNavigate={setView} />}
-        {view === 'goals' && <GoalsPage />}
-        {view === 'journal' && <JournalPage />}
-        {view === 'review' && <ReviewPage />}
+      <AppShell
+        currentView={view}
+        onNavigate={setView}
+      >
+        {view === 'dashboard' && (
+          <Dashboard onNavigate={setView} />
+        )}
+
+        {view === 'goals' && (
+          <GoalsPage />
+        )}
+
+        {view === 'journal' && (
+          <JournalPage />
+        )}
+
+        {view === 'review' && (
+          <ReviewPage />
+        )}
+
+        {view === 'profile' && (
+          <ProfilePage />
+        )}
       </AppShell>
     );
   }
@@ -114,7 +146,10 @@ function AppContent() {
   return (
     <>
       {content}
-      {splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}
+
+      {splashMounted && (
+        <SplashOverlay fadingOut={splashFadingOut} />
+      )}
     </>
   );
 }
