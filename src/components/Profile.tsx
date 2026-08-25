@@ -1,14 +1,36 @@
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth';
-import { LogOut, User } from 'lucide-react';
+import { Bell, Check, LogOut, User } from 'lucide-react';
 import { PageHeader } from './AppShell';
+import { getNotificationPermission, requestNotificationPermission, scheduleTestNotification } from '@/lib/notifications';
 
 export function ProfilePage() {
   const { session } = useAuth();
+  const [notificationStatus, setNotificationStatus] = useState<string>('checking');
+  const [requesting, setRequesting] = useState(false);
+
+  useEffect(() => {
+    getNotificationPermission().then(setNotificationStatus);
+  }, []);
+
+  async function handleEnableNotifications() {
+    setRequesting(true);
+    const status = await requestNotificationPermission();
+    setNotificationStatus(status);
+    setRequesting(false);
+  }
+
+  async function handleTestNotification() {
+    setRequesting(true);
+    await scheduleTestNotification();
+    setRequesting(false);
+  }
 
   async function handleSignOut() {
     await supabase.auth.signOut();
   }
+
+  const notificationsEnabled = notificationStatus === 'granted';
 
   return (
     <div>
@@ -23,15 +45,48 @@ export function ProfilePage() {
             <div className="w-10 h-10 border border-vow-border flex items-center justify-center">
               <User className="w-5 h-5 text-vow-ink" />
             </div>
-
             <div className="min-w-0">
-              <p className="text-xs text-vow-muted uppercase tracking-wide mb-1">
-                Account
-              </p>
+              <p className="text-xs text-vow-muted uppercase tracking-wide mb-1">Account</p>
+              <p className="text-sm text-vow-ink truncate">{session?.user?.email}</p>
+            </div>
+          </div>
+        </div>
 
-              <p className="text-sm text-vow-ink truncate">
-                {session?.user?.email}
+        <div className="border border-vow-border p-5">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 border border-vow-border flex items-center justify-center shrink-0">
+              <Bell className="w-5 h-5 text-vow-ink" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-medium text-vow-ink">Notifications</h2>
+                {notificationsEnabled && <Check className="w-4 h-4 text-vow-ink" />}
+              </div>
+              <p className="text-xs text-vow-muted mt-1 leading-relaxed">
+                VOW can remind you about goals, planned sessions and reviews. Permission is requested only when you choose to enable it.
               </p>
+              <p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus}</p>
+
+              <div className="flex flex-wrap gap-2 mt-4">
+                {!notificationsEnabled && notificationStatus !== 'unsupported' && (
+                  <button
+                    onClick={handleEnableNotifications}
+                    disabled={requesting}
+                    className="border border-vow-ink px-3 py-2 text-xs text-vow-ink disabled:opacity-50"
+                  >
+                    {requesting ? 'Requesting…' : 'Enable notifications'}
+                  </button>
+                )}
+                {notificationsEnabled && (
+                  <button
+                    onClick={handleTestNotification}
+                    disabled={requesting}
+                    className="border border-vow-border px-3 py-2 text-xs text-vow-muted hover:text-vow-ink hover:border-vow-ink disabled:opacity-50"
+                  >
+                    {requesting ? 'Sending…' : 'Send test notification'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
