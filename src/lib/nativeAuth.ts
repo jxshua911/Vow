@@ -1,4 +1,5 @@
 import { App } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { supabase } from './supabase';
 
 export const NATIVE_OAUTH_REDIRECT = 'com.vow.app://callback';
@@ -14,6 +15,8 @@ export async function initNativeAuthListener() {
       const urlObj = new URL(url);
 
       if (url.startsWith(NATIVE_CALENDAR_REDIRECT)) {
+        await Browser.close().catch(() => undefined);
+
         const success = urlObj.searchParams.get('success') === 'true';
         const error = urlObj.searchParams.get('error');
 
@@ -32,6 +35,8 @@ export async function initNativeAuthListener() {
         console.error('[VOW OAuth] Callback received without authorization code.');
         return;
       }
+
+      await Browser.close().catch(() => undefined);
 
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
