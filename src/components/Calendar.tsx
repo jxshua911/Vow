@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Session } from '@/types/database';
@@ -33,9 +34,7 @@ function getDaysBetween(start: Date, end: Date) {
   while (current <= end) { days.push(new Date(current)); current.setDate(current.getDate() + 1); }
   return days;
 }
-function eventDate(event: CalendarEvent) {
-  return event.start?.dateTime ? new Date(event.start.dateTime) : event.start?.date ? new Date(`${event.start.date}T00:00:00`) : null;
-}
+function eventDate(event: CalendarEvent) { return event.start?.dateTime ? new Date(event.start.dateTime) : event.start?.date ? new Date(`${event.start.date}T00:00:00`) : null; }
 function sessionDate(session: Session) { return new Date(session.scheduled_at); }
 function sameDay(a: Date, b: Date) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 function formatMonth(date: Date) { return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }); }
@@ -87,7 +86,7 @@ export function CalendarPage() {
   useEffect(() => { if (googleConnected) loadGoogleEvents(); }, [googleConnected, loadGoogleEvents]);
 
   useEffect(() => {
-    const handleConnected = () => { setConnectingGoogle(false); setGoogleConnected(true); };
+    const handleConnected = () => { setConnectingGoogle(false); setGoogleConnected(true); setError(null); };
     const handleError = (event: Event) => {
       setConnectingGoogle(false);
       setError((event as CustomEvent<string>).detail || 'Google Calendar connection failed.');
@@ -103,20 +102,17 @@ export function CalendarPage() {
   async function connectGoogleCalendar() {
     if (!authSession) return;
     setConnectingGoogle(true); setError(null);
-
     try {
-      const redirectUri = Capacitor.isNativePlatform()
-        ? NATIVE_CALENDAR_REDIRECT
-        : `${window.location.origin}/calendar/oauth/callback`;
-
-      const { data, error: functionError } = await supabase.functions.invoke('google-calendar-auth', {
-        body: { action: 'start', redirectUri },
-      });
-
+      const redirectUri = Capacitor.isNativePlatform() ? NATIVE_CALENDAR_REDIRECT : `${window.location.origin}/calendar/oauth/callback`;
+      const { data, error: functionError } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'start', redirectUri } });
       if (functionError) throw functionError;
       if (!data?.authorizationUrl) throw new Error('Google Calendar authorization URL was not returned.');
 
-      window.location.href = data.authorizationUrl;
+      if (Capacitor.isNativePlatform()) {
+        await Browser.open({ url: data.authorizationUrl });
+      } else {
+        window.location.assign(data.authorizationUrl);
+      }
     } catch (err) {
       setConnectingGoogle(false);
       setError(err instanceof Error ? err.message : 'Could not start Google Calendar connection.');
