@@ -53,6 +53,19 @@ serve(async (req) => {
       if (userError || !user) return json({ error: "Not authenticated" }, 401);
 
       const body = await req.json().catch(() => ({}));
+
+      if (body.action === "status") {
+        const { data: connection, error: connectionError } = await admin
+          .from("google_calendar_connections")
+          .select("id, access_token")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (connectionError) throw connectionError;
+
+        return json({ connected: Boolean(connection?.id && connection?.access_token) });
+      }
+
       if (body.action !== "start") return json({ error: "Unknown action" }, 400);
 
       const redirectUri = body.redirectUri;
