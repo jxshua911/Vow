@@ -4,10 +4,20 @@ import { useAuth } from '@/lib/auth';
 import { PageHeader } from './AppShell';
 import { getNotificationPermission, requestNotificationPermission, scheduleTestNotification } from '@/lib/notifications';
 
+function getFirstName(session: ReturnType<typeof useAuth>['session']) {
+  const metadata = session?.user?.user_metadata as Record<string, unknown> | undefined;
+  const fullName = typeof metadata?.full_name === 'string' ? metadata.full_name : typeof metadata?.name === 'string' ? metadata.name : '';
+  const firstName = fullName.trim().split(/\s+/)[0];
+  if (firstName) return firstName;
+  const emailName = session?.user?.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+  return emailName ? emailName.split(/\s+/)[0] : 'there';
+}
+
 export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const { session } = useAuth();
   const [notificationStatus, setNotificationStatus] = useState<string>('checking');
   const [requesting, setRequesting] = useState(false);
+  const firstName = getFirstName(session);
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
 
@@ -29,7 +39,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 
   return (
     <div>
-      <PageHeader title="Profile" subtitle="Your account and preferences." />
+      <PageHeader title={`Welcome back, ${firstName}`} subtitle="Your account and preferences." />
       <div className="space-y-6">
         <div className="border border-vow-border p-5">
           <div className="flex items-center gap-4">
