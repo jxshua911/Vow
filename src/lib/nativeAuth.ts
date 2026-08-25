@@ -12,30 +12,28 @@ export async function initNativeAuthListener() {
 
     try {
       const urlObj = new URL(url);
-      const code = urlObj.searchParams.get('code');
 
+      if (url.startsWith(NATIVE_CALENDAR_REDIRECT)) {
+        const success = urlObj.searchParams.get('success') === 'true';
+        const error = urlObj.searchParams.get('error');
+
+        if (success) {
+          console.log('[VOW Calendar] Google Calendar connected successfully.');
+          window.dispatchEvent(new CustomEvent('vow:google-calendar-connected'));
+        } else {
+          console.error('[VOW Calendar] Google Calendar connection failed:', error || 'Unknown error');
+          window.dispatchEvent(new CustomEvent('vow:google-calendar-error', { detail: error || 'Google Calendar connection failed.' }));
+        }
+        return;
+      }
+
+      const code = urlObj.searchParams.get('code');
       if (!code) {
         console.error('[VOW OAuth] Callback received without authorization code.');
         return;
       }
 
-      if (url.startsWith(NATIVE_CALENDAR_REDIRECT)) {
-        const { error } = await supabase.functions.invoke('google-calendar-auth', {
-          body: { code },
-        });
-
-        if (error) {
-          console.error('[VOW Calendar] Failed to connect Google Calendar:', error);
-          return;
-        }
-
-        console.log('[VOW Calendar] Google Calendar connected successfully.');
-        window.dispatchEvent(new CustomEvent('vow:google-calendar-connected'));
-        return;
-      }
-
       const { error } = await supabase.auth.exchangeCodeForSession(code);
-
       if (error) {
         console.error('[VOW OAuth] Failed to exchange code for session:', error);
         return;
