@@ -88,17 +88,39 @@ export function CalendarPage() {
 
   useEffect(() => {
     const handleConnected = () => { setConnectingGoogle(false); setGoogleConnected(true); };
+    const handleError = (event: Event) => {
+      setConnectingGoogle(false);
+      setError((event as CustomEvent<string>).detail || 'Google Calendar connection failed.');
+    };
     window.addEventListener('vow:google-calendar-connected', handleConnected);
-    return () => window.removeEventListener('vow:google-calendar-connected', handleConnected);
+    window.addEventListener('vow:google-calendar-error', handleError);
+    return () => {
+      window.removeEventListener('vow:google-calendar-connected', handleConnected);
+      window.removeEventListener('vow:google-calendar-error', handleError);
+    };
   }, []);
 
-  function connectGoogleCalendar() {
-    const clientId = import.meta.env.VITE_GOOGLE_CALENDAR_CLIENT_ID;
-    if (!clientId) { setError('Google Calendar client ID is not configured in the app.'); return; }
+  async function connectGoogleCalendar() {
+    if (!authSession) return;
     setConnectingGoogle(true); setError(null);
-    const redirectUri = Capacitor.isNativePlatform() ? NATIVE_CALENDAR_REDIRECT : `${window.location.origin}/calendar/oauth/callback`;
-    const params = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', access_type: 'offline', prompt: 'consent', scope: 'https://www.googleapis.com/auth/calendar.events' });
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+    try {
+      const redirectUri = Capacitor.isNativePlatform()
+        ? NATIVE_CALENDAR_REDIRECT
+        : `${window.location.origin}/calendar/oauth/callback`;
+
+      const { data, error: functionError } = await supabase.functions.invoke('google-calendar-auth', {
+        body: { action: 'start', redirectUri },
+      });
+
+      if (functionError) throw functionError;
+      if (!data?.authorizationUrl) throw new Error('Google Calendar authorization URL was not returned.');
+
+      window.location.href = data.authorizationUrl;
+    } catch (err) {
+      setConnectingGoogle(false);
+      setError(err instanceof Error ? err.message : 'Could not start Google Calendar connection.');
+    }
   }
 
   const calendarDays = useMemo(() => {
