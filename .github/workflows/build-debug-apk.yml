@@ -16,6 +16,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: gradle
 
       - uses: android-actions/setup-android@v3
 
@@ -24,7 +25,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm install
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
 
       - name: Typecheck
         run: npm run typecheck
@@ -40,15 +45,23 @@ jobs:
 
       - run: chmod +x android/gradlew
 
-      - name: Assemble APK
+      - name: Assemble universal debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK package and signature
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/aapt" dump badging "$APK" | grep -E "package: name='com.vow.app' versionCode='4' versionName='1.0.4'|sdkVersion:'24'|targetSdkVersion:'36'"
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "Vow APK.apk"
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "Vow-1.0.4-debug.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Vow APK
-          path: "Vow APK.apk"
+          name: Vow Android 1.0.4 Debug APK
+          path: "Vow-1.0.4-debug.apk"
           if-no-files-found: error
+          retention-days: 14
