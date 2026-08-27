@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PageHeader } from './AppShell';
-import { getNotificationPermission, requestNotificationPermission } from '@/lib/notifications';
+import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications } from '@/lib/notifications';
 
 function getDisplayName(session: ReturnType<typeof useAuth>['session']) {
   const metadata = session?.user?.user_metadata as Record<string, unknown> | undefined;
@@ -27,6 +27,10 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     setRequesting(true);
     const status = await requestNotificationPermission();
     setNotificationStatus(status);
+    if (status === 'granted' && session) {
+      const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
+      if (data) await syncUpcomingSessionNotifications(data);
+    }
     setRequesting(false);
   }
 
@@ -65,11 +69,11 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
             <div className="w-10 h-10 border border-vow-border flex items-center justify-center text-lg" aria-hidden="true">⌁</div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2"><h2 className="text-sm font-medium text-vow-ink">Notifications</h2>{notificationsEnabled && <span className="text-xs text-vow-ink">Enabled</span>}</div>
-              <p className="text-xs text-vow-muted mt-1 leading-relaxed">VOW reminders use your device's notification system. When enabled, supported reminders can use sound and vibration according to your device settings.</p>
+              <p className="text-xs text-vow-muted mt-1 leading-relaxed">VOW uses the device notification system for scheduled reminders. Notifications are silent by default; sound and vibration remain controlled by your device and notification-channel settings.</p>
               <p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus}</p>
               <div className="flex flex-wrap gap-2 mt-4">
                 {!notificationsEnabled && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="border border-vow-ink px-3 py-2 text-xs text-vow-ink disabled:opacity-50">{requesting ? 'Requesting…' : 'Enable notifications'}</button>}
-                {notificationsEnabled && <span className="border border-vow-border px-3 py-2 text-xs text-vow-muted">Sound + vibration enabled</span>}
+                {notificationsEnabled && <span className="border border-vow-border px-3 py-2 text-xs text-vow-muted">Scheduled reminders active</span>}
               </div>
             </div>
           </div>
