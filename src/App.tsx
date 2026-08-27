@@ -13,6 +13,7 @@ import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
 import { ConnectPage } from '@/components/Connect';
 import { LegalPage } from '@/components/Legal';
+import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import type { UserSettings } from '@/types/database';
 
 const SPLASH_MIN_MS = 900;
@@ -65,6 +66,7 @@ function AppContent() {
   else if (!settings || !settings.onboarding_complete) content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
   else if (view === 'legal') content = <LegalPage onBack={() => setView('profile')} />;
   else content = <AppShell currentView={view} onNavigate={setView}>
+    <NativeCalendarSync />
     {view === 'dashboard' && <Dashboard onNavigate={setView} />}
     {view === 'calendar' && <CalendarPage />}
     {view === 'goals' && <><GoalsPage /><GoalHistoryActions /></>}
