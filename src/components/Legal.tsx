@@ -1,4 +1,4 @@
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Shield } from 'lucide-react';
 import { PageHeader } from './AppShell';
 
 const sections = [
@@ -26,7 +26,7 @@ export function LegalPage({ onBack }: { onBack?: () => void }) {
         <PageHeader title="Terms & Policies" subtitle="The rules, responsibilities and privacy principles governing VOW." />
         <div className="max-w-3xl">
           <div className="border border-vow-border p-5 mb-8 flex items-start gap-4 bg-white/30">
-            <div className="w-10 h-10 border border-vow-border flex items-center justify-center shrink-0"><ShieldCheck className="w-5 h-5 text-vow-ink" /></div>
+            <div className="w-10 h-10 border border-vow-border flex items-center justify-center shrink-0"><Shield className="w-5 h-5 text-vow-ink" /></div>
             <div><p className="text-sm font-medium text-vow-ink">A clear, readable policy</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">These policies explain how VOW works, what connected services mean, and what responsibility remains with you.</p></div>
           </div>
           <div className="border-t border-vow-border">
