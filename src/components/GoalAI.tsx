@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { Goal } from '@/types/database';
+import { useAuth } from '@/lib/auth';
+import type { Goal, Session } from '@/types/database';
 
 export function GoalAI({ goal }: { goal?: Goal | null }) {
+  const { session } = useAuth();
   const [message, setMessage] = useState('');
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,15 +16,37 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
     setLoading(true);
     setError('');
     try {
+      let upcoming: Session[] = [];
+      if (session) {
+        const start = new Date();
+        const end = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000);
+        const { data } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .gte('scheduled_at', start.toISOString())
+          .lte('scheduled_at', end.toISOString())
+          .order('scheduled_at', { ascending: true });
+        upcoming = (data || []) as Session[];
+      }
+
       const context = goal
         ? { title: goal.title, outcome: goal.outcome, status: goal.status, deadline: goal.deadline, weekly_commitment_target: goal.weekly_commitment_target }
         : { title: 'General planning', outcome: 'No single goal selected' };
+      const calendar = upcoming.map((item) => ({
+        title: item.title,
+        scheduled_at: item.scheduled_at,
+        duration_minutes: item.duration_minutes,
+        status: item.status,
+      }));
+
       const { data, error: invokeError } = await supabase.functions.invoke('vow-goal-ai', {
         body: {
           goal: context,
           message: question,
           scope: 'general-life-planning',
-          instruction: 'VOW AI is a general planning and accountability assistant. It can help with goals, routines, decisions, projects, study, training, habits, scheduling, trade-offs and understanding what a commitment will require. Do not assume every conversation is about a goal.',
+          calendar,
+          instruction: 'VOW AI is a general planning and accountability assistant, not a goal-only chatbot. It can help with goals, routines, decisions, projects, study, training, habits, scheduling, trade-offs and understanding what a commitment will require. Use the supplied calendar commitments when useful. Do not assume every conversation is about a goal. When evaluating a new commitment, help the user understand its real requirements, likely weekly shape, conflicts, trade-offs and a credible plan rather than blindly encouraging it.',
         },
       });
       if (invokeError) throw invokeError;
@@ -40,7 +64,7 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
       <div className="mb-4">
         <p className="text-xs uppercase tracking-wide text-vow-muted">VOW AI</p>
         <h2 className="vow-heading text-lg text-vow-ink mt-1">Think it through before you commit.</h2>
-        <p className="text-xs text-vow-muted mt-1">Ask about goals, routines, projects, decisions, trade-offs, scheduling, or what a commitment will actually require.</p>
+        <p className="text-xs text-vow-muted mt-1">Ask about goals, routines, projects, decisions, trade-offs, scheduling, or what a commitment will actually require. VOW AI can use your upcoming VOW schedule when reasoning about a plan.</p>
       </div>
       {answer && <div className="border-l-2 border-vow-ink pl-4 mb-4 text-sm leading-relaxed whitespace-pre-wrap text-vow-ink">{answer}</div>}
       {error && <p className="text-xs text-vow-muted mb-3">{error}</p>}

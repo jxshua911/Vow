@@ -30,7 +30,7 @@ export function ConnectPage() {
     let cancelled = false;
     supabase.functions.invoke('google-calendar-auth', { body: { action: 'status' } }).then(({ data, error }) => {
       if (cancelled) return;
-      const available = !error && data?.available !== false && data?.configured !== false;
+      const available = !error && data?.available === true && data?.configured === true;
       setGoogleCalendarAvailable(available);
       setGoogleCalendarConnected(available && Boolean(data?.connected));
       if (available && data?.connected) setConnected((current) => ({ ...current, 'google-calendar': 'connected' }));

@@ -27,10 +27,10 @@ export async function getNotificationPermission(): Promise<NotificationPermissio
 
 export async function requestNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
   if (!Capacitor.isNativePlatform()) return 'unsupported';
-  await setupNotifications();
   const current = await LocalNotifications.checkPermissions();
   if (current.display === 'granted') return current.display;
   const result = await LocalNotifications.requestPermissions();
+  if (result.display === 'granted') await setupNotifications();
   return result.display;
 }
 

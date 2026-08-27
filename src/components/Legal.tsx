@@ -16,24 +16,34 @@ const sections = [
 export function LegalPage({ onBack }: { onBack?: () => void }) {
   return (
     <div className="min-h-screen bg-vow-bg">
-      <div className="sticky top-0 z-30 bg-vow-bg/95 backdrop-blur border-b border-vow-border" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <div className="max-w-4xl mx-auto px-5 sm:px-8 py-3 flex items-center gap-3">
-          <button onClick={onBack} className="shrink-0 min-h-11 min-w-11 border border-vow-border flex items-center justify-center text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors" aria-label="Back to profile"><ArrowLeft className="w-4 h-4" /></button>
-          <div className="min-w-0"><p className="text-sm font-medium text-vow-ink">Terms & Policies</p><p className="text-[10px] text-vow-muted">VOW · Product policies</p></div>
+      <header className="sticky top-0 z-30 border-b border-vow-border bg-vow-bg/95 backdrop-blur" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 h-16 flex items-center gap-4">
+          <button onClick={onBack} className="shrink-0 w-10 h-10 border border-vow-border flex items-center justify-center text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors" aria-label="Back to profile">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-vow-ink truncate">Terms & Policies</p>
+            <p className="text-[10px] text-vow-muted">VOW · Product policies</p>
+          </div>
         </div>
-      </div>
-      <main className="max-w-4xl mx-auto px-5 sm:px-8 py-8 md:py-12">
+      </header>
+
+      <main className="max-w-3xl mx-auto px-5 sm:px-8 py-10 md:py-14">
         <PageHeader title="Terms & Policies" subtitle="The rules, responsibilities and privacy principles governing VOW." />
-        <div className="max-w-3xl">
-          <div className="border border-vow-border p-5 mb-8 flex items-start gap-4 bg-white/30">
-            <div className="w-10 h-10 border border-vow-border flex items-center justify-center shrink-0"><span className="text-sm font-semibold text-vow-ink" aria-hidden="true">✓</span></div>
-            <div><p className="text-sm font-medium text-vow-ink">A clear, readable policy</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">These policies explain how VOW works, what connected services mean, and what responsibility remains with you.</p></div>
-          </div>
-          <div className="border-t border-vow-border">
-            {sections.map(([title, body]) => <section key={title} className="py-6 border-b border-vow-border"><h2 className="text-sm font-medium text-vow-ink mb-2">{title}</h2><p className="text-sm leading-7 text-vow-muted">{body}</p></section>)}
-          </div>
-          <p className="pt-6 text-xs leading-relaxed text-vow-muted">Last updated: 27 August 2026. This page is a product-level terms framework, not a substitute for review by a qualified lawyer before public release.</p>
+        <div className="mt-8 border border-vow-border divide-y divide-vow-border bg-white/20">
+          {sections.map(([title, body], index) => (
+            <section key={title} className="px-5 py-6 sm:px-7 sm:py-7">
+              <div className="flex gap-4">
+                <span className="shrink-0 pt-0.5 text-[10px] font-mono text-vow-muted">{String(index + 1).padStart(2, '0')}</span>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-medium text-vow-ink mb-2">{title.replace(/^\d+\. /, '')}</h2>
+                  <p className="text-sm leading-7 text-vow-muted">{body}</p>
+                </div>
+              </div>
+            </section>
+          ))}
         </div>
+        <p className="mt-6 text-[11px] leading-5 text-vow-muted">Last updated: 27 August 2026. This page is a product-level terms framework, not a substitute for review by a qualified lawyer before public release.</p>
       </main>
     </div>
   );
