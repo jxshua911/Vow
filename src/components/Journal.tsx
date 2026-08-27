@@ -4,8 +4,21 @@ import { useAuth } from '@/lib/auth';
 import type { JournalEntry, Goal } from '@/types/database';
 import { formatDateLong } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
-import { Modal } from './Goals';
-import { Link2, Trash2 } from 'lucide-react';
+import { Link2, Trash2, X } from 'lucide-react';
+
+function Modal({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="bg-white border border-vow-border p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="vow-heading text-lg text-vow-ink">{title}</h2>
+          <button type="button" onClick={onClose} className="text-vow-muted hover:text-vow-ink" aria-label="Close"><X className="w-4 h-4" /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export function JournalPage() {
   const { session } = useAuth();
@@ -81,24 +94,12 @@ export function JournalPage() {
               <div key={entry.id} className="border-b border-vow-border py-6 group">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="text-xs text-vow-muted">{formatDateLong(entry.created_at)}</div>
-                  <button
-                    onClick={() => handleDelete(entry.id)}
-                    className="opacity-0 group-hover:opacity-100 text-vow-muted hover:text-vow-ink transition-all"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <button onClick={() => handleDelete(entry.id)} className="opacity-0 group-hover:opacity-100 text-vow-muted hover:text-vow-ink transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
                 <p className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{entry.body}</p>
                 <div className="flex items-center gap-3 mt-3">
-                  {entry.tag && (
-                    <span className="text-xs text-vow-muted border border-vow-border px-2 py-0.5">{entry.tag}</span>
-                  )}
-                  {linkedGoal && (
-                    <span className="text-xs text-vow-ink flex items-center gap-1 border-b border-vow-border">
-                      <Link2 className="w-3 h-3" />
-                      {linkedGoal.outcome}
-                    </span>
-                  )}
+                  {entry.tag && <span className="text-xs text-vow-muted border border-vow-border px-2 py-0.5">{entry.tag}</span>}
+                  {linkedGoal && <span className="text-xs text-vow-ink flex items-center gap-1 border-b border-vow-border"><Link2 className="w-3 h-3" />{linkedGoal.outcome}</span>}
                 </div>
               </div>
             );
@@ -106,18 +107,12 @@ export function JournalPage() {
         </div>
       )}
 
-      {showCompose && (
-        <ComposeModal goals={goals} onCreate={handleCreate} onClose={() => setShowCompose(false)} />
-      )}
+      {showCompose && <ComposeModal goals={goals} onCreate={handleCreate} onClose={() => setShowCompose(false)} />}
     </div>
   );
 }
 
-function ComposeModal({ goals, onCreate, onClose }: {
-  goals: Goal[];
-  onCreate: (body: string, tag: string | null, linkedGoalId: string | null) => void;
-  onClose: () => void;
-}) {
+function ComposeModal({ goals, onCreate, onClose }: { goals: Goal[]; onCreate: (body: string, tag: string | null, linkedGoalId: string | null) => void; onClose: () => void }) {
   const [body, setBody] = useState('');
   const [tag, setTag] = useState('');
   const [linkedGoalId, setLinkedGoalId] = useState<string | null>(null);
@@ -133,33 +128,13 @@ function ComposeModal({ goals, onCreate, onClose }: {
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label className="vow-label block mb-2">Entry</label>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={6}
-            required
-            autoFocus
-            className="vow-input resize-none"
-            placeholder="Write freely..."
-          />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} required autoFocus className="vow-input resize-none" placeholder="Write freely..." />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="vow-label block mb-2">Tag (optional)</label>
-            <input value={tag} onChange={(e) => setTag(e.target.value)} className="vow-input" placeholder="e.g. reflection" />
-          </div>
-          <div>
-            <label className="vow-label block mb-2">Link to goal</label>
-            <select value={linkedGoalId || ''} onChange={(e) => setLinkedGoalId(e.target.value || null)} className="vow-input">
-              <option value="">None</option>
-              {goals.map((g) => <option key={g.id} value={g.id}>{g.outcome}</option>)}
-            </select>
-          </div>
+          <div><label className="vow-label block mb-2">Tag (optional)</label><input value={tag} onChange={(e) => setTag(e.target.value)} className="vow-input" placeholder="e.g. reflection" /></div>
+          <div><label className="vow-label block mb-2">Link to goal</label><select value={linkedGoalId || ''} onChange={(e) => setLinkedGoalId(e.target.value || null)} className="vow-input"><option value="">None</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.outcome}</option>)}</select></div>
         </div>
-        <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onClose} className="vow-btn-ghost">Cancel</button>
-          <button type="submit" disabled={!body.trim()} className="vow-btn-primary flex-1">Save entry</button>
-        </div>
+        <div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="vow-btn-ghost">Cancel</button><button type="submit" disabled={!body.trim()} className="vow-btn-primary flex-1">Save entry</button></div>
       </form>
     </Modal>
   );
