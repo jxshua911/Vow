@@ -1,8 +1,20 @@
+/**
+ * VOW date helpers deliberately use the device's local timezone for calendar
+ * concepts. Absolute timestamps remain ISO/UTC when persisted or sent to APIs.
+ */
+export function getUserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
 export function startOfWeek(date: Date = new Date()): Date {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day;
-  d.setDate(diff);
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -24,6 +36,13 @@ export function toDateString(d: Date): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/** Parse a date-only value as a local calendar date, not as a UTC instant. */
+export function fromDateString(value: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return new Date(value);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
 export function formatTime(dt: string): string {
