@@ -30,6 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={{ session, loading }}>{children}</AuthContext.Provider>;
 }
 
+// The hook intentionally lives beside its provider for the public auth API.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext);
 }
