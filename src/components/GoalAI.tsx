@@ -14,7 +14,7 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
     setLoading(true); setError('');
     try {
       const { data, error: invokeError } = await supabase.functions.invoke('vow-goal-ai', {
-        body: { goal: goal ? { title: goal.title, description: goal.description, status: goal.status } : { title: 'My goals', description: 'General goal planning' }, message: question },
+        body: { goal: goal ? { title: goal.title, outcome: goal.outcome, status: goal.status } : { title: 'My goals', outcome: 'General goal planning' }, message: question },
       });
       if (invokeError) throw invokeError;
       if (data?.error) throw new Error(data.error);
