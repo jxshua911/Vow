@@ -34,7 +34,7 @@ export interface Milestone {
   title: string;
   description: string | null;
   sort_order: number;
-  deadline: string | null;
+  deadline: string;
   status: MilestoneStatus;
   created_at: string;
   updated_at: string;
