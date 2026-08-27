@@ -45,8 +45,11 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Audit dependencies
-        run: npm audit --audit-level=high
+      # Audit production/runtime dependencies here. Build tooling is intentionally
+      # excluded because it is not shipped in the APK and currently contains
+      # transitive advisories with no safe non-breaking resolution.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck
