@@ -32,6 +32,7 @@ export function GoalsPage() {
   return <div>
     <PageHeader title="Goals" subtitle="Lock in commitments. Track honestly. Adjust when the plan is wrong." action={<NewButton onClick={() => setShowCreate(true)} label="New goal" />} />
     {loading ? <div className="text-vow-muted text-sm">Loading...</div> : goals.length === 0 ? <div className="border border-vow-border p-16 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">No goals yet</p><p className="text-vow-muted text-sm mb-6">Create your first commitment and let VOW map the work into your calendar.</p><NewButton onClick={() => setShowCreate(true)} label="Create goal" /></div> : <div className="space-y-12">{activeGoals.length > 0 && <GoalSection title="Active" goals={activeGoals} onSelect={setSelectedGoalId} />}{draftGoals.length > 0 && <GoalSection title="Drafts" goals={draftGoals} onSelect={setSelectedGoalId} />}{completedGoals.length > 0 && <GoalSection title="Completed & Abandoned" goals={completedGoals} onSelect={setSelectedGoalId} />}</div>}
+    <GoalAI />
   </div>;
 }
 
@@ -56,11 +57,7 @@ function CreateGoal({ userId, onCreated, onCancel }: { userId: string; onCreated
     setPlanning(true); setError(null); setAiPlan('');
     try {
       const { data, error: aiError } = await supabase.functions.invoke('vow-goal-ai', {
-        body: {
-          goal: { title: input, outcome: input, status: 'draft' },
-          message: `I am considering committing to this: "${input}". Before I lock it in, help me understand what it will realistically take, what resources or habits it may require, what my week could look like, likely trade-offs, and what I should clarify before committing. Keep it practical and concise.`,
-          scope: 'goal-commitment-planning',
-        },
+        body: { goal: { title: input, outcome: input, status: 'draft' }, message: `I am considering committing to this: "${input}". Before I lock it in, help me understand what it will realistically take, what resources or habits it may require, what my week could look like, likely trade-offs, and what I should clarify before committing. Keep it practical and concise.`, scope: 'goal-commitment-planning' },
       });
       if (aiError) throw aiError;
       if (data?.error) throw new Error(data.error);
@@ -79,21 +76,18 @@ function CreateGoal({ userId, onCreated, onCancel }: { userId: string; onCreated
     try {
       const { data: goalData, error: goalErr } = await supabase.from('goals').insert({ user_id: userId, title: decomposed.outcome, outcome: decomposed.outcome, why_it_matters: whyItMatters || null, deadline: decomposed.deadline, status: 'active', weekly_commitment_target: weeklyTarget }).select().single();
       if (goalErr) throw goalErr;
-
       const now = new Date();
       const deadline = decomposed.deadline ? new Date(`${decomposed.deadline}T23:59:59`) : addDays(now, 28);
       const totalDays = Math.max(7, Math.ceil((deadline.getTime() - now.getTime()) / 86400000));
       const milestoneRows = decomposed.milestones.map((m, i) => ({ goal_id: goalData.id, title: m.title, description: m.description, sort_order: i, deadline: toDateString(new Date(Math.min(deadline.getTime(), addDays(now, Math.max(7, m.weeksOut * 7)).getTime()))), status: i === 0 ? 'in_progress' : 'pending' as const }));
       const { data: milestoneData, error: milestoneErr } = await supabase.from('milestones').insert(milestoneRows).select().order('sort_order');
       if (milestoneErr) throw milestoneErr;
-
       const weeks = Math.max(1, Math.min(52, Math.ceil(totalDays / 7)));
       const dayOffsets = [1, 3, 5, 2, 4, 6, 0];
       const sessions: Array<Record<string, unknown>> = [];
       for (let week = 0; week < weeks; week += 1) {
         for (let slot = 0; slot < weeklyTarget; slot += 1) {
-          const dayOffset = dayOffsets[slot % dayOffsets.length];
-          const sessionDate = addDays(now, week * 7 + dayOffset + 1);
+          const sessionDate = addDays(now, week * 7 + dayOffsets[slot % dayOffsets.length] + 1);
           sessionDate.setHours(9, 0, 0, 0);
           if (sessionDate > deadline) continue;
           const progress = Math.min(0.999, Math.max(0, (sessionDate.getTime() - now.getTime()) / Math.max(1, deadline.getTime() - now.getTime())));
@@ -112,10 +106,7 @@ function CreateGoal({ userId, onCreated, onCancel }: { userId: string; onCreated
   }
 
   return <div><PageHeader title="New goal" subtitle="VOW will pressure-test the commitment, decompose the work, and place the resulting routine into your calendar." /><div className="max-w-2xl">
-    {!decomposed ? <>
-      <textarea value={rawInput} onChange={(e) => setRawInput(e.target.value)} rows={4} className="vow-input resize-none mb-4" placeholder="e.g. I want to get better at running" autoFocus />
-      <div className="flex gap-3"><button onClick={onCancel} className="vow-btn-ghost">Cancel</button><button onClick={preparePlan} disabled={!rawInput.trim() || planning} className="vow-btn-primary flex-1">{planning ? 'Thinking it through…' : 'Plan with VOW AI'}</button></div>
-    </> : <>
+    {!decomposed ? <><textarea value={rawInput} onChange={(e) => setRawInput(e.target.value)} rows={4} className="vow-input resize-none mb-4" placeholder="e.g. I want to get better at running" autoFocus /><div className="flex gap-3"><button onClick={onCancel} className="vow-btn-ghost">Cancel</button><button onClick={preparePlan} disabled={!rawInput.trim() || planning} className="vow-btn-primary flex-1">{planning ? 'Thinking it through…' : 'Plan with VOW AI'}</button></div></> : <>
       {aiPlan && <div className="border border-vow-border p-5 mb-6"><p className="vow-label mb-2">VOW AI assessment</p><p className="text-sm leading-relaxed whitespace-pre-wrap text-vow-ink">{aiPlan}</p></div>}
       <div className="border-t border-vow-border pt-4 mb-6"><p className="vow-label mb-1">Outcome</p><p className="text-vow-ink font-medium">{decomposed.outcome}</p><p className="text-xs text-vow-muted mt-2">This commitment will become a calendar routine rather than a one-off task.</p></div>
       <div className="border-t border-vow-border pt-4 mb-6"><p className="vow-label mb-4">Milestones</p><div className="space-y-4">{decomposed.milestones.map((m, i) => <div key={i} className="flex gap-4"><span className="text-vow-muted text-sm font-mono pt-0.5">{String(i + 1).padStart(2, '0')}</span><div><p className="text-sm text-vow-ink font-medium">{m.title}</p><p className="text-xs text-vow-muted mt-1">{m.description}</p></div></div>)}</div></div>
@@ -123,8 +114,7 @@ function CreateGoal({ userId, onCreated, onCancel }: { userId: string; onCreated
       <div className="mb-6"><label className="vow-label block mb-2">Why does this matter to you?</label><textarea value={whyItMatters} onChange={(e) => setWhyItMatters(e.target.value)} rows={2} className="vow-input resize-none" placeholder="Your coach will reference this when motivation dips." /></div>
       {error && <p className="text-sm text-vow-ink mb-4 border-l-2 border-vow-ink pl-3">{error}</p>}
       <div className="flex gap-3"><button onClick={() => { setDecomposed(null); setAiPlan(''); }} className="vow-btn-ghost">Back</button><button onClick={handleCreate} disabled={saving} className="vow-btn-primary flex-1"><Lock className="w-4 h-4" />{saving ? 'Building calendar…' : 'Lock in goal & routine'}</button></div>
-    </>}
-  </div></div>;
+    </>}</div></div>;
 }
 
 function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) {
@@ -136,23 +126,14 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
   const [showAddSession, setShowAddSession] = useState(false);
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [expandedMilestone, setExpandedMilestone] = useState<string | null>(null);
-  const load = useCallback(async () => {
-    const [goalRes, msRes, sessRes] = await Promise.all([
-      supabase.from('goals').select('*').eq('id', goalId).maybeSingle(),
-      supabase.from('milestones').select('*').eq('goal_id', goalId).order('sort_order'),
-      supabase.from('sessions').select('*').eq('goal_id', goalId).order('scheduled_at', { ascending: true }),
-    ]);
-    setGoal(goalRes.data as Goal | null); setMilestones(msRes.data || []); setSessions(sessRes.data || []); setLoading(false);
-  }, [goalId]);
+  const load = useCallback(async () => { const [goalRes, msRes, sessRes] = await Promise.all([supabase.from('goals').select('*').eq('id', goalId).maybeSingle(), supabase.from('milestones').select('*').eq('goal_id', goalId).order('sort_order'), supabase.from('sessions').select('*').eq('goal_id', goalId).order('scheduled_at', { ascending: true })]); setGoal(goalRes.data as Goal | null); setMilestones(msRes.data || []); setSessions(sessRes.data || []); setLoading(false); }, [goalId]);
   useEffect(() => { load(); }, [load]);
-
   async function updateSessionStatus(sessId: string, status: Session['status']) { const updates: Partial<Session> = { status, updated_at: new Date().toISOString() }; if (status === 'completed') updates.completed_at = new Date().toISOString(); await supabase.from('sessions').update(updates).eq('id', sessId); load(); }
   async function moveSession(sess: Session) { const newDate = addDays(new Date(sess.scheduled_at), 1); await supabase.from('sessions').update({ scheduled_at: newDate.toISOString(), moved_count: sess.moved_count + 1, status: 'moved', updated_at: new Date().toISOString() }).eq('id', sess.id); load(); }
   async function toggleMilestoneStatus(ms: Milestone) { const newStatus = ms.status === 'completed' ? 'pending' : 'completed'; await supabase.from('milestones').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', ms.id); load(); }
   async function abandonGoal() { if (!confirm('Mark this goal as abandoned? This records the outcome so VOW can learn from the pattern.')) return; await supabase.from('goals').update({ status: 'abandoned', updated_at: new Date().toISOString() }).eq('id', goalId); onBack(); }
   async function completeGoal() { await supabase.from('goals').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', goalId); onBack(); }
   async function handlePause(context: string) { if (!session) return; await supabase.from('user_settings').upsert({ user_id: session.user.id, pause_context: context || null, updated_at: new Date().toISOString() }, { onConflict: 'user_id' }); setShowPauseModal(false); }
-
   if (loading) return <div className="text-vow-muted text-sm">Loading...</div>;
   if (!goal) return <div className="text-vow-muted text-sm">Goal not found.</div>;
   const completedSessions = sessions.filter((s) => s.status === 'completed').length;
@@ -160,7 +141,6 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
   const pct = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
   const movedCount = sessions.filter((s) => s.moved_count > 0).reduce((sum, s) => sum + s.moved_count, 0);
   const statusIcons: Record<string, typeof CheckCircle2> = { completed: CheckCircle2, scheduled: Circle, skipped: SkipForward, moved: Move };
-
   return <div>
     <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors"><ArrowLeft className="w-4 h-4" />Back to goals</button>
     <div className="border-t border-vow-border pt-8 mb-8"><div className="flex items-start justify-between gap-4 mb-4"><h1 className="vow-heading text-2xl text-vow-ink">{goal.outcome}</h1><span className="text-xs uppercase tracking-wide text-vow-muted">{goal.status}</span></div>{goal.why_it_matters && <p className="text-sm text-vow-muted italic mb-6">"{goal.why_it_matters}"</p>}<div className="grid grid-cols-3 gap-4 border-t border-vow-border pt-4"><div><p className="vow-label">Progress</p><p className="text-lg text-vow-ink mt-1">{pct}%</p></div><div><p className="vow-label">Sessions</p><p className="text-lg text-vow-ink mt-1">{completedSessions}/{totalSessions}</p></div><div><p className="vow-label">Moved</p><p className="text-lg text-vow-ink mt-1">{movedCount}</p></div></div></div>
