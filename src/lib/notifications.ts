@@ -46,7 +46,7 @@ export async function scheduleReminder(id: number, title: string, body: string, 
       body,
       channelId: CHANNEL_ID,
       smallIcon: VOW_NOTIFICATION_ICON,
-      sound: null,
+      sound: undefined,
       schedule: { at, allowWhileIdle: true },
     }],
   });
