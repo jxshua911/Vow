@@ -4,20 +4,10 @@ import { useAuth } from '@/lib/auth';
 import type { JournalEntry, Goal } from '@/types/database';
 import { formatDateLong } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
-import { Link2, Trash2, X } from 'lucide-react';
+import { Link2, Trash2, X, Target } from 'lucide-react';
 
 function Modal({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="bg-white border border-vow-border p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="vow-heading text-lg text-vow-ink">{title}</h2>
-          <button type="button" onClick={onClose} className="text-vow-muted hover:text-vow-ink" aria-label="Close"><X className="w-4 h-4" /></button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
+  return <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-label={title}><div className="bg-white border border-vow-border p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto"><div className="flex items-center justify-between mb-6"><h2 className="vow-heading text-lg text-vow-ink">{title}</h2><button type="button" onClick={onClose} className="text-vow-muted hover:text-vow-ink" aria-label="Close"><X className="w-4 h-4" /></button></div>{children}</div></div>;
 }
 
 export function JournalPage() {
@@ -31,111 +21,51 @@ export function JournalPage() {
     if (!session) return;
     const [entriesRes, goalsRes] = await Promise.all([
       supabase.from('journal_entries').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
-      supabase.from('goals').select('*').eq('user_id', session.user.id).in('status', ['active', 'locked', 'completed']),
+      supabase.from('goals').select('*').eq('user_id', session.user.id).in('status', ['active', 'locked', 'completed']).order('created_at', { ascending: false }),
     ]);
-    setEntries(entriesRes.data || []);
-    setGoals(goalsRes.data || []);
-    setLoading(false);
+    setEntries(entriesRes.data || []); setGoals(goalsRes.data || []); setLoading(false);
   }, [session]);
 
   useEffect(() => { load(); }, [load]);
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this journal entry? This cannot be undone.')) return;
-    await supabase.from('journal_entries').delete().eq('id', id);
-    load();
+    await supabase.from('journal_entries').delete().eq('id', id); load();
   }
 
   async function handleCreate(body: string, tag: string | null, linkedGoalId: string | null) {
     if (!session) return;
-    await supabase.from('journal_entries').insert({
-      user_id: session.user.id,
-      body,
-      tag,
-      linked_goal_id: linkedGoalId,
-    });
-    setShowCompose(false);
-    load();
+    await supabase.from('journal_entries').insert({ user_id: session.user.id, body, tag, linked_goal_id: linkedGoalId });
+    setShowCompose(false); load();
   }
 
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Journal" />
-        <div className="text-vow-muted text-sm">Loading...</div>
-      </div>
-    );
-  }
+  if (loading) return <div><PageHeader title="Journal" /><div className="text-vow-muted text-sm">Loading...</div></div>;
 
-  return (
-    <div>
-      <PageHeader
-        title="Journal"
-        subtitle="Freeform entries. Link to a goal or let the AI connect them later."
-        action={<NewButton onClick={() => setShowCompose(true)} label="New entry" />}
-      />
+  const activeGoals = goals.filter((goal) => goal.status === 'active' || goal.status === 'locked');
+  const promptGoal = activeGoals[0];
+  const prompt = promptGoal ? `What did you do today that moved “${promptGoal.outcome}” forward? What got in the way, and what will you change next?` : null;
 
-      <p className="text-xs text-vow-muted mb-10 leading-relaxed max-w-xl">
-        Your journal is private. Entries are stored in your account and never sent to third-party analytics.
-        In a future version, AI will link entries to goals automatically using semantic matching.
-      </p>
+  return <div>
+    <PageHeader title="Journal" subtitle="Reflect honestly. Link the reflection to the commitment it belongs to." action={<NewButton onClick={() => setShowCompose(true)} label="New entry" />} />
+    <p className="text-xs text-vow-muted mb-8 leading-relaxed max-w-xl">Your journal is private. Entries stay in your account. Link reflections to goals so VOW can show the story behind progress, setbacks and completed commitments.</p>
 
-      {entries.length === 0 ? (
-        <div className="border-t border-vow-border pt-12 text-center">
-          <p className="vow-heading text-xl text-vow-ink mb-2">No journal entries yet</p>
-          <p className="text-vow-muted text-sm mb-6">Write freely — about progress, setbacks, or anything on your mind.</p>
-          <NewButton onClick={() => setShowCompose(true)} label="Write entry" />
-        </div>
-      ) : (
-        <div className="border-t border-vow-border">
-          {entries.map((entry) => {
-            const linkedGoal = goals.find((g) => g.id === entry.linked_goal_id);
-            return (
-              <div key={entry.id} className="border-b border-vow-border py-6 group">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="text-xs text-vow-muted">{formatDateLong(entry.created_at)}</div>
-                  <button onClick={() => handleDelete(entry.id)} className="opacity-0 group-hover:opacity-100 text-vow-muted hover:text-vow-ink transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
-                <p className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{entry.body}</p>
-                <div className="flex items-center gap-3 mt-3">
-                  {entry.tag && <span className="text-xs text-vow-muted border border-vow-border px-2 py-0.5">{entry.tag}</span>}
-                  {linkedGoal && <span className="text-xs text-vow-ink flex items-center gap-1 border-b border-vow-border"><Link2 className="w-3 h-3" />{linkedGoal.outcome}</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+    {prompt && <section className="border border-vow-border p-5 mb-8"><div className="flex items-start gap-3"><Target className="w-4 h-4 text-vow-ink mt-0.5 shrink-0" /><div className="min-w-0 flex-1"><p className="vow-label mb-2">Reflect on your active goal</p><p className="text-sm text-vow-ink leading-relaxed">{prompt}</p><button onClick={() => setShowCompose(true)} className="mt-4 border border-vow-ink px-3 py-2 text-xs text-vow-ink">Write this reflection</button></div></div></section>}
 
-      {showCompose && <ComposeModal goals={goals} onCreate={handleCreate} onClose={() => setShowCompose(false)} />}
-    </div>
-  );
+    {entries.length === 0 ? <div className="border-t border-vow-border pt-12 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">No journal entries yet</p><p className="text-vow-muted text-sm mb-6">Write freely — then connect the reflection to a goal when it matters.</p><NewButton onClick={() => setShowCompose(true)} label="Write entry" /></div> : <div className="border-t border-vow-border">{entries.map((entry) => { const linkedGoal = goals.find((g) => g.id === entry.linked_goal_id); return <div key={entry.id} className="border-b border-vow-border py-6 group"><div className="flex items-start justify-between gap-3 mb-3"><div className="text-xs text-vow-muted">{formatDateLong(entry.created_at)}</div><button onClick={() => handleDelete(entry.id)} className="opacity-0 group-hover:opacity-100 text-vow-muted hover:text-vow-ink transition-all" aria-label="Delete entry"><Trash2 className="w-3.5 h-3.5" /></button></div><p className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{entry.body}</p><div className="flex items-center gap-3 mt-3 flex-wrap">{entry.tag && <span className="text-xs text-vow-muted border border-vow-border px-2 py-0.5">{entry.tag}</span>}{linkedGoal && <span className="text-xs text-vow-ink flex items-center gap-1 border-b border-vow-border"><Link2 className="w-3 h-3" />{linkedGoal.outcome}</span>}</div></div>; })}</div>}
+    {showCompose && <ComposeModal goals={goals} onCreate={handleCreate} onClose={() => setShowCompose(false)} />}
+  </div>;
 }
 
 function ComposeModal({ goals, onCreate, onClose }: { goals: Goal[]; onCreate: (body: string, tag: string | null, linkedGoalId: string | null) => void; onClose: () => void }) {
   const [body, setBody] = useState('');
   const [tag, setTag] = useState('');
   const [linkedGoalId, setLinkedGoalId] = useState<string | null>(null);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!body.trim()) return;
-    onCreate(body.trim(), tag.trim() || null, linkedGoalId);
-  }
-
-  return (
-    <Modal onClose={onClose} title="New journal entry">
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label className="vow-label block mb-2">Entry</label>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} required autoFocus className="vow-input resize-none" placeholder="Write freely..." />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="vow-label block mb-2">Tag (optional)</label><input value={tag} onChange={(e) => setTag(e.target.value)} className="vow-input" placeholder="e.g. reflection" /></div>
-          <div><label className="vow-label block mb-2">Link to goal</label><select value={linkedGoalId || ''} onChange={(e) => setLinkedGoalId(e.target.value || null)} className="vow-input"><option value="">None</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.outcome}</option>)}</select></div>
-        </div>
-        <div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="vow-btn-ghost">Cancel</button><button type="submit" disabled={!body.trim()} className="vow-btn-primary flex-1">Save entry</button></div>
-      </form>
-    </Modal>
-  );
+  const selectedGoal = goals.find((goal) => goal.id === linkedGoalId);
+  function handleSubmit(e: React.FormEvent) { e.preventDefault(); if (!body.trim()) return; onCreate(body.trim(), tag.trim() || null, linkedGoalId); }
+  return <Modal onClose={onClose} title="New journal entry"><form onSubmit={handleSubmit} className="space-y-5">
+    <div><label className="vow-label block mb-2">Entry</label><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} required autoFocus className="vow-input resize-none" placeholder={selectedGoal ? `Reflect on “${selectedGoal.outcome}”…` : 'Write freely...'} /></div>
+    <div><label className="vow-label block mb-2">Link to goal</label><select value={linkedGoalId || ''} onChange={(e) => setLinkedGoalId(e.target.value || null)} className="vow-input"><option value="">No goal — private reflection</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.outcome}</option>)}</select><p className="text-[10px] text-vow-muted mt-2">Linked entries appear as part of the goal's reflection trail.</p></div>
+    <div><label className="vow-label block mb-2">Tag (optional)</label><input value={tag} onChange={(e) => setTag(e.target.value)} className="vow-input" placeholder="e.g. reflection" /></div>
+    <div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="vow-btn-ghost">Cancel</button><button type="submit" disabled={!body.trim()} className="vow-btn-primary flex-1">Save reflection</button></div>
+  </form></Modal>;
 }
