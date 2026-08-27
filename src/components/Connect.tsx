@@ -13,6 +13,8 @@ const categories: { id: IntegrationCategory | 'all'; label: string }[] = [
   { id: 'education', label: 'Education' }, { id: 'productivity', label: 'Productivity' }, { id: 'reading', label: 'Reading' },
   { id: 'mindfulness', label: 'Mindfulness' }, { id: 'faith', label: 'Faith' },
 ];
+const FIRST_VIEW_LIMIT = 6;
+const FIRST_VIEW_KEY = 'vow:connect-first-view-complete';
 
 export function ConnectPage() {
   const { session } = useAuth();
@@ -22,6 +24,7 @@ export function ConnectPage() {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
   const [googleCalendarAvailable, setGoogleCalendarAvailable] = useState(false);
+  const [showAll, setShowAll] = useState(() => localStorage.getItem(FIRST_VIEW_KEY) === 'true');
 
   useEffect(() => { localStorage.setItem('vow:connections', JSON.stringify(connected)); }, [connected]);
 
@@ -40,12 +43,16 @@ export function ConnectPage() {
 
   const integrations = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return INTEGRATIONS.filter((integration) => {
+    const filtered = INTEGRATIONS.filter((integration) => {
       const categoryMatch = category === 'all' || integration.category === category;
       const queryMatch = !q || `${integration.name} ${integration.description} ${integration.category}`.toLowerCase().includes(q);
       return categoryMatch && queryMatch;
     });
-  }, [category, query]);
+    if (showAll || q || category !== 'all') return filtered;
+    const connectedFirst = filtered.filter((item) => item.id === 'google-calendar' ? googleCalendarConnected : connected[item.id] === 'connected');
+    const unconnected = filtered.filter((item) => !connectedFirst.includes(item));
+    return [...connectedFirst, ...unconnected].slice(0, FIRST_VIEW_LIMIT);
+  }, [category, query, showAll, connected, googleCalendarConnected]);
 
   async function connectIntegration(id: string) {
     if (!session || connecting) return;
@@ -64,9 +71,16 @@ export function ConnectPage() {
     }
   }
 
+  function revealAll() {
+    localStorage.setItem(FIRST_VIEW_KEY, 'true');
+    setShowAll(true);
+  }
+
+  const isLimited = !showAll && !query.trim() && category === 'all' && integrations.length < INTEGRATIONS.length;
+
   return <div>
     <PageHeader title="Connect" subtitle="Connect the services that can give VOW reliable evidence for your routines and commitments." />
-    <section className="mb-8 border border-vow-border p-5 md:p-6"><h2 className="text-sm font-medium text-vow-ink mb-1">One place for your evidence</h2><p className="text-sm text-vow-muted leading-relaxed">Only integrations that are actually available can be connected. Providers still in setup stay visible so you can see the roadmap, but their controls are intentionally inactive.</p></section>
+    <section className="mb-8 border border-vow-border p-5 md:p-6"><h2 className="text-sm font-medium text-vow-ink mb-1">One place for your evidence</h2><p className="text-sm text-vow-muted leading-relaxed">VOW starts with a small set of immediately useful connections instead of overwhelming you with a catalogue. Connected and first-hand sources are prioritised; broader discovery is available when you want it.</p></section>
     <div className="mb-5"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search connections" aria-label="Search connections" className="w-full border border-vow-border bg-transparent px-4 py-3 text-sm text-vow-ink outline-none focus:border-vow-ink" /></div>
     <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">{categories.map((item) => <button key={item.id} onClick={() => setCategory(item.id)} className={`whitespace-nowrap px-3 py-2 text-xs border transition-colors ${category === item.id ? 'border-vow-ink text-vow-ink' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>{item.label}</button>)}</div>
     <div className="space-y-2">{integrations.map((integration) => {
@@ -78,5 +92,6 @@ export function ConnectPage() {
         <button disabled={isConnected || unavailable || connecting === integration.id} onClick={() => connectIntegration(integration.id)} className={`shrink-0 px-3 py-2 text-xs border transition-colors ${isConnected ? 'border-vow-border text-vow-muted' : unavailable ? 'border-vow-border text-vow-muted opacity-50 cursor-not-allowed' : 'border-vow-ink text-vow-ink hover:bg-vow-border/40 disabled:opacity-50'}`}>{isConnected ? 'Connected' : unavailable ? 'Unavailable' : connecting === integration.id ? 'Connecting…' : 'Connect'}</button>
       </div>;
     })}</div>
+    {isLimited && <div className="mt-6 flex flex-col items-center gap-2 border-t border-vow-border pt-6"><p className="text-xs text-vow-muted">Showing the connections most relevant to a first VOW setup.</p><button onClick={revealAll} className="border border-vow-ink px-4 py-2 text-xs text-vow-ink">Explore all connections</button></div>}
   </div>;
 }
