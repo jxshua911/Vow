@@ -9,26 +9,27 @@ const ENABLE_KEY = 'vow:native-calendar-sync';
 
 export function NativeCalendarSync() {
   const { session } = useAuth();
+  const userId = session?.user.id;
   const [enabled, setEnabled] = useState(() => localStorage.getItem(ENABLE_KEY) === 'true');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !session || !enabled) return;
+    if (!Capacitor.isNativePlatform() || !userId || !enabled) return;
     let cancelled = false;
     async function sync() {
-      const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
+      const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
       if (cancelled || !data?.length) return;
       try { await syncSessionsToNativeCalendar(data as Session[]); } catch (error) { console.error('[VOW] Native calendar sync failed:', error); }
     }
     sync();
     return () => { cancelled = true; };
-  }, [enabled, session]);
+  }, [enabled, userId]);
 
   if (!Capacitor.isNativePlatform() || !session) return null;
 
   async function toggle() {
-    if (busy) return;
+    if (busy || !userId) return;
     setBusy(true); setMessage('');
     try {
       if (!enabled) {
@@ -36,7 +37,7 @@ export function NativeCalendarSync() {
         if (!granted) throw new Error('Calendar access was not granted.');
         localStorage.setItem(ENABLE_KEY, 'true');
         setEnabled(true);
-        const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
+        const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
         const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[]) : 0;
         setMessage(created ? `${created} upcoming VOW sessions added to your phone calendar.` : 'Phone calendar sync is on.');
       } else {
