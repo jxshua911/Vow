@@ -7,7 +7,6 @@ import { AppShell, type View } from '@/components/AppShell';
 import { Dashboard } from '@/components/Dashboard';
 import { GoalsPage } from '@/components/Goals';
 import { GoalHistoryActions } from '@/components/GoalHistoryActions';
-import { GoalAI } from '@/components/GoalAI';
 import { JournalPage } from '@/components/Journal';
 import { ReviewPage } from '@/components/WeeklyReview';
 import { ProfilePage } from '@/components/Profile';
@@ -33,7 +32,6 @@ function AppContent() {
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
 
   useEffect(() => { const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS); return () => window.clearTimeout(timer); }, []);
-
   useEffect(() => {
     let cancelled = false;
     if (!session) { setSettings(null); setSettingsLoading(false); return; }
@@ -45,7 +43,6 @@ function AppContent() {
     });
     return () => { cancelled = true; };
   }, [session]);
-
   async function handleOnboardingComplete() {
     if (!session) return;
     setSettingsLoading(true);
@@ -53,7 +50,6 @@ function AppContent() {
     if (error) console.error('[VOW] Failed to refresh settings:', error);
     setSettings(data as UserSettings | null); setSettingsLoading(false);
   }
-
   const contentReady = !loading && (!session || !settingsLoading);
   useEffect(() => {
     if (splashMinElapsed && contentReady && !splashFadingOut) {
@@ -71,7 +67,7 @@ function AppContent() {
   else content = <AppShell currentView={view} onNavigate={setView}>
     {view === 'dashboard' && <Dashboard onNavigate={setView} />}
     {view === 'calendar' && <CalendarPage />}
-    {view === 'goals' && <><GoalsPage /><GoalAI /><GoalHistoryActions /></>}
+    {view === 'goals' && <><GoalsPage /><GoalHistoryActions /></>}
     {view === 'journal' && <JournalPage />}
     {view === 'review' && <ReviewPage />}
     {view === 'profile' && <ProfilePage onLegal={() => setView('legal')} />}
