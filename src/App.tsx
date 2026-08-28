@@ -5,12 +5,12 @@ import { AuthPage } from '@/components/AuthPage';
 import { Onboarding } from '@/components/Onboarding';
 import { AppShell, type View } from '@/components/AppShell';
 import { Dashboard } from '@/components/Dashboard';
-import { GoalsPage } from '@/components/Goals';
 import { GoalHistoryActions } from '@/components/GoalHistoryActions';
 import { GoalsJournalWorkspace } from '@/components/GoalsJournalWorkspace';
 import { ReviewPage } from '@/components/WeeklyReview';
 import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
+import { ConnectPage } from '@/components/Connect';
 import { LegalPage } from '@/components/Legal';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import type { UserSettings } from '@/types/database';
@@ -69,7 +69,7 @@ function AppContent() {
     {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
     {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
     {view === 'review' && <ReviewPage />}
-    {view === 'profile' && <ProfilePage onLegal={() => setView('legal')} />}
+    {view === 'profile' && <div className="space-y-16"><ProfilePage onLegal={() => setView('legal')} /><section className="border-t border-vow-border pt-10"><ConnectPage /></section></div>}
   </AppShell>;
 
   return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
