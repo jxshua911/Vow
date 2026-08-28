@@ -60,7 +60,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         {activeGoals.length === 0 ? <div className="border border-vow-border p-8 text-center"><p className="text-vow-muted text-sm">No active goals yet.</p></div> : <div className="space-y-px border border-vow-border">{activeGoals.map((g) => { const goalSessions = sessions.filter((s) => s.goal_id === g.id); const completed = goalSessions.filter((s) => s.status === 'completed').length; const total = goalSessions.length; const pct = total > 0 ? Math.round((completed / total) * 100) : 0; return <button key={g.id} onClick={() => onNavigate('goals')} className="w-full text-left bg-vow-bg px-4 py-3 hover:opacity-70 transition-opacity"><div className="flex items-center justify-between mb-2"><div className="text-sm text-vow-ink truncate flex-1">{g.outcome}</div><div className="text-xs text-vow-muted ml-2">{pct}%</div></div><div className="h-px bg-vow-border relative"><div className="absolute inset-y-0 left-0 bg-vow-ink transition-all duration-500" style={{ width: `${pct}%`, height: '1px' }} /></div><div className="text-xs text-vow-muted mt-1.5">{g.weekly_commitment_target} sessions/week — {completed}/{total} all-time</div></button>; })}</div>}
       </div>
     </div>
-    <div className="mt-8 border-t border-vow-border pt-5"><p className="text-xs text-vow-muted">Your journal remains private and is available within your Goals workspace.</p><button onClick={() => onNavigate('goals')} className="mt-2 text-vow-ink text-sm border-b border-vow-ink">Open Goals & Journal</button></div>
+    <div className="mt-8 border-t border-vow-border pt-5"><p className="text-xs text-vow-muted">Your journal remains private and is available within your Goals workspace.</p></div>
   </div>;
 }
 
