@@ -7,11 +7,10 @@ import { AppShell, type View } from '@/components/AppShell';
 import { Dashboard } from '@/components/Dashboard';
 import { GoalsPage } from '@/components/Goals';
 import { GoalHistoryActions } from '@/components/GoalHistoryActions';
-import { JournalPage } from '@/components/Journal';
+import { GoalsJournalWorkspace } from '@/components/GoalsJournalWorkspace';
 import { ReviewPage } from '@/components/WeeklyReview';
 import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
-import { ConnectPage } from '@/components/Connect';
 import { LegalPage } from '@/components/Legal';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import type { UserSettings } from '@/types/database';
@@ -66,14 +65,11 @@ function AppContent() {
   else if (!settings || !settings.onboarding_complete) content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
   else if (view === 'legal') content = <LegalPage onBack={() => setView('profile')} />;
   else content = <AppShell currentView={view} onNavigate={setView}>
-    <NativeCalendarSync />
     {view === 'dashboard' && <Dashboard onNavigate={setView} />}
-    {view === 'calendar' && <CalendarPage />}
-    {view === 'goals' && <><GoalsPage /><GoalHistoryActions /></>}
-    {view === 'journal' && <JournalPage />}
+    {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
+    {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
     {view === 'review' && <ReviewPage />}
     {view === 'profile' && <ProfilePage onLegal={() => setView('legal')} />}
-    {view === 'connect' && <ConnectPage />}
   </AppShell>;
 
   return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
