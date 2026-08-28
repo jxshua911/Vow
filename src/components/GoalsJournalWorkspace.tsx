@@ -12,7 +12,7 @@ export function GoalsJournalWorkspace({ children }: { children?: ReactNode }) {
           <p className="vow-label mb-1">Reflect on the work</p>
           <p className="text-xs text-vow-muted leading-relaxed">Keep your journal close to your goals. Your writing stays private unless you explicitly choose to share something.</p>
         </div>
-        <JournalPage />
+        <JournalPage embedded />
       </section>
     </div>
   );
