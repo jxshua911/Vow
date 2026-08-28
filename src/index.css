@@ -121,6 +121,24 @@
     height: auto;
     animation: vow-splash-in 350ms ease both;
   }
+
+  .vow-calendar-sync-panel {
+    max-height: 300px;
+    opacity: 1;
+    transform: translateY(0);
+    overflow: hidden;
+    transition: max-height 460ms ease, opacity 380ms ease, transform 460ms ease, margin-bottom 460ms ease, padding-top 460ms ease, padding-bottom 460ms ease, border-color 460ms ease;
+  }
+
+  .vow-calendar-sync-panel-hiding {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-8px);
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
+  }
 }
 
 @keyframes vow-splash-in {
