@@ -15,6 +15,7 @@ export function NativeCalendarSync() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === 'true');
+  const [hiding, setHiding] = useState(false);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !userId || !enabled) return;
@@ -32,10 +33,11 @@ export function NativeCalendarSync() {
 
   function dismissAfterSuccess(text: string) {
     setMessage(text);
+    window.setTimeout(() => setHiding(true), 850);
     window.setTimeout(() => {
       setDismissed(true);
       localStorage.setItem(DISMISSED_KEY, 'true');
-    }, 850);
+    }, 1320);
   }
 
   async function toggle() {
@@ -46,6 +48,7 @@ export function NativeCalendarSync() {
         const granted = await requestNativeCalendarAccess();
         if (!granted) throw new Error('Calendar access was not granted.');
         localStorage.setItem(ENABLE_KEY, 'true');
+        localStorage.removeItem(DISMISSED_KEY);
         setEnabled(true);
         const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
         const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[]) : 0;
@@ -60,5 +63,5 @@ export function NativeCalendarSync() {
     } finally { setBusy(false); }
   }
 
-  return <div className="border border-vow-border p-5 mb-8 transition-all duration-500 ease-out animate-[fadeIn_220ms_ease-out]"><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-medium text-vow-ink">Phone calendar</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">Put VOW sessions into your device calendar so your normal calendar reminders can alert you.</p>{message && <p className="text-xs text-vow-ink mt-2">{message}</p>}</div><button onClick={toggle} disabled={busy} className="vow-btn-primary disabled:opacity-50">{busy ? 'Updating…' : enabled ? 'Calendar sync on' : 'Add VOW to phone calendar'}</button></div></div>;
+  return <div className={`border border-vow-border p-5 mb-8 vow-calendar-sync-panel${hiding ? ' vow-calendar-sync-panel-hiding' : ''}`}><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-medium text-vow-ink">Phone calendar</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">Put VOW sessions into your device calendar so your normal calendar reminders can alert you.</p>{message && <p className="text-xs text-vow-ink mt-2">{message}</p>}</div><button onClick={toggle} disabled={busy} className="vow-btn-primary disabled:opacity-50">{busy ? 'Updating…' : enabled ? 'Calendar sync on' : 'Add VOW to phone calendar'}</button></div></div>;
 }
