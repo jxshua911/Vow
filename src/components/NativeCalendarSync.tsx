@@ -17,20 +17,6 @@ export function NativeCalendarSync() {
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === 'true');
   const [hiding, setHiding] = useState(false);
 
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !userId || !enabled) return;
-    let cancelled = false;
-    async function sync() {
-      const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
-      if (cancelled || !data?.length) return;
-      try { await syncSessionsToNativeCalendar(data as Session[]); } catch (error) { console.error('[VOW] Native calendar sync failed:', error); }
-    }
-    sync();
-    return () => { cancelled = true; };
-  }, [enabled, userId]);
-
-  if (!Capacitor.isNativePlatform() || !session || dismissed) return null;
-
   function dismissAfterSuccess(text: string) {
     setMessage(text);
     window.setTimeout(() => setHiding(true), 850);
@@ -39,6 +25,29 @@ export function NativeCalendarSync() {
       localStorage.setItem(DISMISSED_KEY, 'true');
     }, 1320);
   }
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !userId || !enabled || dismissed) return;
+    let cancelled = false;
+    async function sync() {
+      const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
+      if (cancelled) return;
+      try {
+        if (data?.length) {
+          const created = await syncSessionsToNativeCalendar(data as Session[]);
+          if (!cancelled) dismissAfterSuccess(created ? `${created} upcoming VOW sessions are synced to your phone calendar.` : 'Phone calendar sync is up to date.');
+        } else {
+          dismissAfterSuccess('Phone calendar sync is up to date.');
+        }
+      } catch (error) {
+        console.error('[VOW] Native calendar sync failed:', error);
+      }
+    }
+    sync();
+    return () => { cancelled = true; };
+  }, [enabled, userId, dismissed]);
+
+  if (!Capacitor.isNativePlatform() || !session || dismissed) return null;
 
   async function toggle() {
     if (busy || !userId) return;
