@@ -1,4 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1294 918" role="img" aria-label="VOW logo">
-<path fill="#000000" d="M 1269,25 L 558,26 L 552,36 L 551,143 L 559,153 L 1000,154 L 1004,162 L 537,709 L 522,700 L 275,377 L 257,377 L 192,443 L 191,456 L 491,854 L 534,896 L 1270,41 Z"/>
-<path fill="#000000" d="M 20,94 L 24,108 L 562,543 L 580,533 L 819,251 L 816,242 L 725,247 L 577,412 L 100,23 L 80,23 Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-label="VOW logo">
+  <g fill="none" stroke="#000000" stroke-width="18" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M55 75 L185 150 L55 225"/>
+    <circle cx="330" cy="150" r="72"/>
+    <path d="M450 75 L510 225 L570 105 L630 225 L690 75"/>
+  </g>
 </svg>
