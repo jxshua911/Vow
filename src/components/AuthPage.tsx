@@ -43,7 +43,7 @@ export function AuthPage() {
   }
 
   return <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12"><div className="w-full max-w-sm">
-    <div className="text-center mb-12"><h1 className="vow-heading text-5xl text-vow-ink mb-3">VOW</h1><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
+    <div className="text-center mb-12"><img src="/vow-logo.svg" alt="VOW" className="w-44 max-w-full h-auto mx-auto mb-7" /><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
     {!emailMode ? <div className="space-y-3">
       <button onClick={() => handleOAuthSignIn('google')} disabled={loading} className="w-full flex items-center justify-center gap-2.5 border border-vow-border py-3 text-sm font-medium text-vow-ink hover:border-vow-ink transition-colors disabled:opacity-40"><GoogleIcon className="w-4 h-4" />Continue with Google</button>
       <button onClick={() => handleOAuthSignIn('apple')} disabled={loading} className="w-full flex items-center justify-center gap-2.5 border border-vow-border py-3 text-sm font-medium text-vow-ink hover:border-vow-ink transition-colors disabled:opacity-40"><AppleIcon />Continue with Apple</button>
