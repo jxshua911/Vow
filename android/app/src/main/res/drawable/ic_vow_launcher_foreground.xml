@@ -4,9 +4,9 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:pivotX="54" android:pivotY="54">
-        <path android:fillColor="#00000000" android:pathData="M28,38 L46,54 L28,70" android:strokeColor="#000000" android:strokeWidth="4.2" android:strokeLineCap="butt" android:strokeLineJoin="miter" />
-        <path android:fillColor="#00000000" android:pathData="M61,36 A18,18 0,1 0,61,72 A18,18 0,1 0,61,36" android:strokeColor="#000000" android:strokeWidth="4.2" />
-        <path android:fillColor="#00000000" android:pathData="M79,38 L84,70 L89,45 L94,70 L99,38" android:strokeColor="#000000" android:strokeWidth="4.2" android:strokeLineCap="butt" android:strokeLineJoin="miter" />
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.9" android:scaleY="0.9" android:translateX="-8.55">
+        <path android:fillColor="#00000000" android:pathData="M28,38 L46,54 L28,70" android:strokeColor="#111111" android:strokeWidth="4.2" android:strokeLineCap="butt" android:strokeLineJoin="miter" />
+        <path android:fillColor="#00000000" android:pathData="M61,36 A18,18 0,1 0,61,72 A18,18 0,1 0,61,36" android:strokeColor="#111111" android:strokeWidth="4.2" />
+        <path android:fillColor="#00000000" android:pathData="M79,38 L84,70 L89,45 L94,70 L99,38" android:strokeColor="#111111" android:strokeWidth="4.2" android:strokeLineCap="butt" android:strokeLineJoin="miter" />
     </group>
 </vector>
