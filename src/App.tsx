@@ -8,22 +8,20 @@ import { Dashboard } from '@/components/Dashboard';
 import { GoalsPage } from '@/components/Goals';
 import { JournalPage } from '@/components/Journal';
 import { ReviewPage } from '@/components/WeeklyReview';
+import { ProfilePage } from '@/components/Profile';
 import type { UserSettings } from '@/types/database';
 
-const SPLASH_MIN_MS = 2800;
-const SPLASH_FADE_OUT_MS = 480;
+const SPLASH_MIN_MS = 1800;
+const SPLASH_FADE_OUT_MS = 420;
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) {
   return (
-    <div
-      className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`}
-      aria-hidden={fadingOut}
-    >
-      <img
-        src="/Vow-Loading_Screen.png"
-        alt="VOW"
-        className="vow-splash-logo"
-      />
+    <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} aria-hidden={fadingOut}>
+      <div className="vow-splash-mark" aria-label="VOW loading">
+        <span className="vow-splash-vow vow-heading">VOW</span>
+        <span className="vow-splash-line" />
+        <span className="vow-splash-caption">Commit. Execute.</span>
+      </div>
     </div>
   );
 }
@@ -33,7 +31,6 @@ function AppContent() {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [view, setView] = useState<View>('dashboard');
-
   const [splashMounted, setSplashMounted] = useState(true);
   const [splashFadingOut, setSplashFadingOut] = useState(false);
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
@@ -49,29 +46,20 @@ function AppContent() {
       setSettingsLoading(false);
       return;
     }
-
-    supabase
-      .from('user_settings')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setSettings(data as UserSettings | null);
-        setSettingsLoading(false);
-      });
+    setSettingsLoading(true);
+    supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle().then(({ data }) => {
+      setSettings(data as UserSettings | null);
+      setSettingsLoading(false);
+    });
   }, [session]);
 
   function handleOnboardingComplete() {
+    if (!session) return;
     setSettingsLoading(true);
-    supabase
-      .from('user_settings')
-      .select('*')
-      .eq('user_id', session!.user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setSettings(data as UserSettings | null);
-        setSettingsLoading(false);
-      });
+    supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle().then(({ data }) => {
+      setSettings(data as UserSettings | null);
+      setSettingsLoading(false);
+    });
   }
 
   const contentReady = !loading && (!session || !settingsLoading);
@@ -79,27 +67,18 @@ function AppContent() {
   useEffect(() => {
     if (splashMinElapsed && contentReady && !splashFadingOut) {
       setSplashFadingOut(true);
-      const timer = window.setTimeout(
-        () => setSplashMounted(false),
-        SPLASH_FADE_OUT_MS,
-      );
+      const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS);
       return () => window.clearTimeout(timer);
     }
   }, [splashMinElapsed, contentReady, splashFadingOut]);
 
   let content: React.ReactNode;
   if (loading || (session && settingsLoading)) {
-    content = (
-      <div className="min-h-screen bg-vow-bg flex items-center justify-center">
-        <div className="text-vow-muted text-sm">Loading...</div>
-      </div>
-    );
+    content = <AppLoading />;
   } else if (!session) {
     content = <AuthPage />;
   } else if (!settings || !settings.onboarding_complete) {
-    content = (
-      <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />
-    );
+    content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
   } else {
     content = (
       <AppShell currentView={view} onNavigate={setView}>
@@ -107,22 +86,18 @@ function AppContent() {
         {view === 'goals' && <GoalsPage />}
         {view === 'journal' && <JournalPage />}
         {view === 'review' && <ReviewPage />}
+        {view === 'profile' && <ProfilePage />}
       </AppShell>
     );
   }
 
-  return (
-    <>
-      {content}
-      {splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}
-    </>
-  );
+  return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
+}
+
+function AppLoading() {
+  return <div className="min-h-screen bg-vow-bg flex items-center justify-center"><div className="vow-loading-dots" aria-label="Loading"><span /><span /><span /></div></div>;
 }
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
+  return <AuthProvider><AppContent /></AuthProvider>;
 }
