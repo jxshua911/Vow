@@ -3,18 +3,33 @@ import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabase';
 import { NATIVE_OAUTH_REDIRECT } from '@/lib/nativeAuth';
-import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ChevronLeft } from 'lucide-react';
 import { GoogleIcon } from './GoogleIcon';
 
+function AppleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="w-4 h-4 fill-current">
+      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.36 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.49 4.09ZM12.03 7.25C11.88 5.02 13.69 3.18 15.8 3c.29 2.58-2.33 4.5-3.77 4.25Z" />
+    </svg>
+  );
+}
+
 export function AuthPage() {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signup');
+  const [emailMode, setEmailMode] = useState(false);
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  function switchMode(newMode: 'signin' | 'signup') {
-    setMode(newMode);
+  function openEmail(modeToOpen: 'signin' | 'signup' = 'signin') {
+    setMode(modeToOpen);
+    setEmailMode(true);
+    setError(null);
+  }
+
+  function closeEmail() {
+    setEmailMode(false);
     setError(null);
     setEmail('');
     setPassword('');
@@ -24,7 +39,6 @@ export function AuthPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
     try {
       if (mode === 'signup') {
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
@@ -40,42 +54,29 @@ export function AuthPage() {
     }
   }
 
-  async function handleGoogleSignIn() {
+  async function handleOAuthSignIn(provider: 'google' | 'apple') {
     setError(null);
     setLoading(true);
     try {
-      if (Capacitor.isNativePlatform()) {
-        // Native app: open Google's consent screen in an in-app browser and
-        // let it redirect to our custom URL scheme. src/lib/nativeAuth.ts
-        // listens for that redirect and finishes the sign-in.
-        const { data, error: googleError } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: NATIVE_OAUTH_REDIRECT,
-            skipBrowserRedirect: true,
-          },
+      const options = Capacitor.isNativePlatform()
+        ? { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true }
+        : { redirectTo: window.location.origin };
+
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options,
+      });
+      if (oauthError) throw oauthError;
+
+      if (Capacitor.isNativePlatform() && data?.url) {
+        const finishedListener = await Browser.addListener('browserFinished', () => {
+          setLoading(false);
+          finishedListener.remove();
         });
-        if (googleError) throw googleError;
-        if (data?.url) {
-          // If the user closes the in-app browser without completing
-          // sign-in, this fires and un-sticks the button. If they DO
-          // complete it, the appUrlOpen listener in lib/nativeAuth.ts
-          // creates a session, AuthPage unmounts, and this becomes moot.
-          const finishedListener = await Browser.addListener('browserFinished', () => {
-            setLoading(false);
-            finishedListener.remove();
-          });
-          await Browser.open({ url: data.url, presentationStyle: 'popover' });
-        }
-      } else {
-        const { error: googleError } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: { redirectTo: window.location.origin },
-        });
-        if (googleError) throw googleError;
+        await Browser.open({ url: data.url, presentationStyle: 'popover' });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
+      setError(err instanceof Error ? err.message : `${provider === 'google' ? 'Google' : 'Apple'} sign-in failed. Please try again.`);
       setLoading(false);
     }
   }
@@ -83,109 +84,104 @@ export function AuthPage() {
   return (
     <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
-        {/* Wordmark */}
         <div className="text-center mb-12">
           <h1 className="vow-heading text-5xl text-vow-ink mb-3">VOW</h1>
-          <p className="text-vow-muted text-sm tracking-wide">
-            Commit. Schedule. Execute. Review. Adjust.
-          </p>
+          <p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p>
         </div>
 
-        {/* Mode toggle — clean, no border overlap */}
-        <div className="flex border border-vow-border mb-8">
-          <button
-            onClick={() => switchMode('signup')}
-            className={`flex-1 py-3 text-sm transition-colors ${
-              mode === 'signup'
-                ? 'bg-vow-ink text-vow-bg font-medium'
-                : 'text-vow-muted hover:text-vow-ink'
-            }`}
-          >
-            Create account
-          </button>
-          <button
-            onClick={() => switchMode('signin')}
-            className={`flex-1 py-3 text-sm transition-colors border-l border-vow-border ${
-              mode === 'signin'
-                ? 'bg-vow-ink text-vow-bg font-medium'
-                : 'text-vow-muted hover:text-vow-ink'
-            }`}
-          >
-            Sign in
-          </button>
-        </div>
+        {!emailMode ? (
+          <div className="space-y-3">
+            <button
+              onClick={() => handleOAuthSignIn('google')}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2.5 border border-vow-border py-3 text-sm font-medium text-vow-ink hover:border-vow-ink transition-colors disabled:opacity-40"
+            >
+              <GoogleIcon className="w-4 h-4" />
+              Continue with Google
+            </button>
 
-        {/* Google sign-in */}
-        <button
-          onClick={handleGoogleSignIn}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2.5 border border-vow-border py-3 text-sm font-medium text-vow-ink hover:border-vow-ink transition-colors mb-6 disabled:opacity-40"
-        >
-          <GoogleIcon className="w-4 h-4" />
-          Continue with Google
-        </button>
+            <button
+              onClick={() => handleOAuthSignIn('apple')}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2.5 border border-vow-border py-3 text-sm font-medium text-vow-ink hover:border-vow-ink transition-colors disabled:opacity-40"
+            >
+              <AppleIcon />
+              Continue with Apple
+            </button>
 
-        {/* Divider */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 h-px bg-vow-border" />
-          <span className="text-xs text-vow-muted uppercase tracking-wide">or</span>
-          <div className="flex-1 h-px bg-vow-border" />
-        </div>
+            <button
+              onClick={() => openEmail('signin')}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2.5 bg-vow-ink text-vow-bg py-3 text-sm font-medium hover:opacity-85 transition-opacity disabled:opacity-40"
+            >
+              <Mail className="w-4 h-4" />
+              Sign in with email
+            </button>
 
-        {/* Email/password form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="vow-label block mb-2">Email</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="vow-input pl-10"
-                placeholder="you@example.com"
-              />
-            </div>
-          </div>
+            {error && (
+              <p className="text-sm text-vow-ink leading-relaxed pt-3" style={{ borderLeft: '2px solid #111', paddingLeft: '0.75rem' }}>
+                {error}
+              </p>
+            )}
 
-          <div>
-            <label className="vow-label block mb-2">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" />
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="vow-input pl-10"
-                placeholder="At least 6 characters"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-sm text-vow-ink leading-relaxed" style={{ borderLeft: '2px solid #111', paddingLeft: '0.75rem' }}>
-              {error}
+            <p className="text-xs text-vow-muted mt-8 text-center leading-relaxed">
+              New to VOW? <button onClick={() => openEmail('signup')} className="text-vow-ink underline underline-offset-2">Create an account with email</button>
             </p>
-          )}
+          </div>
+        ) : (
+          <div>
+            <button onClick={closeEmail} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+              Back
+            </button>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-vow-ink text-vow-bg text-sm font-medium py-3 hover:opacity-85 transition-opacity disabled:opacity-40"
-          >
-            {loading ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Sign in'}
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </form>
+            <div className="flex border border-vow-border mb-8">
+              <button
+                onClick={() => setMode('signin')}
+                className={`flex-1 py-3 text-sm transition-colors ${mode === 'signin' ? 'bg-vow-ink text-vow-bg font-medium' : 'text-vow-muted hover:text-vow-ink'}`}
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => setMode('signup')}
+                className={`flex-1 py-3 text-sm transition-colors border-l border-vow-border ${mode === 'signup' ? 'bg-vow-ink text-vow-bg font-medium' : 'text-vow-muted hover:text-vow-ink'}`}
+              >
+                Create account
+              </button>
+            </div>
 
-        <p className="text-xs text-vow-muted mt-8 text-center leading-relaxed">
-          {mode === 'signup'
-            ? 'Your journal and goals are private to you. No data is shared with third parties.'
-            : 'Welcome back. Pick up where you left off.'}
-        </p>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="vow-label block mb-2">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" />
+                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="vow-input pl-10" placeholder="you@example.com" autoFocus />
+                </div>
+              </div>
+
+              <div>
+                <label className="vow-label block mb-2">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" />
+                  <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="vow-input pl-10" placeholder="At least 6 characters" />
+                </div>
+              </div>
+
+              {error && (
+                <p className="text-sm text-vow-ink leading-relaxed" style={{ borderLeft: '2px solid #111', paddingLeft: '0.75rem' }}>{error}</p>
+              )}
+
+              <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 bg-vow-ink text-vow-bg text-sm font-medium py-3 hover:opacity-85 transition-opacity disabled:opacity-40">
+                {loading ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Sign in'}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+
+            <p className="text-xs text-vow-muted mt-8 text-center leading-relaxed">
+              {mode === 'signup' ? 'Your journal and goals are private to you. No data is shared with third parties.' : 'Welcome back. Pick up where you left off.'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
