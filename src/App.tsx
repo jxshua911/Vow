@@ -14,8 +14,8 @@ import { LegalPage } from '@/components/Legal';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import type { UserSettings } from '@/types/database';
 
-const SPLASH_MIN_MS = 900;
-const SPLASH_FADE_OUT_MS = 320;
+const SPLASH_MIN_MS = 1400;
+const SPLASH_FADE_OUT_MS = 420;
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) {
   return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} aria-hidden={fadingOut}><img src="/Vow-Loading_Screen.png" alt="VOW" className="vow-splash-logo" /></div>;
@@ -59,7 +59,7 @@ function AppContent() {
   }, [splashMinElapsed, contentReady, splashFadingOut]);
 
   let content: React.ReactNode;
-  if (loading || (session && settingsLoading)) content = <div className="min-h-screen bg-vow-bg flex items-center justify-center"><div className="text-vow-muted text-sm">Loading...</div></div>;
+  if (loading || (session && settingsLoading)) content = <AppLoading />;
   else if (!session) content = <AuthPage />;
   else if (!settings || !settings.onboarding_complete) content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
   else if (view === 'legal') content = <LegalPage onBack={() => setView('profile')} />;
@@ -72,6 +72,10 @@ function AppContent() {
   </AppShell>;
 
   return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
+}
+
+function AppLoading() {
+  return <div className="min-h-screen bg-vow-bg flex items-center justify-center" aria-label="Loading"><div className="vow-loading-dots"><span /><span /><span /></div></div>;
 }
 
 export default function App() { return <AuthProvider><AppContent /></AuthProvider>; }
