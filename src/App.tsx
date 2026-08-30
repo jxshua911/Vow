@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { ThemeProvider, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { AuthPage } from '@/components/AuthPage';
 import { Onboarding } from '@/components/Onboarding';
@@ -19,7 +20,8 @@ const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) {
-  return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} aria-hidden={fadingOut}><BrandLogo className="vow-splash-logo" /></div>;
+  const { theme } = useTheme();
+  return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} data-theme={theme} aria-hidden={fadingOut}><BrandLogo className="vow-splash-logo" /></div>;
 }
 
 function AppContent() {
@@ -79,4 +81,4 @@ function AppLoading() {
   return <div className="min-h-screen bg-vow-bg flex items-center justify-center" aria-label="Loading"><div className="vow-loading-dots"><span /><span /><span /></div></div>;
 }
 
-export default function App() { return <AuthProvider><AppContent /></AuthProvider>; }
+export default function App() { return <ThemeProvider><AuthProvider><AppContent /></AuthProvider></ThemeProvider>; }
