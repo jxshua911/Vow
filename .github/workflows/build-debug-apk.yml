@@ -20,56 +20,44 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v5
-
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
-
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
           package-manager-cache: false
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
-
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
-
       - name: Typecheck
         run: npm run typecheck
-
       - name: Lint
         run: npm run lint
-
       - name: Build web app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
-
       - name: Sync Capacitor Android
         run: npx cap sync android
-
       - name: Verify Gradle wrapper
         working-directory: android
         run: chmod +x gradlew
-
       - name: Assemble universal debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
-
       - name: Verify APK compatibility and signature
         run: |
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
@@ -81,14 +69,12 @@ jobs:
           echo "$BADGING" | grep -q "package: name='com.vow.app' versionCode='7' versionName='1.0.7'"
           echo "$BADGING" | grep -q "sdkVersion:'24'"
           echo "$BADGING" | grep -q "targetSdkVersion:'36'"
-
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "Vow-1.0.7-debug.apk"
-
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.0.7.apk"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Vow Android 1.0.7 Debug APK
-          path: "Vow-1.0.7-debug.apk"
+          name: VOW APK 1.0.7
+          path: "VOW APK 1.0.7.apk"
           if-no-files-found: error
           retention-days: 14
