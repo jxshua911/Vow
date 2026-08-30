@@ -1,19 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
 
-:root { --vow-bg: 247 247 245; --vow-ink: 17 17 17; --vow-muted: 107 107 107; --vow-border: 226 226 223; --vow-success: 63 107 79; }
-@media (prefers-color-scheme: dark) { :root { --vow-bg: 17 17 17; --vow-ink: 247 247 245; --vow-muted: 173 173 173; --vow-border: 58 58 58; --vow-success: 128 174 145; } }
+:root,
+:root[data-theme='light'] { --vow-bg: 247 247 245; --vow-ink: 17 17 17; --vow-muted: 107 107 107; --vow-border: 226 226 223; --vow-success: 63 107 79; color-scheme: light; }
+:root[data-theme='dark'] { --vow-bg: 17 17 17; --vow-ink: 247 247 245; --vow-muted: 173 173 173; --vow-border: 58 58 58; --vow-success: 128 174 145; color-scheme: dark; }
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root { color-scheme: light; }
-  @media (prefers-color-scheme: dark) { :root { color-scheme: dark; } }
-  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-  body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'Inter', system-ui, sans-serif; font-weight: 400; }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: rgb(var(--vow-bg)); color-scheme: inherit; }
+  body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'Inter', system-ui, sans-serif; font-weight: 400; margin: 0; transition: background-color 180ms ease, color 180ms ease; }
   ::selection { background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); }
   input, textarea, select, button { font-family: inherit; }
+  input, textarea, select { color-scheme: inherit; }
 }
 
 @layer components {
@@ -35,9 +35,9 @@
   .vow-card { background: rgb(var(--vow-bg)); border: 1px solid rgb(var(--vow-border)); }
   .vow-divider { border-color: rgb(var(--vow-border)); }
 
-  .vow-splash-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; background: rgb(var(--vow-bg)); pointer-events: auto; opacity: 1; transition: opacity 420ms cubic-bezier(.4,0,.2,1); }
+  .vow-splash-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; background: rgb(var(--vow-bg)); pointer-events: auto; opacity: 1; transition: opacity 420ms cubic-bezier(.4,0,.2,1), background-color 180ms ease; }
   .vow-splash-overlay.vow-splash-fading { opacity: 0; pointer-events: none; }
-  .vow-splash-logo { display: block; width: min(72vw, 520px); max-width: 520px; height: auto; margin: 0 auto; flex: 0 0 auto; animation: vow-splash-in 650ms cubic-bezier(.2,.7,.2,1) both; }
+  .vow-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; margin: 0 auto; flex: 0 0 auto; animation: vow-splash-in 650ms cubic-bezier(.2,.7,.2,1) both; }
   .vow-loading-dots { display: flex; gap: 5px; align-items: center; }
   .vow-loading-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--vow-ink)); animation: vow-dot 900ms ease-in-out infinite; opacity: 0.25; }
   .vow-loading-dots span:nth-child(2) { animation-delay: 120ms; }
