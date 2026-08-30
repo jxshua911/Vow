@@ -27,8 +27,8 @@ function durationDeadline(start: Date, value: GoalDuration) {
   return deadline;
 }
 
-function durationLabel(value: GoalDuration) {
-  return GOAL_DURATIONS.find((duration) => duration.value === value)?.label ?? '1 month';
+function durationLabel(value: GoalDuration | '') {
+  return GOAL_DURATIONS.find((duration) => duration.value === value)?.label ?? 'Select duration';
 }
 
 export function GoalsPage() {
