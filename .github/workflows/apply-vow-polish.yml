@@ -1,0 +1,250 @@
+name: Apply VOW polish
+
+on:
+  push:
+    branches:
+      - capacitor-mobile
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: capacitor-mobile
+          fetch-depth: 0
+
+      - name: Apply requested VOW changes
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def write(path, content):
+              p=Path(path); p.parent.mkdir(parents=True, exist_ok=True); p.write_text(content, encoding='utf-8')
+
+          # Theme-aware web brand assets. Geometry follows the authoritative >OW concept.
+          black='''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-label="VOW logo"><g fill="none" stroke="#111111" stroke-width="18" stroke-linecap="butt" stroke-linejoin="miter"><path d="M55 75 L185 150 L55 225"/><circle cx="330" cy="150" r="72"/><path d="M450 75 L510 225 L570 105 L630 225 L690 75"/></g></svg>\n'''
+          white=black.replace('#111111','#F7F7F5')
+          write('public/vow-logo-white.svg', white)
+          for name, bg, fg, circle in [
+              ('vow-icon-square.svg','#F7F7F5','#111111',False),
+              ('vow-icon-square-dark.svg','#111111','#F7F7F5',False),
+              ('vow-icon-circle.svg','#F7F7F5','#111111',True),
+              ('vow-icon-circle-dark.svg','#111111','#F7F7F5',True),
+          ]:
+              shape=f'<circle cx="256" cy="256" r="256" fill="{bg}"/>' if circle else f'<rect width="512" height="512" rx="96" fill="{bg}"/>'
+              logo=f'<g transform="translate(59 116.5) scale(.62)" fill="none" stroke="{fg}" stroke-width="18" stroke-linecap="butt" stroke-linejoin="miter"><path d="M55 75 L185 150 L55 225"/><circle cx="330" cy="150" r="72"/><path d="M450 75 L510 225 L570 105 L630 225 L690 75"/></g>'
+              write(f'public/{name}', f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VOW icon">{shape}{logo}</svg>\n')
+
+          # Canonical auth display name: one source of truth for every page.
+          write('src/lib/auth.tsx', '''import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+          import type { Session } from '@supabase/supabase-js';
+          import { supabase } from './supabase';
+
+          interface AuthContextValue { session: Session | null; loading: boolean; displayName: string; updateDisplayName: (name: string) => Promise<{ error: Error | null }>; }
+          const AuthContext = createContext<AuthContextValue>({ session: null, loading: true, displayName: 'there', updateDisplayName: async () => ({ error: null }) });
+
+          export function getDisplayName(session: Session | null) {
+            const metadata = session?.user?.user_metadata as Record<string, unknown> | undefined;
+            const fullName = typeof metadata?.full_name === 'string' ? metadata.full_name : typeof metadata?.name === 'string' ? metadata.name : '';
+            if (fullName.trim()) return fullName.trim();
+            const emailName = session?.user?.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+            return emailName || 'there';
+          }
+
+          export function AuthProvider({ children }: { children: ReactNode }) {
+            const [session, setSession] = useState<Session | null>(null);
+            const [loading, setLoading] = useState(true);
+            const [displayName, setDisplayName] = useState('there');
+            useEffect(() => {
+              supabase.auth.getSession().then(({ data }) => { setSession(data.session); setDisplayName(getDisplayName(data.session)); setLoading(false); });
+              const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => { setSession(sess); setDisplayName(getDisplayName(sess)); setLoading(false); });
+              return () => listener.subscription.unsubscribe();
+            }, []);
+            async function updateDisplayName(name: string) {
+              const next = name.trim();
+              if (!session || !next) return { error: new Error('A display name is required.') };
+              const { data, error } = await supabase.auth.updateUser({ data: { ...session.user.user_metadata, full_name: next, name: next } });
+              if (error) return { error };
+              const refreshed = data.user ? { ...session, user: data.user } as Session : session;
+              setSession(refreshed); setDisplayName(next);
+              return { error: null };
+            }
+            return <AuthContext.Provider value={{ session, loading, displayName, updateDisplayName }}>{children}</AuthContext.Provider>;
+          }
+
+          // eslint-disable-next-line react-refresh/only-export-components
+          export function useAuth() { return useContext(AuthContext); }
+          ''')
+
+          # Profile consumes canonical name and update function.
+          p=Path('src/components/Profile.tsx'); s=p.read_text()
+          s=re.sub(r"function getDisplayName\(session: ReturnType<typeof useAuth>\['session'\]\) \{.*?\n\}\n\n", '', s, flags=re.S)
+          s=s.replace("  const { session } = useAuth();", "  const { session, displayName, updateDisplayName } = useAuth();")
+          s=s.replace("const [name, setName] = useState(() => getDisplayName(session));", "const [name, setName] = useState(displayName);")
+          s=s.replace("  useEffect(() => { setName(getDisplayName(session)); }, [session]);", "  useEffect(() => { setName(displayName); }, [displayName]);")
+          s=s.replace("const { error } = await supabase.auth.updateUser({ data: { ...session.user.user_metadata, full_name: nextName, name: nextName } });", "const { error } = await updateDisplayName(nextName);")
+          s=s.replace("setName(getDisplayName(session));", "setName(displayName);")
+          s=s.replace("return <div><button onClick={onBack}", "return <div><button onClick={onBack}")
+          # Shared information receives canonical name from parent rather than deriving independently.
+          s=s.replace("if (subpage === 'shared') return <SharedInformationPage session={session} onBack={() => setSubpage('main')} />;", "if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;")
+          s=s.replace("function SharedInformationPage({ session, onBack }: { session: ReturnType<typeof useAuth>['session']; onBack: () => void }) {\n  const name = getDisplayName(session);", "function SharedInformationPage({ session, displayName, onBack }: { session: ReturnType<typeof useAuth>['session']; displayName: string; onBack: () => void }) {\n  const name = displayName;")
+          p.write_text(s)
+
+          # Dashboard uses canonical displayName from auth context.
+          p=Path('src/components/Dashboard.tsx'); s=p.read_text()
+          s=s.replace("const { session } = useAuth();", "const { session, displayName } = useAuth();")
+          s=s.replace("  const displayName = getDisplayName(session);\n", "")
+          s=s.replace("import { getDisplayName, useAuth } from '@/lib/auth';", "import { useAuth } from '@/lib/auth';")
+          p.write_text(s)
+
+          # Brand component gives web pages explicit light/dark artwork instead of filters.
+          write('src/components/BrandLogo.tsx', '''import type { ImgHTMLAttributes } from 'react';
+          export function BrandLogo(props: Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'>) {
+            return <picture><source media="(prefers-color-scheme: dark)" srcSet="/vow-logo-white.svg" /><img {...props} src="/vow-logo.svg" alt={props.alt || 'VOW'} /></picture>;
+          }
+          ''')
+          for path in ['src/components/AppShell.tsx','src/components/AuthPage.tsx','src/App.tsx']:
+              p=Path(path); s=p.read_text()
+              if "./BrandLogo" not in s and "@/components/BrandLogo" not in s:
+                  s=s.replace("import {", "import {", 1)
+              if path.endswith('AppShell.tsx'):
+                  s=s.replace("import type { ReactNode } from 'react';", "import type { ReactNode } from 'react';\nimport { BrandLogo } from './BrandLogo';")
+              elif path.endswith('AuthPage.tsx'):
+                  s=s.replace("import { GoogleIcon } from './GoogleIcon';", "import { GoogleIcon } from './GoogleIcon';\nimport { BrandLogo } from './BrandLogo';")
+              else:
+                  s=s.replace("import type { UserSettings } from '@/types/database';", "import type { UserSettings } from '@/types/database';\nimport { BrandLogo } from '@/components/BrandLogo';")
+              s=s.replace('<img src="/vow-logo.svg" alt="VOW" className="w-28 h-auto" />','<BrandLogo className="w-28 h-auto" />')
+              s=s.replace('<img src="/vow-logo.svg" alt="VOW" className="w-20 h-auto" />','<BrandLogo className="w-20 h-auto" />')
+              s=s.replace('<img src="/vow-logo.svg" alt="VOW" className="w-44 max-w-full h-auto mx-auto mb-7" />','<BrandLogo className="w-44 max-w-full h-auto mx-auto mb-7" />')
+              s=s.replace('<img src="/vow-logo.svg" alt="VOW" className="vow-splash-logo" />','<BrandLogo className="vow-splash-logo" />')
+              p.write_text(s)
+
+          # Goals: exact duration data, exact month arithmetic, AI aware of duration, strict required selection, one CTA.
+          p=Path('src/components/Goals.tsx'); s=p.read_text()
+          s=s.replace("  { value: '1w', label: '1 week', days: 7 },\n  { value: '2w', label: '2 weeks', days: 14 },\n  { value: '3w', label: '3 weeks', days: 21 },\n  { value: '1m', label: '1 month', days: 30 },\n  { value: '2m', label: '2 months', days: 60 },", "  { value: '1w', label: '1 week' },\n  { value: '2w', label: '2 weeks' },\n  { value: '3w', label: '3 weeks' },\n  { value: '1m', label: '1 month' },\n  { value: '2m', label: '2 months' },")
+          s=re.sub(r"function durationDays\(value: GoalDuration\) \{.*?\n\}\n\n", "function durationDeadline(start: Date, value: GoalDuration) {\n  const deadline = new Date(start);\n  if (value === '1w') deadline.setDate(deadline.getDate() + 7);\n  else if (value === '2w') deadline.setDate(deadline.getDate() + 14);\n  else if (value === '3w') deadline.setDate(deadline.getDate() + 21);\n  else deadline.setMonth(deadline.getMonth() + (value === '1m' ? 1 : 2));\n  deadline.setHours(23, 59, 59, 999);\n  return deadline;\n}\n\n", s, flags=re.S)
+          s=s.replace("const [duration, setDuration] = useState<GoalDuration>('1m');", "const [duration, setDuration] = useState<GoalDuration | ''>('');")
+          s=s.replace("const input = rawInput.trim();\n    if (!input || planning) return;", "const input = rawInput.trim();\n    if (!input || !duration || planning) return;")
+          s=s.replace("I am considering committing to this: \"${input}\". Help me make this a strict SMART goal", "I am considering committing to this for ${durationLabel(duration)}: \"${input}\". Help me make this a strict SMART goal")
+          s=s.replace("const now = new Date();\n      const totalDays = durationDays(duration);\n      const deadline = addDays(now, totalDays);\n      deadline.setHours(23, 59, 59, 999);", "const now = new Date();\n      now.setHours(0, 0, 0, 0);\n      if (!duration) throw new Error('Choose a goal duration before locking it in.');\n      const deadline = durationDeadline(now, duration);\n      const totalDays = Math.max(1, Math.round((deadline.getTime() - now.getTime()) / 86400000));")
+          s=s.replace("why_it_matters: whyItMatters || null, deadline: deadlineStr, status: 'active'", "why_it_matters: whyItMatters || null, start_date: toDateString(now), duration, deadline: deadlineStr, status: 'active'")
+          s=s.replace("const milestoneDays = Math.max(1, Math.round(totalDays * ((i + 1) / milestoneCount)));\n        return {", "const milestoneDate = new Date(now.getTime() + (deadline.getTime() - now.getTime()) * ((i + 1) / milestoneCount));\n        return {")
+          s=s.replace("deadline: toDateString(addDays(now, milestoneDays))", "deadline: toDateString(milestoneDate)")
+          s=s.replace("const weeks = Math.max(1, Math.min(52, Math.ceil(totalDays / 7)));", "const weeks = Math.max(1, Math.min(52, Math.ceil(totalDays / 7)));\n      const plannedStartMs = now.getTime();")
+          s=s.replace("const sessionDate = addDays(now, week * 7 + dayOffsets[slot % dayOffsets.length] + 1);", "const sessionDate = addDays(now, week * 7 + dayOffsets[slot % dayOffsets.length] + 1);")
+          s=s.replace("const progress = Math.min(0.999, Math.max(0, (sessionDate.getTime() - now.getTime()) / Math.max(1, deadline.getTime() - now.getTime())));", "const progress = Math.min(0.999, Math.max(0, (sessionDate.getTime() - plannedStartMs) / Math.max(1, deadline.getTime() - plannedStartMs)));")
+          s=s.replace("const goalCtaLabel = goals.length > 0 ? 'New goal' : 'Create goal';", "const goalCtaLabel = goals.length > 0 ? 'New Goal' : 'Create Goal';")
+          s=s.replace("label=" + "{goalCtaLabel}", "label={goalCtaLabel}")
+          s=s.replace("<PageHeader title=\"New goal\"", "<PageHeader title=\"New Goal\"")
+          # Required duration selector is shown before planning.
+          old="""!decomposed ? <><textarea value={rawInput} onChange={(e) => setRawInput(e.target.value)} rows={4} className=\"vow-input resize-none mb-4\" placeholder=\"e.g. I want to get better at running\" autoFocus /><div className=\"flex gap-3\"><button onClick={onCancel} className=\"vow-btn-ghost\">Cancel</button><button onClick={preparePlan} disabled={!rawInput.trim() || planning} className=\"vow-btn-primary flex-1\">{planning ? 'Thinking it through…' : 'Plan with VOW AI'}</button></div></>"""
+          new="""!decomposed ? <><div className=\"mb-5\"><label className=\"vow-label block mb-2\">Goal duration (required)</label><select value={duration} onChange={(e) => setDuration(e.target.value as GoalDuration)} className=\"vow-input\"><option value=\"\">Select duration</option><option value=\"1w\">1 week</option><option value=\"2w\">2 weeks</option><option value=\"3w\">3 weeks</option><option value=\"1m\">1 month</option><option value=\"2m\">2 months</option></select></div><textarea value={rawInput} onChange={(e) => setRawInput(e.target.value)} rows={4} className=\"vow-input resize-none mb-4\" placeholder=\"e.g. I want to get better at running\" autoFocus /><div className=\"flex gap-3\"><button onClick={onCancel} className=\"vow-btn-ghost\">Cancel</button><button onClick={preparePlan} disabled={!rawInput.trim() || !duration || planning} className=\"vow-btn-primary flex-1\">{planning ? 'Thinking it through…' : 'Plan with VOW AI'}</button></div></>"""
+          if old in s: s=s.replace(old,new)
+          s=s.replace("value={duration} onChange={(e) => setDuration(e.target.value as GoalDuration)}", "value={duration} onChange={(e) => setDuration(e.target.value as GoalDuration)}")
+          s=s.replace("Deadline: {formatDate(toDateString(addDays(new Date(), durationDays(duration))))}", "Deadline: {duration ? formatDate(toDateString(durationDeadline(new Date(), duration))) : 'Choose a duration'}")
+          s=s.replace("disabled={saving} className=\"vow-btn-primary flex-1\"><Lock", "disabled={saving || !duration} className=\"vow-btn-primary flex-1\"><Lock")
+          p.write_text(s)
+
+          # Journal CTA: exactly one CTA in embedded workspace, with requested capitalization.
+          p=Path('src/components/Journal.tsx'); s=p.read_text()
+          s=s.replace("const entryCtaLabel = entries.length > 0 ? 'New journal entry' : 'Create journal entry';", "const entryCtaLabel = entries.length > 0 ? 'New Journal Entry' : 'Create Journal Entry';")
+          p.write_text(s)
+
+          # Calendar: date selection is always acknowledged and editor animates into view.
+          p=Path('src/components/Calendar.tsx'); s=p.read_text()
+          s=s.replace("{showCreate && googleConnected && <div ref={createPanelRef}", "{showCreate && <div ref={createPanelRef}")
+          s=s.replace("<div ref={createPanelRef} className=\"border border-vow-ink p-5 mb-8 bg-vow-bg\">", "<div ref={createPanelRef} className=\"vow-calendar-editor-enter border border-vow-ink p-5 mb-8 bg-vow-bg\">")
+          s=s.replace("{creatingEvent ? 'Saving...' : 'Save routine change'}", "{creatingEvent ? 'Saving...' : googleConnected ? 'Save routine change' : 'Connect Calendar to save'}")
+          s=s.replace("disabled={creatingEvent || (!newTitle.trim() && !routineChange.trim())}", "disabled={creatingEvent || !googleConnected || (!newTitle.trim() && !routineChange.trim())}")
+          p.write_text(s)
+
+          # Theme variables: system dark mode with real logo assets (no invert filters).
+          p=Path('tailwind.config.js'); s=p.read_text()
+          s=s.replace("bg: '#F7F7F5',\n          ink: '#111111',\n          muted: '#6B6B6B',\n          border: '#E2E2DF',\n          success: '#3F6B4F',", "bg: 'rgb(var(--vow-bg) / <alpha-value>)',\n          ink: 'rgb(var(--vow-ink) / <alpha-value>)',\n          muted: 'rgb(var(--vow-muted) / <alpha-value>)',\n          border: 'rgb(var(--vow-border) / <alpha-value>)',\n          success: 'rgb(var(--vow-success) / <alpha-value>)',")
+          p.write_text(s)
+
+          p=Path('src/index.css'); s=p.read_text()
+          prefix=""":root { --vow-bg: 247 247 245; --vow-ink: 17 17 17; --vow-muted: 107 107 107; --vow-border: 226 226 223; --vow-success: 63 107 79; }\n@media (prefers-color-scheme: dark) { :root { --vow-bg: 17 17 17; --vow-ink: 247 247 245; --vow-muted: 173 173 173; --vow-border: 58 58 58; --vow-success: 128 174 145; } }\n\n"""
+          if not s.startswith(':root'): s=prefix+s
+          s=s.replace("body { background-color: #F7F7F5; color: #111111;", "body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink));")
+          s=s.replace("::selection { background: #111111; color: #F7F7F5; }", "::selection { background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); }")
+          s=s.replace("background: transparent; border: 1px solid #E2E2DF;", "background: transparent; border: 1px solid rgb(var(--vow-border));")
+          s=s.replace("color: #111111; transition", "color: rgb(var(--vow-ink)); transition")
+          s=s.replace("border-color: #111111; box-shadow: 0 0 0 1px #111111", "border-color: rgb(var(--vow-ink)); box-shadow: 0 0 0 1px rgb(var(--vow-ink))")
+          s=s.replace("color: #B0B0B0", "color: rgb(var(--vow-muted))")
+          s=s.replace("background: #111111; color: #F7F7F5", "background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg))")
+          s=s.replace("border: 1px solid #E2E2DF", "border: 1px solid rgb(var(--vow-border))")
+          s=s.replace("border-color: #111111", "border-color: rgb(var(--vow-ink))")
+          s=s.replace("background: #F7F7F5", "background: rgb(var(--vow-bg))")
+          s=s.replace("border-color: #E2E2DF", "border-color: rgb(var(--vow-border))")
+          s=s.replace("background: #fbf4eb", "background: rgb(var(--vow-bg))")
+          s=s.replace("background: #111111; animation: vow-dot", "background: rgb(var(--vow-ink)); animation: vow-dot")
+          s += "\n.vow-calendar-editor-enter { animation: vow-calendar-editor-enter 320ms cubic-bezier(.2,.7,.2,1) both; }\n@keyframes vow-calendar-editor-enter { from { opacity: 0; transform: translateY(18px) scale(.995); } to { opacity: 1; transform: translateY(0) scale(1); } }\n@media (prefers-reduced-motion: reduce) { .vow-calendar-editor-enter { animation: none; } }\n"
+          p.write_text(s)
+
+          # Android native vectors: geometry is centred in the viewport; no manual translation offsets.
+          vector='''<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#00000000" android:pathData="M20,28 L36,54 L20,80" android:strokeColor="#111111" android:strokeWidth="4.2" android:strokeLineCap="butt" android:strokeLineJoin="miter" />
+              <path android:fillColor="#00000000" android:pathData="M65,30 A24,24 0,1 0,65,78 A24,24 0,1 0,65,30 M65,35 A19,19 0,1 1,65,73 A19,19 0,1 1,65,35" android:strokeColor="#111111" android:strokeWidth="4.2" />
+              <path android:fillColor="#00000000" android:pathData="M79,28 L84,80 L89,39 L94,80 L99,28" android:strokeColor="#111111" android:strokeWidth="4.2" android:strokeLineCap="butt" android:strokeLineJoin="miter" />
+          </vector>
+          '''
+          write('android/app/src/main/res/drawable/ic_vow_launcher_foreground.xml', vector)
+          write('android/app/src/main/res/drawable/ic_vow_foreground.xml', vector)
+          write('android/app/src/main/res/drawable/ic_vow_splash.xml', vector.replace('strokeColor="#111111"','strokeColor="#111111"').replace('android:fillColor="#00000000"','android:fillColor="#00000000"'))
+          night=vector.replace('#111111','#F7F7F5')
+          write('android/app/src/main/res/drawable-night/ic_vow_launcher_foreground.xml', night)
+          write('android/app/src/main/res/drawable-night/ic_vow_foreground.xml', night)
+          write('android/app/src/main/res/drawable-night/ic_vow_splash.xml', night)
+          write('android/app/src/main/res/drawable-night/ic_vow_monochrome.xml', night)
+
+          # Adaptive icon + legacy round icon.
+          write('android/app/src/main/res/mipmap-anydpi-v26/ic_vow_launcher.xml', '''<?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/vow_icon_background"/><foreground android:drawable="@drawable/ic_vow_launcher_foreground"/></adaptive-icon>
+          ''')
+          write('android/app/src/main/res/mipmap-anydpi-v26/ic_vow_launcher_round.xml', '''<?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/vow_icon_background"/><foreground android:drawable="@drawable/ic_vow_launcher_foreground"/></adaptive-icon>
+          ''')
+          legacy='''<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+            <path android:fillColor="#F7F7F5" android:pathData="M0,0h48v48h-48z"/>
+            <path android:fillColor="#111111" android:pathData="M9,13 L17,24 L9,35" android:strokeWidth="2.8" android:strokeColor="#111111" android:fillColor="#00000000"/>
+            <path android:fillColor="#00000000" android:pathData="M29,13 A11,11 0,1 0,29,35 A11,11 0,1 0,29,13" android:strokeColor="#111111" android:strokeWidth="2.8"/>
+            <path android:fillColor="#00000000" android:pathData="M36,13 L38,35 L40,17 L42,35 L44,13" android:strokeColor="#111111" android:strokeWidth="2.8"/>
+          </vector>
+          '''
+          write('android/app/src/main/res/mipmap-anydpi/ic_vow_launcher.xml', legacy)
+          write('android/app/src/main/res/mipmap-anydpi/ic_vow_launcher_round.xml', legacy.replace('<path android:fillColor="#F7F7F5" android:pathData="M0,0h48v48h-48z"/>','<path android:fillColor="#F7F7F5" android:pathData="M0,0h48v48h-48z"/>'))
+          write('android/app/src/main/res/mipmap-anydpi-night/ic_vow_launcher.xml', legacy.replace('#F7F7F5','#111111').replace('#111111','#F7F7F5',1))
+          write('android/app/src/main/res/mipmap-anydpi-night/ic_vow_launcher_round.xml', legacy.replace('#F7F7F5','#111111').replace('#111111','#F7F7F5',1))
+
+          # Theme-aware native splash background.
+          write('android/app/src/main/res/values/colors.xml', '''<?xml version="1.0" encoding="utf-8"?><resources><color name="vow_icon_background">#F7F7F5</color></resources>\n''')
+          write('android/app/src/main/res/values-night/colors.xml', '''<?xml version="1.0" encoding="utf-8"?><resources><color name="vow_icon_background">#111111</color></resources>\n''')
+
+          # Manifest points to distinct round resource and splash theme remains DayNight.
+          p=Path('android/app/src/main/AndroidManifest.xml'); s=p.read_text().replace('android:roundIcon="@mipmap/ic_vow_launcher"','android:roundIcon="@mipmap/ic_vow_launcher_round"'); p.write_text(s)
+
+          # Database: persist start date + selected duration as real goal data.
+          write('supabase/migrations/20260830120000_add_goal_duration.sql', '''ALTER TABLE goals ADD COLUMN IF NOT EXISTS start_date date;\nALTER TABLE goals ADD COLUMN IF NOT EXISTS duration text;\nALTER TABLE goals DROP CONSTRAINT IF EXISTS goals_duration_check;\nALTER TABLE goals ADD CONSTRAINT goals_duration_check CHECK (duration IS NULL OR duration IN ('1w','2w','3w','1m','2m'));\nUPDATE goals SET start_date = COALESCE(start_date, created_at::date) WHERE start_date IS NULL;\nUPDATE goals SET duration = COALESCE(duration, CASE WHEN deadline IS NULL THEN NULL WHEN deadline - created_at::date <= 7 THEN '1w' WHEN deadline - created_at::date <= 14 THEN '2w' WHEN deadline - created_at::date <= 21 THEN '3w' WHEN deadline - created_at::date <= 45 THEN '1m' ELSE '2m' END) WHERE duration IS NULL;\n''')
+          p=Path('src/types/database.ts'); s=p.read_text().replace("  why_it_matters: string | null;\n  deadline", "  why_it_matters: string | null;\n  start_date: string | null;\n  duration: '1w' | '2w' | '3w' | '1m' | '2m' | null;\n  deadline"); p.write_text(s)
+
+          # Remove this one-time workflow before committing so it cannot run again.
+          Path('.github/workflows/apply-vow-polish.yml').unlink()
+          PY
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Complete VOW branding, SMART goals, journal and calendar polish"
+          git push origin capacitor-mobile
