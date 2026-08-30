@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.76" android:scaleY="0.76">
-        <path
-            android:fillColor="@color/vow_icon_foreground"
-            android:pathData="M18.35,8 L18,19.23 L18.92,20.69 L74.86,51.38 L78.05,54.31 L18.57,87.38 L18.07,100 L85.76,62.47 L88.73,59.55 L90,55.29 L89.22,49.92 L86.18,46.15 Z" />
-    </group>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/vow_icon_foreground"
+        android:pathData="M26.578,16.699 L26.578,27.422 L27.828,29.062 L80.602,54.5 L81.953,56.055 L81.746,57.535 L80.395,58.852 L27.406,91.207 L26.578,93.27 L26.578,103.75 L75.199,74.133 L79.535,71.602 L82.219,68.648 L84.586,64.117 L85.914,58.836 L85.914,54.164 L84.125,48.023 L81.148,43.641 L77.539,40.5 Z" />
 </vector>
