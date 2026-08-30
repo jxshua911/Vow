@@ -7,7 +7,7 @@ import { PageHeader, NewButton } from './AppShell';
 import { Link2, Trash2, X } from 'lucide-react';
 
 function Modal({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
-  return <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-label={title}><div className="bg-white border border-vow-border p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto"><div className="flex items-center justify-between mb-6"><h2 className="vow-heading text-lg text-vow-ink">{title}</h2><button type="button" onClick={onClose} className="text-vow-muted hover:text-vow-ink" aria-label="Close"><X className="w-4 h-4" /></button></div>{children}</div></div>;
+  return <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-label={title}><div className="bg-vow-bg border border-vow-border p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto"><div className="flex items-center justify-between mb-6"><h2 className="vow-heading text-lg text-vow-ink">{title}</h2><button type="button" onClick={onClose} className="text-vow-muted hover:text-vow-ink" aria-label="Close"><X className="w-4 h-4" /></button></div>{children}</div></div>;
 }
 
 export function JournalPage({ embedded = false }: { embedded?: boolean }) {
