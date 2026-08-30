@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
     <path android:fillColor="@color/vow_icon_background" android:pathData="M0,0h108v108h-108z" />
-    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.76" android:scaleY="0.76">
-        <path android:fillColor="@color/vow_icon_foreground" android:pathData="M18.35,8 L18,19.23 L18.92,20.69 L74.86,51.38 L78.05,54.31 L18.57,87.38 L18.07,100 L85.76,62.47 L88.73,59.55 L90,55.29 L89.22,49.92 L86.18,46.15 Z" />
-    </group>
+    <path
+        android:fillColor="@color/vow_icon_foreground"
+        android:pathData="M26.578,16.664 L26.578,27.000 L27.211,28.266 L68.133,52.312 L69.398,53.473 L69.293,54.527 L67.816,55.793 L27.422,79.523 L26.578,80.895 L26.578,91.230 L27.211,91.230 L77.098,61.910 L79.102,60.117 L80.367,58.113 L81.316,55.055 L81.316,52.523 L79.945,48.727 L78.152,46.617 L76.676,45.562 L27.105,16.664 Z" />
 </vector>
