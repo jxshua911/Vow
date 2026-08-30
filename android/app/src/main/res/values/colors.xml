@@ -1,1 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><resources><color name="vow_icon_background">#F7F7F5</color></resources>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="vow_icon_background">#FFFFFF</color>
+</resources>
