@@ -13,12 +13,13 @@ import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import type { UserSettings } from '@/types/database';
+import { BrandLogo } from '@/components/BrandLogo';
 
 const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) {
-  return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} aria-hidden={fadingOut}><img src="/vow-logo.svg" alt="VOW" className="vow-splash-logo" /></div>;
+  return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} aria-hidden={fadingOut}><BrandLogo className="vow-splash-logo" /></div>;
 }
 
 function AppContent() {

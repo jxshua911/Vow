@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { getDisplayName, useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
 import { isThisWeek, formatTime, formatRelative, dayName } from '@/lib/dates';
 import { PageHeader } from './AppShell';
@@ -9,7 +9,7 @@ import type { View } from './AppShell';
 interface DashboardProps { onNavigate: (view: View) => void; }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { session } = useAuth();
+  const { session, displayName } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   for (const s of sortedByDate) { if (s.status === 'completed') streak++; else break; }
   const now = new Date();
   const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 5);
-  const displayName = getDisplayName(session);
   if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
 
   return <div>

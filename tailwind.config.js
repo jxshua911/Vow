@@ -5,11 +5,11 @@ export default {
     extend: {
       colors: {
         vow: {
-          bg: '#F7F7F5',
-          ink: '#111111',
-          muted: '#6B6B6B',
-          border: '#E2E2DF',
-          success: '#3F6B4F',
+          bg: 'rgb(var(--vow-bg) / <alpha-value>)',
+          ink: 'rgb(var(--vow-ink) / <alpha-value>)',
+          muted: 'rgb(var(--vow-muted) / <alpha-value>)',
+          border: 'rgb(var(--vow-border) / <alpha-value>)',
+          success: 'rgb(var(--vow-success) / <alpha-value>)',
         },
       },
       fontFamily: {

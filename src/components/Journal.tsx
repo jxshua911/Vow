@@ -31,7 +31,7 @@ export function JournalPage({ embedded = false }: { embedded?: boolean }) {
   const activeGoals = goals.filter((goal) => goal.status === 'active' || goal.status === 'locked');
   const promptGoal = activeGoals[0];
   const prompt = promptGoal ? `What did you do today that moved “${promptGoal.outcome}” forward? What got in the way, and what will you change next?` : null;
-  const entryCtaLabel = entries.length > 0 ? 'New journal entry' : 'Create journal entry';
+  const entryCtaLabel = entries.length > 0 ? 'New Journal Entry' : 'Create Journal Entry';
   return <div>
     {embedded ? <div className="flex items-start justify-between gap-4 mb-8"><div><h2 className="vow-heading text-2xl text-vow-ink mb-1">Journal</h2><p className="text-xs text-vow-muted">Reflect honestly and keep the story behind your commitments.</p></div><NewButton onClick={() => setShowCompose(true)} label={entryCtaLabel} /></div> : <PageHeader title="Journal" subtitle="Reflect honestly. Link the reflection to the commitment it belongs to." action={<NewButton onClick={() => setShowCompose(true)} label={entryCtaLabel} />} />}
     <p className="text-xs text-vow-muted mb-8 leading-relaxed max-w-xl">Your journal is private. Entries stay in your account. Link reflections to goals so VOW can show the story behind progress, setbacks and completed commitments.</p>

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { NATIVE_OAUTH_REDIRECT } from '@/lib/nativeAuth';
 import { Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
 import { GoogleIcon } from './GoogleIcon';
+import { BrandLogo } from './BrandLogo';
 
 function AppleIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true" className="w-4 h-4 fill-current"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.36 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.49 4.09ZM12.03 7.25C11.88 5.02 13.69 3.18 15.8 3c.29 2.58-2.33 4.5-3.77 4.25Z" /></svg>; }
 
@@ -43,7 +44,7 @@ export function AuthPage() {
   }
 
   return <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12"><div className="w-full max-w-sm">
-    <div className="text-center mb-12"><img src="/vow-logo.svg" alt="VOW" className="w-44 max-w-full h-auto mx-auto mb-7" /><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
+    <div className="text-center mb-12"><BrandLogo className="w-44 max-w-full h-auto mx-auto mb-7" /><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
     {!emailMode ? <div className="space-y-3">
       <button onClick={() => handleOAuthSignIn('google')} disabled={loading} className="w-full flex items-center justify-center gap-2.5 border border-vow-border py-3 text-sm font-medium text-vow-ink hover:border-vow-ink transition-colors disabled:opacity-40"><GoogleIcon className="w-4 h-4" />Continue with Google</button>
       <button onClick={() => handleOAuthSignIn('apple')} disabled={loading} className="w-full flex items-center justify-center gap-2.5 border border-vow-border py-3 text-sm font-medium text-vow-ink hover:border-vow-ink transition-colors disabled:opacity-40"><AppleIcon />Continue with Apple</button>

@@ -21,6 +21,8 @@ export interface Goal {
   title: string;
   outcome: string;
   why_it_matters: string | null;
+  start_date: string | null;
+  duration: '1w' | '2w' | '3w' | '1m' | '2m' | null;
   deadline: string | null;
   status: GoalStatus;
   weekly_commitment_target: number;

@@ -9,16 +9,22 @@ import { PageHeader, NewButton } from './AppShell';
 import { Lock, Plus, Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from 'lucide-react';
 
 const GOAL_DURATIONS = [
-  { value: '1w', label: '1 week', days: 7 },
-  { value: '2w', label: '2 weeks', days: 14 },
-  { value: '3w', label: '3 weeks', days: 21 },
-  { value: '1m', label: '1 month', days: 30 },
-  { value: '2m', label: '2 months', days: 60 },
+  { value: '1w', label: '1 week' },
+  { value: '2w', label: '2 weeks' },
+  { value: '3w', label: '3 weeks' },
+  { value: '1m', label: '1 month' },
+  { value: '2m', label: '2 months' },
 ] as const;
 type GoalDuration = (typeof GOAL_DURATIONS)[number]['value'];
 
-function durationDays(value: GoalDuration) {
-  return GOAL_DURATIONS.find((duration) => duration.value === value)?.days ?? 30;
+function durationDeadline(start: Date, value: GoalDuration) {
+  const deadline = new Date(start);
+  if (value === '1w') deadline.setDate(deadline.getDate() + 7);
+  else if (value === '2w') deadline.setDate(deadline.getDate() + 14);
+  else if (value === '3w') deadline.setDate(deadline.getDate() + 21);
+  else deadline.setMonth(deadline.getMonth() + (value === '1m' ? 1 : 2));
+  deadline.setHours(23, 59, 59, 999);
+  return deadline;
 }
 
 function durationLabel(value: GoalDuration) {
@@ -45,7 +51,7 @@ export function GoalsPage() {
   const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
   const draftGoals = goals.filter((g) => g.status === 'draft');
   const completedGoals = goals.filter((g) => g.status === 'completed' || g.status === 'abandoned');
-  const goalCtaLabel = goals.length > 0 ? 'New goal' : 'Create goal';
+  const goalCtaLabel = goals.length > 0 ? 'New Goal' : 'Create Goal';
   return <div>
     <PageHeader title="Goals" subtitle="Lock in commitments. Track honestly. Adjust when the plan is wrong." action={<NewButton onClick={() => setShowCreate(true)} label={goalCtaLabel} />} />
     {loading ? <div className="text-vow-muted text-sm">Loading...</div> : goals.length === 0 ? <div className="border border-vow-border p-16 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">No goals yet</p><p className="text-vow-muted text-sm">Create your first commitment and let VOW map the work into your calendar.</p></div> : <div className="space-y-12">{activeGoals.length > 0 && <GoalSection title="Active" goals={activeGoals} onSelect={setSelectedGoalId} />}{draftGoals.length > 0 && <GoalSection title="Drafts" goals={draftGoals} onSelect={setSelectedGoalId} />}{completedGoals.length > 0 && <GoalSection title="Completed & Abandoned" goals={completedGoals} onSelect={setSelectedGoalId} />}</div>}
@@ -64,17 +70,17 @@ function CreateGoal({ userId, onCreated, onCancel }: { userId: string; onCreated
   const [planning, setPlanning] = useState(false);
   const [whyItMatters, setWhyItMatters] = useState('');
   const [weeklyTarget, setWeeklyTarget] = useState(3);
-  const [duration, setDuration] = useState<GoalDuration>('1m');
+  const [duration, setDuration] = useState<GoalDuration | ''>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function preparePlan() {
     const input = rawInput.trim();
-    if (!input || planning) return;
+    if (!input || !duration || planning) return;
     setPlanning(true); setError(null); setAiPlan('');
     try {
       const { data, error: aiError } = await supabase.functions.invoke('vow-goal-ai', {
-        body: { goal: { title: input, outcome: input, status: 'draft' }, message: `I am considering committing to this: "${input}". Help me make this a strict SMART goal: Specific, Measurable, Achievable, Relevant, and Time-bound. Before I lock it in, explain what success should be measured by, what it will realistically take, what resources or habits it may require, what my week could look like, likely trade-offs, and what I should clarify before committing. Keep it practical and concise.`, scope: 'goal-commitment-planning' },
+        body: { goal: { title: input, outcome: input, status: 'draft' }, message: `I am considering committing to this for ${durationLabel(duration)}: "${input}". Help me make this a strict SMART goal: Specific, Measurable, Achievable, Relevant, and Time-bound. Before I lock it in, explain what success should be measured by, what it will realistically take, what resources or habits it may require, what my week could look like, likely trade-offs, and what I should clarify before committing. Keep it practical and concise.`, scope: 'goal-commitment-planning' },
       });
       if (aiError) throw aiError;
       if (data?.error) throw new Error(data.error);
@@ -92,20 +98,22 @@ function CreateGoal({ userId, onCreated, onCancel }: { userId: string; onCreated
     setSaving(true); setError(null);
     try {
       const now = new Date();
-      const totalDays = durationDays(duration);
-      const deadline = addDays(now, totalDays);
-      deadline.setHours(23, 59, 59, 999);
+      now.setHours(0, 0, 0, 0);
+      if (!duration) throw new Error('Choose a goal duration before locking it in.');
+      const deadline = durationDeadline(now, duration);
+      const totalDays = Math.max(1, Math.round((deadline.getTime() - now.getTime()) / 86400000));
       const deadlineStr = toDateString(deadline);
-      const { data: goalData, error: goalErr } = await supabase.from('goals').insert({ user_id: userId, title: decomposed.outcome, outcome: decomposed.outcome, why_it_matters: whyItMatters || null, deadline: deadlineStr, status: 'active', weekly_commitment_target: weeklyTarget }).select().single();
+      const { data: goalData, error: goalErr } = await supabase.from('goals').insert({ user_id: userId, title: decomposed.outcome, outcome: decomposed.outcome, why_it_matters: whyItMatters || null, start_date: toDateString(now), duration, deadline: deadlineStr, status: 'active', weekly_commitment_target: weeklyTarget }).select().single();
       if (goalErr) throw goalErr;
       const milestoneCount = decomposed.milestones.length;
       const milestoneRows = decomposed.milestones.map((m, i) => {
-        const milestoneDays = Math.max(1, Math.round(totalDays * ((i + 1) / milestoneCount)));
-        return { goal_id: goalData.id, title: m.title, description: m.description, sort_order: i, deadline: toDateString(addDays(now, milestoneDays)), status: i === 0 ? 'in_progress' : 'pending' as const };
+        const milestoneDate = new Date(now.getTime() + (deadline.getTime() - now.getTime()) * ((i + 1) / milestoneCount));
+        return { goal_id: goalData.id, title: m.title, description: m.description, sort_order: i, deadline: toDateString(milestoneDate), status: i === 0 ? 'in_progress' : 'pending' as const };
       });
       const { data: milestoneData, error: milestoneErr } = await supabase.from('milestones').insert(milestoneRows).select().order('sort_order');
       if (milestoneErr) throw milestoneErr;
       const weeks = Math.max(1, Math.min(52, Math.ceil(totalDays / 7)));
+      const plannedStartMs = now.getTime();
       const dayOffsets = [1, 3, 5, 2, 4, 6, 0];
       const sessions: Array<Record<string, unknown>> = [];
       for (let week = 0; week < weeks; week += 1) {
@@ -113,7 +121,7 @@ function CreateGoal({ userId, onCreated, onCancel }: { userId: string; onCreated
           const sessionDate = addDays(now, week * 7 + dayOffsets[slot % dayOffsets.length] + 1);
           sessionDate.setHours(9, 0, 0, 0);
           if (sessionDate > deadline) continue;
-          const progress = Math.min(0.999, Math.max(0, (sessionDate.getTime() - now.getTime()) / Math.max(1, deadline.getTime() - now.getTime())));
+          const progress = Math.min(0.999, Math.max(0, (sessionDate.getTime() - plannedStartMs) / Math.max(1, deadline.getTime() - plannedStartMs)));
           const milestoneIndex = Math.min((milestoneData || []).length - 1, Math.floor(progress * (milestoneData || []).length));
           const milestone = (milestoneData || [])[Math.max(0, milestoneIndex)];
           sessions.push({ goal_id: goalData.id, milestone_id: milestone?.id ?? null, user_id: userId, title: milestone?.title || decomposed.outcome, scheduled_at: sessionDate.toISOString(), duration_minutes: decomposed.suggestedSessionDuration, status: 'scheduled' });
@@ -128,17 +136,17 @@ function CreateGoal({ userId, onCreated, onCancel }: { userId: string; onCreated
     } finally { setSaving(false); }
   }
 
-  return <div><PageHeader title="New goal" subtitle="VOW will pressure-test the commitment, make it SMART, decompose the work, and place the resulting routine into your calendar." /><div className="max-w-2xl">
-    {!decomposed ? <><textarea value={rawInput} onChange={(e) => setRawInput(e.target.value)} rows={4} className="vow-input resize-none mb-4" placeholder="e.g. I want to get better at running" autoFocus /><div className="flex gap-3"><button onClick={onCancel} className="vow-btn-ghost">Cancel</button><button onClick={preparePlan} disabled={!rawInput.trim() || planning} className="vow-btn-primary flex-1">{planning ? 'Thinking it through…' : 'Plan with VOW AI'}</button></div></> : <>
+  return <div><PageHeader title="New Goal" subtitle="VOW will pressure-test the commitment, make it SMART, decompose the work, and place the resulting routine into your calendar." /><div className="max-w-2xl">
+    {!decomposed ? <><div className="mb-5"><label className="vow-label block mb-2">Goal duration (required)</label><select value={duration} onChange={(e) => setDuration(e.target.value as GoalDuration)} className="vow-input"><option value="">Select duration</option><option value="1w">1 week</option><option value="2w">2 weeks</option><option value="3w">3 weeks</option><option value="1m">1 month</option><option value="2m">2 months</option></select></div><textarea value={rawInput} onChange={(e) => setRawInput(e.target.value)} rows={4} className="vow-input resize-none mb-4" placeholder="e.g. I want to get better at running" autoFocus /><div className="flex gap-3"><button onClick={onCancel} className="vow-btn-ghost">Cancel</button><button onClick={preparePlan} disabled={!rawInput.trim() || !duration || planning} className="vow-btn-primary flex-1">{planning ? 'Thinking it through…' : 'Plan with VOW AI'}</button></div></> : <>
       {aiPlan && <div className="border border-vow-border p-5 mb-6"><p className="vow-label mb-2">VOW AI assessment</p><p className="text-sm leading-relaxed whitespace-pre-wrap text-vow-ink">{aiPlan}</p></div>}
       <div className="border border-vow-border p-5 mb-6"><p className="vow-label mb-3">Strict SMART goal</p><div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-vow-muted"><div><span className="text-vow-ink font-medium">Specific</span> — define the exact outcome.</div><div><span className="text-vow-ink font-medium">Measurable</span> — know what success looks like.</div><div><span className="text-vow-ink font-medium">Achievable</span> — match the commitment to your available time.</div><div><span className="text-vow-ink font-medium">Relevant</span> — connect it to why it matters.</div><div><span className="text-vow-ink font-medium">Time-bound</span> — choose a fixed completion window.</div></div></div>
       <div className="border-t border-vow-border pt-4 mb-6"><p className="vow-label mb-1">Outcome</p><p className="text-vow-ink font-medium">{decomposed.outcome}</p><p className="text-xs text-vow-muted mt-2">This commitment will become a calendar routine rather than a one-off task.</p></div>
-      <div className="mb-6"><label className="vow-label block mb-2">Duration</label><select value={duration} onChange={(e) => setDuration(e.target.value as GoalDuration)} className="vow-input"><option value="1w">1 week</option><option value="2w">2 weeks</option><option value="3w">3 weeks</option><option value="1m">1 month</option><option value="2m">2 months</option></select><p className="text-xs text-vow-muted mt-2">Every goal must have a fixed time boundary. This sets the deadline and controls how VOW spreads milestones and calendar sessions.</p><p className="text-xs text-vow-ink mt-2">Deadline: {formatDate(toDateString(addDays(new Date(), durationDays(duration))))}</p></div>
+      <div className="mb-6"><label className="vow-label block mb-2">Duration</label><select value={duration} onChange={(e) => setDuration(e.target.value as GoalDuration)} className="vow-input"><option value="1w">1 week</option><option value="2w">2 weeks</option><option value="3w">3 weeks</option><option value="1m">1 month</option><option value="2m">2 months</option></select><p className="text-xs text-vow-muted mt-2">Every goal must have a fixed time boundary. This sets the deadline and controls how VOW spreads milestones and calendar sessions.</p><p className="text-xs text-vow-ink mt-2">Deadline: {duration ? formatDate(toDateString(durationDeadline(new Date(), duration))) : 'Choose a duration'}</p></div>
       <div className="border-t border-vow-border pt-4 mb-6"><p className="vow-label mb-4">Milestones</p><div className="space-y-4">{decomposed.milestones.map((m, i) => <div key={i} className="flex gap-4"><span className="text-vow-muted text-sm font-mono pt-0.5">{String(i + 1).padStart(2, '0')}</span><div><p className="text-sm text-vow-ink font-medium">{m.title}</p><p className="text-xs text-vow-muted mt-1">{m.description}</p></div></div>)}</div></div>
       <div className="mb-6"><label className="vow-label block mb-2">Sessions per week</label><input type="number" min={1} max={14} value={weeklyTarget} onChange={(e) => setWeeklyTarget(Math.min(14, Math.max(1, parseInt(e.target.value, 10) || 1)))} className="vow-input" /><p className="text-xs text-vow-muted mt-2">VOW will spread these sessions across the selected duration and advance the calendar routine as milestones change.</p></div>
       <div className="mb-6"><label className="vow-label block mb-2">Why does this matter to you?</label><textarea value={whyItMatters} onChange={(e) => setWhyItMatters(e.target.value)} rows={2} className="vow-input resize-none" placeholder="Your coach will reference this when motivation dips." /></div>
       {error && <p className="text-sm text-vow-ink mb-4 border-l-2 border-vow-ink pl-3">{error}</p>}
-      <div className="flex gap-3"><button onClick={() => { setDecomposed(null); setAiPlan(''); }} className="vow-btn-ghost">Back</button><button onClick={handleCreate} disabled={saving} className="vow-btn-primary flex-1"><Lock className="w-4 h-4" />{saving ? 'Building calendar…' : `Lock in ${durationLabel(duration)} goal`}</button></div>
+      <div className="flex gap-3"><button onClick={() => { setDecomposed(null); setAiPlan(''); }} className="vow-btn-ghost">Back</button><button onClick={handleCreate} disabled={saving || !duration} className="vow-btn-primary flex-1"><Lock className="w-4 h-4" />{saving ? 'Building calendar…' : `Lock in ${durationLabel(duration)} goal`}</button></div>
     </>}</div></div>;
 }
 
