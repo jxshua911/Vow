@@ -1,0 +1,89 @@
+name: Finish VOW validation fixes
+
+on:
+  push:
+    branches:
+      - capacitor-mobile
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: capacitor-mobile
+          fetch-depth: 0
+      - name: Fix validation issues
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def write(path, content):
+              p=Path(path); p.parent.mkdir(parents=True, exist_ok=True); p.write_text(content, encoding='utf-8')
+
+          # Correct the centred icon geometry and night resources.
+          vector='''<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#00000000" android:pathData="M14.5,28 L30.5,54 L14.5,80" android:strokeColor="#111111" android:strokeWidth="4.2" android:strokeLineCap="butt" android:strokeLineJoin="miter" />
+              <path android:fillColor="#00000000" android:pathData="M59.5,30 A24,24 0,1 0,59.5,78 A24,24 0,1 0,59.5,30 M59.5,35 A19,19 0,1 1,59.5,73 A19,19 0,1 1,59.5,35" android:strokeColor="#111111" android:strokeWidth="4.2" />
+              <path android:fillColor="#00000000" android:pathData="M73.5,28 L78.5,80 L83.5,39 L88.5,80 L93.5,28" android:strokeColor="#111111" android:strokeWidth="4.2" android:strokeLineCap="butt" android:strokeLineJoin="miter" />
+          </vector>\n'''
+          night=vector.replace('#111111','#F7F7F5')
+          for path in ['android/app/src/main/res/drawable/ic_vow_launcher_foreground.xml','android/app/src/main/res/drawable/ic_vow_foreground.xml','android/app/src/main/res/drawable/ic_vow_splash.xml']:
+              write(path, vector)
+          for path in ['android/app/src/main/res/drawable-night/ic_vow_launcher_foreground.xml','android/app/src/main/res/drawable-night/ic_vow_foreground.xml','android/app/src/main/res/drawable-night/ic_vow_splash.xml','android/app/src/main/res/drawable-night/ic_vow_monochrome.xml']:
+              write(path, night)
+
+          # Legacy vector, centred in a 48dp viewport; night variant is a separate resource.
+          legacy='''<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+            <path android:fillColor="#F7F7F5" android:pathData="M0,0h48v48h-48z"/>
+            <path android:fillColor="#00000000" android:pathData="M6.5,13 L14.5,24 L6.5,35" android:strokeColor="#111111" android:strokeWidth="2.8" android:strokeLineCap="butt" android:strokeLineJoin="miter"/>
+            <path android:fillColor="#00000000" android:pathData="M24,13 A11,11 0,1 0,24,35 A11,11 0,1 0,24,13 M24,15.5 A8.5,8.5 0,1 1,24,32.5 A8.5,8.5 0,1 1,24,15.5" android:strokeColor="#111111" android:strokeWidth="2.8"/>
+            <path android:fillColor="#00000000" android:pathData="M33.5,13 L35.5,35 L37.5,17 L39.5,35 L41.5,13" android:strokeColor="#111111" android:strokeWidth="2.8"/>
+          </vector>\n'''
+          legacy_night=legacy.replace('#F7F7F5','#111111').replace('#111111','#F7F7F5')
+          write('android/app/src/main/res/mipmap-anydpi/ic_vow_launcher.xml', legacy)
+          write('android/app/src/main/res/mipmap-anydpi/ic_vow_launcher_round.xml', legacy)
+          write('android/app/src/main/res/mipmap-night/ic_vow_launcher.xml', legacy_night)
+          write('android/app/src/main/res/mipmap-night/ic_vow_launcher_round.xml', legacy_night)
+          for p in Path('android/app/src/main/res/mipmap-anydpi-night').glob('*') if Path('android/app/src/main/res/mipmap-anydpi-night').exists() else []:
+              p.unlink()
+          try: Path('android/app/src/main/res/mipmap-anydpi-night').rmdir()
+          except OSError: pass
+
+          # Fix web icon centring from the concept sheet: logo centre = icon centre.
+          for path in ['public/vow-icon-square.svg','public/vow-icon-square-dark.svg','public/vow-icon-circle.svg','public/vow-icon-circle-dark.svg']:
+              p=Path(path); s=p.read_text(); s=s.replace('translate(59 116.5)', 'translate(25.05 163)'); p.write_text(s)
+
+          # CSS @import must be first; finish variable-driven dark branding.
+          p=Path('src/index.css'); s=p.read_text()
+          imp="@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');"
+          s=s.replace(imp+'\n\n','')
+          s=imp+'\n\n'+s
+          s=s.replace('color: #6B6B6B;', 'color: rgb(var(--vow-muted));')
+          s=s.replace('color: #111111; font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; border: 1px solid', 'color: rgb(var(--vow-ink)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; border: 1px solid')
+          s=s.replace('color-scheme: light dark;', '')
+          if 'color-scheme: light;' not in s:
+              s=s.replace('@layer base {', '@layer base {\n  :root { color-scheme: light; }\n  @media (prefers-color-scheme: dark) { :root { color-scheme: dark; } }')
+          p.write_text(s)
+
+          # Accept the union in the helper so strict TypeScript does not reject the required selector state.
+          p=Path('src/components/Goals.tsx'); s=p.read_text().replace('function durationLabel(value: GoalDuration) {', "function durationLabel(value: GoalDuration | '') {").replace("return GOAL_DURATIONS.find((duration) => duration.value === value)?.label ?? '1 month';", "return GOAL_DURATIONS.find((duration) => duration.value === value)?.label ?? 'Select duration';")
+          p.write_text(s)
+
+          Path('.github/workflows/apply-vow-fixes-2.yml').unlink()
+          PY
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix VOW theme assets, icon centering and validation"
+          git push origin capacitor-mobile
