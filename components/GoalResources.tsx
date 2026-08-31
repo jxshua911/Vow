@@ -14,6 +14,7 @@ type GoalResource = {
 };
 
 type GoalOption = { id: string; outcome: string; status: string };
+type PendingLink = { url: string; title: string | null; resource_type: GoalResource['resource_type'] };
 
 function inferType(url: string): GoalResource['resource_type'] {
   const value = url.toLowerCase();
@@ -43,9 +44,32 @@ export function GoalResources() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [creatingGoal, setCreatingGoal] = useState(false);
   const [error, setError] = useState('');
   const latestGoalId = useRef<string | null>(null);
   const pendingAttachments = useRef<Array<{ file: File; title: string }>>([]);
+  const pendingLinks = useRef<PendingLink[]>([]);
+
+  useEffect(() => {
+    const updateCreatingState = () => setCreatingGoal(/\bNew Goal\b/.test(document.body.innerText));
+    updateCreatingState();
+    const observer = new MutationObserver(updateCreatingState);
+    observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+    return () => observer.disconnect();
+  }, []);
+
+  async function attachPendingToGoal(nextGoalId: string) {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+    const pendingFiles = pendingAttachments.current.splice(0);
+    const pendingUrlLinks = pendingLinks.current.splice(0);
+    await Promise.all(pendingFiles.map(async (item) => {
+      try { await uploadFile(nextGoalId, item.file, item.title); } catch (err) { console.error('[VOW] Failed to attach pending file:', err); }
+    }));
+    if (pendingUrlLinks.length) {
+      await supabase.from('goal_resources').insert(pendingUrlLinks.map((item) => ({ ...item, goal_id: nextGoalId, user_id: userData.user.id })));
+    }
+  }
 
   async function loadGoals() {
     const { data } = await supabase.from('goals').select('id,outcome,status,created_at').order('created_at', { ascending: false });
@@ -54,10 +78,9 @@ export function GoalResources() {
     const justCreated = latestGoalId.current && newest && latestGoalId.current !== newest;
     setGoals(nextGoals);
     if (!goalId && newest) setGoalId(newest);
-    if (justCreated && pendingAttachments.current.length > 0) {
-      const pending = pendingAttachments.current.splice(0);
-      await Promise.all(pending.map((item) => uploadFile(newest!, item.file, item.title)));
-      await loadResources(newest!);
+    if (justCreated && newest && (pendingAttachments.current.length || pendingLinks.current.length)) {
+      await attachPendingToGoal(newest);
+      await loadResources(newest);
     }
     latestGoalId.current = newest;
   }
@@ -94,27 +117,32 @@ export function GoalResources() {
   }
 
   async function addResource() {
-    if (!goalId || saving) return;
+    if (saving) return;
     setSaving(true); setError('');
     try {
       if (file) {
-        if (goals[0]?.id === goalId) await uploadFile(goalId, file, title.trim());
-        else pendingAttachments.current.push({ file, title: title.trim() });
-        setFile(null); setTitle('');
-        await loadResources(goalId);
+        if (creatingGoal) pendingAttachments.current.push({ file, title: title.trim() });
+        else if (goalId) await uploadFile(goalId, file, title.trim());
+        setFile(null);
       }
       const cleanUrl = url.trim();
       if (cleanUrl) {
         let parsed: URL;
         try { parsed = new URL(cleanUrl); } catch { throw new Error('Enter a valid link.'); }
         if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Only web links can be added.');
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) throw new Error('You need to be signed in.');
-        const { error: insertError } = await supabase.from('goal_resources').insert({ goal_id: goalId, user_id: userData.user.id, url: parsed.toString(), title: title.trim() || null, resource_type: inferType(parsed.toString()) });
-        if (insertError) throw insertError;
-        setUrl(''); setTitle('');
-        await loadResources(goalId);
+        const pendingLink = { url: parsed.toString(), title: title.trim() || null, resource_type: inferType(parsed.toString()) };
+        if (creatingGoal) pendingLinks.current.push(pendingLink);
+        else {
+          const { data: userData } = await supabase.auth.getUser();
+          if (!userData.user || !goalId) throw new Error('You need to be signed in and have a goal selected.');
+          const { error: insertError } = await supabase.from('goal_resources').insert({ ...pendingLink, goal_id: goalId, user_id: userData.user.id });
+          if (insertError) throw insertError;
+        }
+        setUrl('');
       }
+      setTitle('');
+      if (goalId && !creatingGoal) await loadResources(goalId);
+      if (creatingGoal) setError('Reference saved. VOW will attach it to the new goal as soon as you create it.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save that reference.');
     } finally { setSaving(false); }
@@ -128,16 +156,14 @@ export function GoalResources() {
   }
 
   if (loading) return null;
-  if (!goals.length) return <section className="border-t border-vow-border pt-10"><p className="vow-label mb-2">Goal references</p><p className="text-xs text-vow-muted">Add a reference after creating your first goal, or attach one while you are building a new goal.</p></section>;
 
   return <section className="border-t border-vow-border pt-10">
     <div className="mb-6">
       <p className="vow-label mb-1">Goal references</p>
-      <p className="text-xs text-vow-muted leading-relaxed">Attach an image, video, YouTube link, Instagram link, or any useful reference. When you add an attachment while creating a new goal, VOW carries it onto the newly created goal.</p>
+      <p className="text-xs text-vow-muted leading-relaxed">Attach an image, video, YouTube link, Instagram link, or any useful reference. While you are creating a new goal, VOW holds these references and attaches them to that new goal automatically.</p>
     </div>
     <div className="max-w-2xl">
-      <label className="vow-label block mb-2">Goal</label>
-      <select value={goalId} onChange={(e) => setGoalId(e.target.value)} className="vow-input mb-4">{goals.map((goal) => <option key={goal.id} value={goal.id}>{goal.outcome}</option>)}</select>
+      {!creatingGoal && goals.length > 0 && <><label className="vow-label block mb-2">Goal</label><select value={goalId} onChange={(e) => setGoalId(e.target.value)} className="vow-input mb-4">{goals.map((goal) => <option key={goal.id} value={goal.id}>{goal.outcome}</option>)}</select></>}
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
         <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addResource(); }} className="vow-input" placeholder="Paste YouTube, Instagram, image, video, or web link" inputMode="url" />
         <button onClick={addResource} disabled={(!url.trim() && !file) || saving} className="vow-btn-primary">{saving ? 'Saving…' : 'Add reference'}</button>
