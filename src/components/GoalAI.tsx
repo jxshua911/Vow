@@ -33,8 +33,13 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
         upcoming = (data || []) as Session[];
       }
       const context = goal
-        ? { title: goal.title, outcome: goal.outcome, status: goal.status, deadline: goal.deadline, weekly_commitment_target: goal.weekly_commitment_target }
+        ? { title: goal.title, outcome: goal.outcome, status: goal.status, deadline: goal.deadline, weekly_commitment_target: goal.weekly_commitment_target, why_it_matters: goal.why_it_matters }
         : { title: 'General planning', outcome: 'No single goal selected' };
+      let references: Array<{ url: string; title: string | null; resource_type: string }> = [];
+      if (goal) {
+        const { data } = await supabase.from('goal_resources').select('url,title,resource_type').eq('goal_id', goal.id).order('created_at', { ascending: true });
+        references = (data || []) as Array<{ url: string; title: string | null; resource_type: string }>;
+      }
       const calendar = upcoming.map((item) => ({ title: item.title, scheduled_at: item.scheduled_at, duration_minutes: item.duration_minutes, status: item.status }));
       const { data, error: invokeError } = await supabase.functions.invoke('vow-goal-ai', {
         body: {
@@ -42,7 +47,8 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
           message: question,
           scope: 'general-life-planning',
           calendar,
-          instruction: 'You are VOW AI, a general planning and accountability assistant, not a goal-only chatbot. Help with goals, routines, decisions, projects, study, training, habits, scheduling, trade-offs and understanding what a commitment will require. Use the supplied VOW calendar when useful. When evaluating a new commitment, explain its requirements, likely weekly shape, conflicts, trade-offs and a credible plan rather than blindly encouraging it. Be practical, concise, honest about uncertainty and age-appropriate.',
+          references,
+          instruction: 'You are VOW AI, a rigorous planning and accountability assistant. Give useful, goal-specific reasoning, not motivational filler. Do not say “define what better looks like”, “stay consistent”, “break it into smaller steps”, or similar generic coaching phrases unless you immediately replace them with concrete actions, numbers, checkpoints, or decision rules tied to this exact goal. If the goal is measurable, identify the metric and a credible baseline/target. If it is skill-based, specify practice structure and progression. If it is a project, specify deliverables, dependencies and milestones. If it is a study goal, specify topics, workload and assessment. If it is a fitness goal, specify training variables and recovery considerations without pretending certainty. Use the supplied VOW calendar to find conflicts and realistic weekly capacity. Use attached goal references as evidence of the user’s intended outcome; inspect public links when relevant. Use web research when current, specialised, empirical, or time-sensitive information would materially improve the answer, and cite or name the important sources/findings rather than pretending research was done. If critical information is missing, ask only the minimum necessary question; otherwise make a reasonable assumption and state it. Challenge unrealistic or contradictory goals instead of blindly encouraging them. Return a practical plan with: target, success metric, assumptions/baseline, milestone sequence, weekly workload, concrete actions/sessions, progression, checkpoints, risks and fallback rules. Be concise, specific and age-appropriate.',
         },
       });
       if (invokeError) throw new Error('VOW AI could not complete that request.');
@@ -63,13 +69,13 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
       <div className="mb-4">
         <p className="text-xs uppercase tracking-wide text-vow-muted">VOW AI</p>
         <h2 className="vow-heading text-lg text-vow-ink mt-1">Think it through before you commit.</h2>
-        <p className="text-xs text-vow-muted mt-1">Ask about goals, routines, projects, decisions, trade-offs, scheduling, or what a commitment will actually require. VOW AI can use your upcoming VOW schedule when reasoning about a plan.</p>
+        <p className="text-xs text-vow-muted mt-1">Ask about goals, routines, projects, decisions, trade-offs, scheduling, or what a commitment will actually require. VOW AI can use your calendar and the references attached to the goal.</p>
       </div>
       {answer && <div className="border-l-2 border-vow-ink pl-4 mb-4 text-sm leading-relaxed whitespace-pre-wrap text-vow-ink">{answer}</div>}
       {error && <p className="text-xs text-vow-muted mb-3">{error}</p>}
       <div className="flex flex-col sm:flex-row gap-2">
-        <textarea value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') ask(); }} rows={2} placeholder="e.g. What would this commitment require from my week?" className="flex-1 border border-vow-border bg-transparent px-3 py-2 text-sm text-vow-ink outline-none resize-none" />
-        <button onClick={ask} disabled={loading || !message.trim()} className="min-h-11 border border-vow-ink px-4 text-xs text-vow-ink disabled:opacity-50">{loading ? 'Thinking…' : 'Ask VOW AI'}</button>
+        <textarea value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') ask(); }} rows={2} placeholder="e.g. Build me a realistic plan to reach this goal." className="flex-1 border border-vow-border bg-transparent px-3 py-2 text-sm text-vow-ink outline-none resize-none" />
+        <button onClick={ask} disabled={loading || !message.trim()} className="min-h-11 border border-vow-ink px-4 text-xs text-vow-ink disabled:opacity-50">{loading ? 'Researching…' : 'Ask VOW AI'}</button>
       </div>
     </section>
   );
