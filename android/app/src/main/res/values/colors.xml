@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="vow_icon_background">#FFFFFF</color>
-    <color name="vow_icon_foreground">#000000</color>
+    <color name="vow_icon_background">#000000</color>
+    <color name="vow_icon_foreground">#FFFFFF</color>
+    <color name="vow_icon_black_bg">#000000</color>
+    <color name="vow_icon_white_bg">#FFFFFF</color>
 </resources>
