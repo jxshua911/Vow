@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ExternalLink, Image as ImageIcon, Instagram, Link as LinkIcon, Trash2, Youtube, Video, Upload } from 'lucide-react';
+import { Link2, Trash2 } from 'lucide-react';
 
 type GoalResource = {
   id: string;
@@ -26,11 +26,9 @@ function inferType(url: string): GoalResource['resource_type'] {
 }
 
 function ResourceIcon({ type }: { type: GoalResource['resource_type'] }) {
-  if (type === 'youtube') return <Youtube className="w-4 h-4" />;
-  if (type === 'instagram') return <Instagram className="w-4 h-4" />;
-  if (type === 'image') return <ImageIcon className="w-4 h-4" />;
-  if (type === 'video') return <Video className="w-4 h-4" />;
-  return <LinkIcon className="w-4 h-4" />;
+  const label = type === 'youtube' ? 'YT' : type === 'instagram' ? 'IG' : type === 'image' ? 'IMG' : type === 'video' ? 'VID' : null;
+  if (label) return <span className="w-4 h-4 inline-flex items-center justify-center text-[9px] font-semibold leading-none" aria-hidden="true">{label}</span>;
+  return <Link2 className="w-4 h-4" />;
 }
 
 function isStorageUrl(url: string) { return url.startsWith('storage://'); }
@@ -177,12 +175,12 @@ export function GoalResources() {
         <button onClick={addResource} disabled={(!url.trim() && !file) || saving} className="vow-btn-primary">{saving ? 'Saving…' : 'Add reference'}</button>
       </div>
       <div className="mt-2 flex items-center gap-3">
-        <label className="vow-btn-ghost cursor-pointer"><Upload className="w-4 h-4" />Attach image/video<input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} /></label>
+        <label className="vow-btn-ghost cursor-pointer"><span className="text-sm" aria-hidden="true">＋</span>Attach image/video<input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} /></label>
         {file && <span className="text-xs text-vow-muted truncate">{file.name}</span>}
       </div>
       <input value={title} onChange={(e) => setTitle(e.target.value)} className="vow-input mt-2" placeholder="Optional label — e.g. target physique, technique, destination" />
       {error && <p className="text-xs text-vow-ink mt-3">{error}</p>}
-      {resources.length > 0 && <div className="mt-5 border-t border-vow-border">{resources.map((resource) => <div key={resource.id} className="py-4 border-b border-vow-border flex items-center gap-3"><ResourceIcon type={resource.resource_type} /><div className="min-w-0 flex-1">{resource.displayUrl && resource.resource_type === 'image' ? <a href={resource.displayUrl} target="_blank" rel="noreferrer"><img src={resource.displayUrl} alt={resource.title || 'Goal reference'} className="w-20 h-20 object-cover border border-vow-border mb-2" /></a> : resource.displayUrl && resource.resource_type === 'video' ? <video src={resource.displayUrl} controls className="w-full max-h-56 border border-vow-border mb-2" /> : <a href={resource.displayUrl || resource.url} target="_blank" rel="noreferrer" className="text-sm text-vow-ink hover:opacity-70 inline-flex items-center gap-1 max-w-full"><span className="truncate">{resource.title || resource.url}</span><ExternalLink className="w-3 h-3 flex-shrink-0" /></a>}<p className="text-xs text-vow-muted capitalize mt-1">{resource.title || resource.resource_type} · {resource.resource_type} reference</p></div><button onClick={() => removeResource(resource.id)} className="text-vow-muted hover:text-vow-ink" aria-label="Remove reference"><Trash2 className="w-4 h-4" /></button></div>)}</div>}
+      {resources.length > 0 && <div className="mt-5 border-t border-vow-border">{resources.map((resource) => <div key={resource.id} className="py-4 border-b border-vow-border flex items-center gap-3"><ResourceIcon type={resource.resource_type} /><div className="min-w-0 flex-1">{resource.displayUrl && resource.resource_type === 'image' ? <a href={resource.displayUrl} target="_blank" rel="noreferrer"><img src={resource.displayUrl} alt={resource.title || 'Goal reference'} className="w-20 h-20 object-cover border border-vow-border mb-2" /></a> : resource.displayUrl && resource.resource_type === 'video' ? <video src={resource.displayUrl} controls className="w-full max-h-56 border border-vow-border mb-2" /> : <a href={resource.displayUrl || resource.url} target="_blank" rel="noreferrer" className="text-sm text-vow-ink hover:opacity-70 inline-flex items-center gap-1 max-w-full"><span className="truncate">{resource.title || resource.url}</span><span className="text-xs" aria-hidden="true">↗</span></a>}<p className="text-xs text-vow-muted capitalize mt-1">{resource.title || resource.resource_type} · {resource.resource_type} reference</p></div><button onClick={() => removeResource(resource.id)} className="text-vow-muted hover:text-vow-ink" aria-label="Remove reference"><Trash2 className="w-4 h-4" /></button></div>)}</div>}
     </div>
   </section>;
 }
