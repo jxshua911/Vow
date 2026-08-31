@@ -38,6 +38,8 @@
   .vow-splash-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; background: rgb(var(--vow-bg)); pointer-events: auto; opacity: 1; transition: opacity 420ms cubic-bezier(.4,0,.2,1), background-color 180ms ease; }
   .vow-splash-overlay.vow-splash-fading { opacity: 0; pointer-events: none; }
   .vow-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; margin: 0 auto; flex: 0 0 auto; animation: vow-splash-in 650ms cubic-bezier(.2,.7,.2,1) both; }
+  .vow-theme-splash { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; background: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); }
+  .vow-theme-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; animation: vow-theme-splash-in 500ms cubic-bezier(.2,.7,.2,1) both; }
   .vow-loading-dots { display: flex; gap: 5px; align-items: center; }
   .vow-loading-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--vow-ink)); animation: vow-dot 900ms ease-in-out infinite; opacity: 0.25; }
   .vow-loading-dots span:nth-child(2) { animation-delay: 120ms; }
@@ -48,10 +50,11 @@
 }
 
 @keyframes vow-splash-in { from { opacity: 0; transform: scale(1.025) translateY(4px); } 60% { opacity: 1; } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes vow-theme-splash-in { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
 @keyframes vow-dot { 0%, 100% { opacity: .2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .vow-splash-logo, .vow-loading-dots span { animation: none; }
+  .vow-splash-logo, .vow-theme-splash-logo, .vow-loading-dots span { animation: none; }
   .vow-splash-overlay { transition: none; }
 }
 
