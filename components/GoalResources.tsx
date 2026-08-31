@@ -58,6 +58,19 @@ export function GoalResources() {
     return () => observer.disconnect();
   }, []);
 
+  async function uploadFile(nextGoalId: string, selectedFile: File, resourceTitle: string) {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) throw new Error('You need to be signed in.');
+    if (selectedFile.size > 25 * 1024 * 1024) throw new Error('Attachments must be 25 MB or smaller.');
+    const safeName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `${userData.user.id}/${nextGoalId}/${crypto.randomUUID()}-${safeName}`;
+    const { error: uploadError } = await supabase.storage.from('goal-resources').upload(path, selectedFile, { contentType: selectedFile.type, upsert: false });
+    if (uploadError) throw uploadError;
+    const type = selectedFile.type.startsWith('video/') ? 'video' : 'image';
+    const { error: insertError } = await supabase.from('goal_resources').insert({ goal_id: nextGoalId, user_id: userData.user.id, url: `storage://${path}`, title: resourceTitle || selectedFile.name, resource_type: type });
+    if (insertError) throw insertError;
+  }
+
   async function attachPendingToGoal(nextGoalId: string) {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
@@ -69,6 +82,21 @@ export function GoalResources() {
     if (pendingUrlLinks.length) {
       await supabase.from('goal_resources').insert(pendingUrlLinks.map((item) => ({ ...item, goal_id: nextGoalId, user_id: userData.user.id })));
     }
+  }
+
+  async function loadResources(nextGoalId: string) {
+    if (!nextGoalId) { setResources([]); return; }
+    const { data, error: resourceError } = await supabase.from('goal_resources').select('*').eq('goal_id', nextGoalId).order('created_at', { ascending: false });
+    if (resourceError) { setError('Could not load goal references.'); return; }
+    const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await signedDisplayUrl(resource.url) })));
+    setResources(next);
+  }
+
+  async function signedDisplayUrl(urlValue: string) {
+    if (!isStorageUrl(urlValue)) return urlValue;
+    const path = urlValue.slice('storage://'.length);
+    const { data } = await supabase.storage.from('goal-resources').createSignedUrl(path, 60 * 60);
+    return data?.signedUrl || '';
   }
 
   async function loadGoals() {
@@ -85,36 +113,16 @@ export function GoalResources() {
     latestGoalId.current = newest;
   }
 
-  async function signedDisplayUrl(urlValue: string) {
-    if (!isStorageUrl(urlValue)) return urlValue;
-    const path = urlValue.slice('storage://'.length);
-    const { data } = await supabase.storage.from('goal-resources').createSignedUrl(path, 60 * 60);
-    return data?.signedUrl || '';
-  }
-
-  async function loadResources(nextGoalId: string) {
-    if (!nextGoalId) { setResources([]); return; }
-    const { data, error: resourceError } = await supabase.from('goal_resources').select('*').eq('goal_id', nextGoalId).order('created_at', { ascending: false });
-    if (resourceError) { setError('Could not load goal references.'); return; }
-    const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await signedDisplayUrl(resource.url) })));
-    setResources(next);
-  }
-
   useEffect(() => { loadGoals().finally(() => setLoading(false)); }, []);
-  useEffect(() => { setError(''); loadResources(goalId); }, [goalId]);
-
-  async function uploadFile(nextGoalId: string, selectedFile: File, resourceTitle: string) {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) throw new Error('You need to be signed in.');
-    if (selectedFile.size > 25 * 1024 * 1024) throw new Error('Attachments must be 25 MB or smaller.');
-    const safeName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const path = `${userData.user.id}/${nextGoalId}/${crypto.randomUUID()}-${safeName}`;
-    const { error: uploadError } = await supabase.storage.from('goal-resources').upload(path, selectedFile, { contentType: selectedFile.type, upsert: false });
-    if (uploadError) throw uploadError;
-    const type = selectedFile.type.startsWith('video/') ? 'video' : 'image';
-    const { error: insertError } = await supabase.from('goal_resources').insert({ goal_id: nextGoalId, user_id: userData.user.id, url: `storage://${path}`, title: resourceTitle || selectedFile.name, resource_type: type });
-    if (insertError) throw insertError;
-  }
+  useEffect(() => {
+    setError('');
+    if (goalId && !creatingGoal) loadResources(goalId);
+  }, [goalId, creatingGoal]);
+  useEffect(() => {
+    if (!creatingGoal && !pendingAttachments.current.length && !pendingLinks.current.length) return;
+    const timer = window.setInterval(() => { loadGoals(); }, 1200);
+    return () => window.clearInterval(timer);
+  }, [creatingGoal]);
 
   async function addResource() {
     if (saving) return;
