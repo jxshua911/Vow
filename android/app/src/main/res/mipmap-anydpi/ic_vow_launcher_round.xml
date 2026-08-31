@@ -3,4 +3,5 @@
     android:drawable="@drawable/vow_icon_exact"
     android:scaleWidth="120%"
     android:scaleHeight="120%"
-    android:scaleGravity="center" />
+    android:scaleGravity="center"
+    android:level="10000" />
