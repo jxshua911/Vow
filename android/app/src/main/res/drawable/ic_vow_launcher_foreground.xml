@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <scale xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/vow_icon_exact"
+    android:drawable="@drawable/vow_icon_white_foreground"
     android:scaleWidth="120%"
     android:scaleHeight="120%"
     android:scaleGravity="center"
