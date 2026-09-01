@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="@color/vow_icon_background" android:pathData="M0,0h108v108h-108z" />
-    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.76" android:scaleY="0.76">
-        <path android:fillColor="@color/vow_icon_foreground" android:pathData="M18.35,8 L18,19.23 L18.92,20.69 L74.86,51.38 L78.05,54.31 L18.57,87.38 L18.07,100 L85.76,62.47 L88.73,59.55 L90,55.29 L89.22,49.92 L86.18,46.15 Z" />
-    </group>
+    <path android:fillColor="#FFFFFF" android:pathData="M0,0h108v108h-108z" />
+
+    <!-- > -->
+    <path android:fillColor="#000000" android:pathData="M14,38 L17,34 L38,50 L38,54 L17,70 L14,66 L32,54 Z" />
+
+    <!-- O -->
+    <path android:fillColor="#000000" android:fillType="evenOdd" android:pathData="M47,39 A15,15 0,1 1,47,69 A15,15 0,1 1,47,39 M47,46 A8,8 0,1 0,47,62 A8,8 0,1 0,47,46" />
+
+    <!-- W -->
+    <path android:fillColor="#000000" android:pathData="M64,40 L70,40 L75,61 L80,40 L86,40 L91,61 L96,40 L102,40 L95,68 L88,68 L83,49 L78,68 L71,68 Z" />
 </vector>
