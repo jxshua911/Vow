@@ -1,0 +1,83 @@
+-- Armadillo: deterministic goal -> category -> evidence intelligence.
+-- This layer never blocks manual tracking and only recommends integrations already
+-- specified for VOW: Strava, Google Calendar, Medito and GitHub.
+
+create or replace function public.armadillo_analyse_goal(
+  goal_title text,
+  goal_outcome text default null,
+  goal_why text default null
+)
+returns jsonb
+language plpgsql
+immutable
+set search_path = public, pg_temp
+as $$
+declare
+  t text := lower(trim(concat_ws(' ', coalesce(goal_title,''), coalesce(goal_outcome,''), coalesce(goal_why,''))));
+  category text := 'General';
+  goal_type text := 'Goal';
+  metric text := 'measurable progress toward the stated outcome';
+  integration text := null;
+  evidence jsonb := jsonb_build_array('manual progress updates','goal milestones','completed sessions or actions');
+  confidence numeric := 0.55;
+begin
+  if t ~ '(run|running|5k|10k|marathon|half marathon|mile|km)' then
+    category := 'Sports'; goal_type := 'Running'; metric := 'distance, pace, time';
+    evidence := jsonb_build_array('activity distance','activity pace','activity time'); integration := 'Strava'; confidence := 0.90;
+  elsif t ~ '(cycle|cycling|bike|biking|ride)' then
+    category := 'Sports'; goal_type := 'Cycling'; metric := 'distance, duration';
+    evidence := jsonb_build_array('ride distance','ride duration'); integration := 'Strava'; confidence := 0.90;
+  elsif t ~ '(football|soccer|match|football training)' then
+    category := 'Sports'; goal_type := 'Football'; metric := 'sessions, minutes, performance';
+    evidence := jsonb_build_array('training sessions','match activity','manual performance notes'); integration := 'Strava'; confidence := 0.90;
+  elsif t ~ '(study|revise|revision|exam|homework|learn|learning|physics|chemistry|biology|maths|mathematics)' then
+    category := 'Education'; goal_type := 'Study'; metric := 'study time, task completion, accuracy';
+    evidence := jsonb_build_array('study sessions','completed tasks','practice results'); integration := 'Google Calendar'; confidence := 0.90;
+  elsif t ~ '(read|reading|book|books|pages)' then
+    category := 'Reading'; goal_type := 'Reading'; metric := 'pages, books, reading time';
+    evidence := jsonb_build_array('pages read','books completed','reading sessions'); confidence := 0.90;
+  elsif t ~ '(meditate|meditation|mindfulness)' then
+    category := 'Mindfulness'; goal_type := 'Meditation'; metric := 'sessions, duration';
+    evidence := jsonb_build_array('meditation sessions','meditation duration'); integration := 'Medito'; confidence := 0.90;
+  elsif t ~ '(github|commit|commits|pull request|contribution|coding project)' then
+    category := 'Technology/Projects'; goal_type := 'GitHub Contributions'; metric := 'contributions, pull requests, commits';
+    evidence := jsonb_build_array('GitHub activity'); integration := 'GitHub'; confidence := 0.90;
+  elsif t ~ '(portfolio|project|career|cv|resume|job|application|internship)' then
+    category := 'Career/Projects'; goal_type := 'Project'; metric := 'deliverables, milestones, completion';
+    evidence := jsonb_build_array('project milestones','completed deliverables','project review'); integration := 'Google Calendar'; confidence := 0.90;
+  end if;
+
+  return jsonb_build_object(
+    'category', category,
+    'goal_type', goal_type,
+    'metric', metric,
+    'evidence', evidence,
+    'integration', integration,
+    'fallback', 'Manual tracking remains fully usable if the suggested integration is not connected.',
+    'confidence', confidence
+  );
+end;
+$$;
+
+revoke all on function public.armadillo_analyse_goal(text,text,text) from public;
+grant execute on function public.armadillo_analyse_goal(text,text,text) to authenticated;
+
+create or replace function public.attach_armadillo_to_goal()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  analysis jsonb;
+begin
+  analysis := public.armadillo_analyse_goal(NEW.title, NEW.outcome, NEW.why_it_matters);
+  NEW.plan_json := coalesce(NEW.plan_json, '{}'::jsonb) || jsonb_build_object('armadillo', analysis);
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_attach_armadillo_to_goal on public.goals;
+create trigger trg_attach_armadillo_to_goal
+before insert or update of title, outcome, why_it_matters, plan_json
+on public.goals
+for each row execute function public.attach_armadillo_to_goal();
