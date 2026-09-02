@@ -37,6 +37,7 @@ jobs:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
+          cmdline-tools-version: 14742923
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Audit production dependencies
@@ -66,15 +67,15 @@ jobs:
           "$BT/apksigner" verify --verbose "$APK"
           BADGING="$($BT/aapt dump badging "$APK")"
           echo "$BADGING"
-          echo "$BADGING" | grep -q "package: name='com.vow.app' versionCode='7' versionName='1.0.7'"
+          echo "$BADGING" | grep -q "package: name='com.vow.app' versionCode='8' versionName='1.0.8'"
           echo "$BADGING" | grep -q "sdkVersion:'24'"
           echo "$BADGING" | grep -q "targetSdkVersion:'36'"
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.0.7.apk"
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.0.8.apk"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.0.7
-          path: "VOW APK 1.0.7.apk"
+          name: VOW APK 1.0.8
+          path: "VOW APK 1.0.8.apk"
           if-no-files-found: error
           retention-days: 14
