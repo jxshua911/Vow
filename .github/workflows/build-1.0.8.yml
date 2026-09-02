@@ -1,0 +1,47 @@
+name: VOW 1.0.8 Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - capacitor-mobile
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Verify Android
+        run: |
+          cd android
+          ./gradlew assembleDebug lint
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vow-1.0.8-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
