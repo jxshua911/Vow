@@ -81,14 +81,12 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 
 function SharedInformationPage({ session, displayName, onBack }: { session: ReturnType<typeof useAuth>['session']; displayName: string; onBack: () => void }) {
   const name = displayName;
-  const phone = session?.user?.phone || '';
   const email = session?.user?.email || '';
   const phoneCalendarConnected = localStorage.getItem('vow:native-calendar-sync') === 'true';
   const googleCalendarConnected = localStorage.getItem('vow:connections')?.includes('google-calendar') === true;
   const rows = [
     { label: 'Name', value: name || 'Not provided' },
     { label: 'Email', value: email || 'Not provided' },
-    { label: 'Phone number', value: phone || 'Not provided' },
     { label: 'Google Calendar', value: googleCalendarConnected ? 'Connected' : 'Not connected' },
     { label: 'Phone Calendar', value: phoneCalendarConnected ? 'Connected' : 'Not connected' },
   ];
