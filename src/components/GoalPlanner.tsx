@@ -1,3 +1,4 @@
+/* eslint-disable no-empty */
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { addDays, toDateString } from '@/lib/dates';
