@@ -1,4 +1,4 @@
-name: VOW 1.0.8 Android Build
+name: VOW 1.0.9 Android Build
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vow-1-0-8-${{ github.ref }}
+  group: vow-1-0-9-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -54,11 +54,11 @@ jobs:
           test -s "$APK"
           echo "APK size: $(stat -c%s "$APK") bytes"
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.0.8.apk"
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.0.9.apk"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.0.8
-          path: "VOW APK 1.0.8.apk"
+          name: VOW APK 1.0.9
+          path: "VOW APK 1.0.9.apk"
           if-no-files-found: error
           retention-days: 14
