@@ -1,20 +1,22 @@
+import { analyseGoalForEvidence, type ArmadilloResult } from '@/lib/armadillo';
+
 export interface DecomposedGoal {
   outcome: string;
   deadline: string;
   milestones: { title: string; description: string; weeksOut: number }[];
   weeklyCommitment: number;
   suggestedSessionDuration: number;
+  armadillo: ArmadilloResult;
 }
 
 /**
  * Goal decomposition — MVP version uses heuristic decomposition.
- * In production this would call an LLM with a structured prompt (see docs/ai-prompts.md).
- * The heuristic captures the same structured output shape the AI prompt would return.
+ * Armadillo runs alongside decomposition so every VOW gets a category,
+ * measurable metric and the most relevant evidence source without blocking creation.
  */
 export function decomposeGoal(rawInput: string): DecomposedGoal {
   const input = rawInput.trim().toLowerCase();
 
-  // Detect domain and produce concrete outcome + sequenced milestones
   let outcome = rawInput.trim();
   let milestones: { title: string; description: string; weeksOut: number }[] = [];
   let weeklyCommitment = 3;
@@ -93,7 +95,6 @@ export function decomposeGoal(rawInput: string): DecomposedGoal {
     weeklyCommitment = 5;
     suggestedSessionDuration = 30;
   } else {
-    // Generic decomposition
     const title = rawInput.trim();
     outcome = title.charAt(0).toUpperCase() + title.slice(1);
     milestones = [
@@ -115,5 +116,6 @@ export function decomposeGoal(rawInput: string): DecomposedGoal {
     milestones,
     weeklyCommitment,
     suggestedSessionDuration,
+    armadillo: analyseGoalForEvidence(rawInput),
   };
 }
