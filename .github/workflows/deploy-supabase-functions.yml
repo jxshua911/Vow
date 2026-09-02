@@ -1,10 +1,15 @@
 name: Deploy Supabase Edge Functions
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - capacitor-mobile
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch: {}
 
 jobs:
-  deploy:
+  deploy-functions:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,7 +21,22 @@ jobs:
         with:
           version: latest
 
-      - name: Deploy Google Calendar function
+      - name: Deploy Google Calendar auth function
         run: supabase functions deploy google-calendar-auth --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Google Calendar events function
+        run: supabase functions deploy google-calendar-events --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy VOW AI function
+        run: supabase functions deploy vow-goal-ai --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy goal calendar sync function
+        run: supabase functions deploy google-calendar-sync-goal --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

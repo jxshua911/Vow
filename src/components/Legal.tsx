@@ -1,0 +1,50 @@
+import { ArrowLeft } from 'lucide-react';
+import { PageHeader } from './AppShell';
+
+const sections = [
+  ['1. Service', 'VOW is a personal planning, accountability and evidence-organising tool. It is provided for general informational and productivity purposes and is not a substitute for professional medical, mental-health, financial, legal, educational or other professional advice.'],
+  ['2. Connected services', 'When you connect a third-party service, you authorise VOW to access only the data and scopes that service permits. Third-party services remain governed by their own terms and privacy policies. VOW does not guarantee the availability, accuracy, completeness or continued operation of any third-party integration.'],
+  ['3. Evidence and verification', 'VOW may classify information as self-reported, supporting evidence or verified evidence. Verification is an automated interpretation of available data and is not a guarantee that a real-world event occurred. You remain responsible for reviewing important records and decisions.'],
+  ['4. Privacy', 'VOW should collect and process only information reasonably necessary to provide the features you request. Sensitive journal content should remain private to your account. Connected-service data should be scoped to the permissions you grant and should not be sold or used for unrelated advertising.'],
+  ['5. Security', 'VOW will use reasonable technical and organisational safeguards, including authenticated access controls and least-privilege access where practical. No internet service can guarantee absolute security, and you should use a strong account password and protect access to your device.'],
+  ['6. Your responsibility', 'You are responsible for the accuracy of information you enter, the permissions you grant, and your use of recommendations or evidence produced by VOW. Do not use VOW as the sole basis for a decision where professional or emergency assistance is required.'],
+  ['7. Disclaimer and limitation of liability', 'To the maximum extent permitted by applicable law, VOW and its developers provide the service without warranties of uninterrupted availability, accuracy, fitness for a particular purpose or error-free operation. Nothing in these terms excludes liability that cannot lawfully be excluded or limited.'],
+  ['8. Changes and termination', 'Features, integrations and these policies may change as VOW develops. We may suspend or discontinue features when necessary for security, legal, operational or technical reasons. Where practical, material policy changes should be communicated before they take effect.'],
+  ['9. Governing law', 'The governing law, dispute-resolution process and any mandatory consumer protections will be determined by the jurisdiction applicable to the service and its users. Nothing here is intended to remove rights that cannot legally be waived.'],
+] as const;
+
+export function LegalPage({ onBack }: { onBack?: () => void }) {
+  return (
+    <div className="min-h-screen bg-vow-bg">
+      <header className="sticky top-0 z-30 border-b border-vow-border bg-vow-bg/95 backdrop-blur" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 h-16 flex items-center gap-4">
+          <button onClick={onBack} className="shrink-0 w-10 h-10 border border-vow-border flex items-center justify-center text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors" aria-label="Back to profile">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-vow-ink truncate">Terms & Policies</p>
+            <p className="text-[10px] text-vow-muted">VOW · Product policies</p>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-5 sm:px-8 py-10 md:py-14">
+        <PageHeader title="Terms & Policies" subtitle="The rules, responsibilities and privacy principles governing VOW." />
+        <div className="mt-8 border border-vow-border divide-y divide-vow-border bg-white/20">
+          {sections.map(([title, body], index) => (
+            <section key={title} className="px-5 py-6 sm:px-7 sm:py-7">
+              <div className="flex gap-4">
+                <span className="shrink-0 pt-0.5 text-[10px] font-mono text-vow-muted">{String(index + 1).padStart(2, '0')}</span>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-medium text-vow-ink mb-2">{title.replace(/^\d+\. /, '')}</h2>
+                  <p className="text-sm leading-7 text-vow-muted">{body}</p>
+                </div>
+              </div>
+            </section>
+          ))}
+        </div>
+        <p className="mt-6 text-[11px] leading-5 text-vow-muted">Last updated: 27 August 2026. This page is a product-level terms framework, not a substitute for review by a qualified lawyer before public release.</p>
+      </main>
+    </div>
+  );
+}

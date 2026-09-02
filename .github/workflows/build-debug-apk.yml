@@ -1,70 +1,67 @@
-name: Build Android Debug APK
+name: Build Android APK
 
 on:
+  push:
+    branches:
+      - capacitor-mobile
   workflow_dispatch: {}
 
-jobs:
-  build-debug-apk:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+permissions:
+  contents: read
 
-      - uses: actions/setup-java@v4
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-
-      - uses: android-actions/setup-android@v3
-
-      - uses: actions/setup-node@v4
+          cache: gradle
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-
-      - run: npm ci
-
+          node-version: 22
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
       - name: Build web app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
-
-      - run: npx cap sync android
-
-      # Android 12+ always creates a system starting window. Make its splash icon
-      # fully transparent so the native starting window cannot show the small
-      # VOW mark before the app's own large splash screen.
-      - name: Remove Android starting-window icon
-        shell: bash
-        run: |
-          mkdir -p android/app/src/main/res/drawable
-          cat > android/app/src/main/res/drawable/vow_empty_splash.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-              <solid android:color="@android:color/transparent" />
-              <size android:width="1dp" android:height="1dp" />
-          </shape>
-          EOF
-
-          for f in android/app/src/main/res/values-v31/styles.xml android/app/src/main/res/values-v33/styles.xml; do
-            if [ -f "$f" ]; then
-              sed -i 's#@drawable/[^<]*splash[^<]*#@drawable/vow_empty_splash#g' "$f"
-              sed -i 's#@drawable/[^<]*launcher[^<]*#@drawable/vow_empty_splash#g' "$f"
-            fi
-          done
-
-          grep -RIl 'windowSplashScreenAnimatedIcon' android/app/src/main/res/values* 2>/dev/null | while read -r f; do
-            sed -i 's#>[^<]*</item>#>@drawable/vow_empty_splash</item>#' "$f"
-          done
-
-      - run: chmod +x android/gradlew
-
-      - name: Assemble debug APK
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+      - name: Assemble universal debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
-
-      - uses: actions/upload-artifact@v4
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Verify APK
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          echo "APK size: $(stat -c%s "$APK") bytes"
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.0.8.apk"
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: Vow-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: VOW APK 1.0.8-debug
+          path: "VOW APK 1.0.8.apk"
           if-no-files-found: error
+          retention-days: 14

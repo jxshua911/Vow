@@ -1,135 +1,105 @@
-import { analyseGoalForEvidence } from '@/lib/armadillo';
-import type { ArmadilloResult } from '@/lib/armadillo';
-
 export interface DecomposedGoal {
   outcome: string;
   deadline: string;
   milestones: { title: string; description: string; weeksOut: number }[];
   weeklyCommitment: number;
   suggestedSessionDuration: number;
-  armadillo: ArmadilloResult;
 }
 
-function numericTarget(input: string, unit: string): number | null {
-  const match = input.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*${unit}`, 'i'));
-  return match ? Number(match[1]) : null;
-}
-
+/**
+ * Goal decomposition — MVP version uses heuristic decomposition.
+ * In production this would call an LLM with a structured prompt (see docs/ai-prompts.md).
+ * The heuristic captures the same structured output shape the AI prompt would return.
+ */
 export function decomposeGoal(rawInput: string): DecomposedGoal {
   const input = rawInput.trim().toLowerCase();
+
+  // Detect domain and produce concrete outcome + sequenced milestones
   let outcome = rawInput.trim();
   let milestones: { title: string; description: string; weeksOut: number }[] = [];
   let weeklyCommitment = 3;
   let suggestedSessionDuration = 45;
 
-  if (/run|running|5k|10k|marathon|jog|walk|walking/.test(input)) {
-    const distance = numericTarget(input, '(?:km|k)');
-    const monthly = /this month|monthly|per month/.test(input);
-    const target = distance ?? (input.includes('marathon') ? 42.2 : 5);
-    const label = target === 42.2 ? 'marathon' : `${target}K`;
-    outcome = monthly && distance ? `Run ${target} km this month` : `Run a ${label} without stopping`;
-    if (monthly && distance) {
-      milestones = [
-        { title: `Build toward ${Math.round(target * 0.25)} km`, description: 'Establish a sustainable running rhythm and accumulate consistent distance.', weeksOut: 1 },
-        { title: `Reach ${Math.round(target * 0.6)} km total`, description: 'Build weekly volume gradually while reviewing how the body and schedule respond.', weeksOut: 3 },
-        { title: `Reach ${target} km total`, description: 'Complete the target monthly distance without needing to cram missed volume into a single session.', weeksOut: 4 },
-      ];
-      weeklyCommitment = 3;
-      suggestedSessionDuration = 45;
-    } else {
-      milestones = [
-        { title: 'Establish a comfortable baseline', description: 'Use easy walk-run or continuous running based on your current ability.', weeksOut: 2 },
-        { title: `Build toward ${Math.max(1, Math.round(target * 0.6))} km`, description: 'Extend distance gradually while keeping the workload manageable.', weeksOut: 4 },
-        { title: `Complete ${label}`, description: `Complete the ${label} target without forcing the pace.`, weeksOut: 8 },
-      ];
-      weeklyCommitment = 3;
-      suggestedSessionDuration = 40;
-    }
-  } else if (/read|reading|book|books|pages/.test(input)) {
-    const pages = numericTarget(input, 'pages?');
-    const daily = /every day|daily|a day|per day/.test(input);
-    if (pages && daily) {
-      outcome = `Read ${pages} pages every day`;
-      milestones = [
-        { title: `Build a ${Math.max(1, Math.round(pages * 0.5))}-page daily baseline`, description: 'Make the reading block easy enough to establish consistently.', weeksOut: 1 },
-        { title: `Reach ${Math.max(1, Math.round(pages * 0.75))} pages per day`, description: 'Increase volume while protecting consistency.', weeksOut: 3 },
-        { title: `Sustain ${pages} pages per day`, description: 'Maintain the target and review the habit weekly.', weeksOut: 6 },
-      ];
-      weeklyCommitment = 7;
-      suggestedSessionDuration = 30;
-    } else {
-      outcome = 'Read 6 books in the next 3 months';
-      milestones = [
-        { title: 'Finish book 1', description: 'Complete your first book.', weeksOut: 2 },
-        { title: 'Finish book 3', description: 'Build a steady reading habit.', weeksOut: 6 },
-        { title: 'Finish book 6', description: 'Reach your reading goal.', weeksOut: 12 },
-      ];
-      weeklyCommitment = 5;
-      suggestedSessionDuration = 30;
-    }
-  } else if (/study|school|exam|physics|chemistry|math|mathematics|revision|homework/.test(input)) {
-    const hours = numericTarget(input, 'hours?');
-    const daily = /every weekday|every day|daily|a day|per day/.test(input);
-    outcome = hours && daily ? `Study for ${hours} hours ${/weekday/.test(input) ? 'every weekday' : 'every day'}` : rawInput.trim();
+  if (/run|running|5k|10k|marathon|couch/.test(input)) {
+    outcome = 'Run a 5K without stopping';
     milestones = [
-      { title: 'Establish the study routine', description: 'Complete consistent focused sessions and identify the highest-value work.', weeksOut: 1 },
-      { title: 'Build consistency', description: 'Increase the proportion of planned study sessions completed.', weeksOut: 3 },
-      { title: 'Review progress', description: 'Use completed work and results to adjust the next study block.', weeksOut: 6 },
+      { title: 'Run 1 mile without stopping', description: 'Build baseline aerobic capacity with walk-run intervals.', weeksOut: 2 },
+      { title: 'Run 2 miles continuously', description: 'Extend endurance to 2 miles at conversational pace.', weeksOut: 4 },
+      { title: 'Complete a 5K', description: 'Run the full 5K distance without walk breaks.', weeksOut: 8 },
     ];
-    weeklyCommitment = daily && /weekday/.test(input) ? 5 : 4;
-    suggestedSessionDuration = hours ? Math.max(30, Math.min(120, Math.round(hours * 60))) : 60;
-  } else if (/code|program|learn.*javascript|learn.*python|developer|coding/.test(input)) {
-    outcome = rawInput.trim();
+    weeklyCommitment = 3;
+    suggestedSessionDuration = 40;
+  } else if (/write|book|novel|blog|writing/.test(input)) {
+    outcome = 'Complete a first draft of your book';
     milestones = [
-      { title: 'Complete the fundamentals', description: 'Work through the core concepts required for the stated project or skill.', weeksOut: 2 },
-      { title: 'Build a small practice project', description: 'Apply the fundamentals to a real, small piece of work.', weeksOut: 4 },
-      { title: 'Ship a working project', description: 'Complete and share a usable result.', weeksOut: 8 },
+      { title: 'Outline the full structure', description: 'Write a chapter-by-chapter outline.', weeksOut: 2 },
+      { title: 'Draft first 10,000 words', description: 'Write the opening chapters without editing.', weeksOut: 5 },
+      { title: 'Complete first draft', description: 'Finish the full manuscript, rough is fine.', weeksOut: 12 },
     ];
     weeklyCommitment = 4;
     suggestedSessionDuration = 60;
-  } else if (/meditat|mindful|stress|anxiety|calm/.test(input)) {
-    outcome = rawInput.trim();
+  } else if (/code|program|learn.*javascript|learn.*python|developer|coding/.test(input)) {
+    outcome = 'Build and ship a working project in your chosen language';
     milestones = [
-      { title: 'Establish the practice', description: 'Start with short sessions that are easy to repeat.', weeksOut: 2 },
-      { title: 'Build consistency', description: 'Increase consistency before increasing duration.', weeksOut: 4 },
-      { title: 'Sustain the routine', description: 'Review what makes the practice fit naturally into your day.', weeksOut: 8 },
+      { title: 'Complete a fundamentals tutorial', description: 'Work through core syntax and concepts.', weeksOut: 2 },
+      { title: 'Build a small practice project', description: 'Apply fundamentals to a tiny real project.', weeksOut: 4 },
+      { title: 'Ship a portfolio project', description: 'Complete and deploy a project you can share.', weeksOut: 8 },
+    ];
+    weeklyCommitment = 4;
+    suggestedSessionDuration = 60;
+  } else if (/read|reading|books/.test(input)) {
+    outcome = 'Read 6 books in the next 3 months';
+    milestones = [
+      { title: 'Finish book 1', description: 'Complete your first book.', weeksOut: 2 },
+      { title: 'Finish book 3', description: 'Build a steady reading habit.', weeksOut: 6 },
+      { title: 'Finish book 6', description: 'Reach your reading goal.', weeksOut: 12 },
+    ];
+    weeklyCommitment = 5;
+    suggestedSessionDuration = 30;
+  } else if (/meditat|mindful|stress|anxiety|calm/.test(input)) {
+    outcome = 'Build a consistent daily meditation practice';
+    milestones = [
+      { title: 'Meditate 5 minutes daily for 2 weeks', description: 'Establish the habit with short sessions.', weeksOut: 2 },
+      { title: 'Meditate 10 minutes daily', description: 'Extend duration once the habit sticks.', weeksOut: 4 },
+      { title: '30-day unbroken streak', description: 'Sustain the practice for a full month.', weeksOut: 8 },
     ];
     weeklyCommitment = 7;
     suggestedSessionDuration = 15;
   } else if (/gym|fitness|workout|strength|muscle|lift/.test(input)) {
-    outcome = rawInput.trim();
+    outcome = 'Build a consistent 3x/week strength training routine';
     milestones = [
-      { title: 'Establish a consistent routine', description: 'Learn and repeat the core movements or sessions required by the goal.', weeksOut: 2 },
-      { title: 'Progress the workload', description: 'Increase training demand only when the current workload is handled consistently.', weeksOut: 6 },
-      { title: 'Sustain the routine', description: 'Maintain the plan and review progress against the original outcome.', weeksOut: 12 },
+      { title: 'Complete 2 weeks of consistent workouts', description: 'Learn basic movement patterns.', weeksOut: 2 },
+      { title: 'Increase weights for 4 weeks', description: 'Progressive overload with tracked lifts.', weeksOut: 6 },
+      { title: 'Hit 12 weeks consistent', description: 'Sustained routine with visible progress.', weeksOut: 12 },
     ];
     weeklyCommitment = 3;
     suggestedSessionDuration = 60;
   } else if (/guitar|music|piano|instrument|practice/.test(input)) {
-    outcome = rawInput.trim();
+    outcome = 'Play 10 songs confidently on your instrument';
     milestones = [
-      { title: 'Learn the fundamentals', description: 'Master the basic skills needed for the stated goal.', weeksOut: 2 },
-      { title: 'Apply the skills', description: 'Practise through real pieces or exercises.', weeksOut: 5 },
-      { title: 'Demonstrate the outcome', description: 'Use a concrete performance or completed piece as the checkpoint.', weeksOut: 12 },
+      { title: 'Learn basic chords/scales', description: 'Master fundamentals.', weeksOut: 2 },
+      { title: 'Play 3 simple songs', description: 'Apply fundamentals to real music.', weeksOut: 5 },
+      { title: 'Play 10 songs', description: 'Build a comfortable repertoire.', weeksOut: 12 },
     ];
     weeklyCommitment = 4;
     suggestedSessionDuration = 30;
   } else if (/language|spanish|french|japanese|german|learn.*language/.test(input)) {
-    outcome = rawInput.trim();
+    outcome = 'Reach conversational ability in your target language';
     milestones = [
-      { title: 'Build the foundation', description: 'Develop core vocabulary and grammar for the target language.', weeksOut: 4 },
-      { title: 'Use the language actively', description: 'Practise understanding and producing the language in real contexts.', weeksOut: 8 },
-      { title: 'Demonstrate progress', description: 'Test the target skill through a conversation, task, or other concrete outcome.', weeksOut: 16 },
+      { title: 'Complete beginner course (A1)', description: 'Build basic vocabulary and grammar.', weeksOut: 4 },
+      { title: 'Have a 5-minute conversation', description: 'Practice speaking with a tutor or partner.', weeksOut: 8 },
+      { title: 'Reach A2 level', description: 'Sustained conversational ability.', weeksOut: 16 },
     ];
     weeklyCommitment = 5;
     suggestedSessionDuration = 30;
   } else {
+    // Generic decomposition
     const title = rawInput.trim();
     outcome = title.charAt(0).toUpperCase() + title.slice(1);
     milestones = [
-      { title: 'Define the first checkpoint', description: 'Turn the commitment into a specific, measurable first result.', weeksOut: 1 },
-      { title: 'Take the first concrete action', description: 'Complete the first real step toward the outcome.', weeksOut: 3 },
-      { title: 'Reach the outcome', description: 'Achieve or evaluate the specific result you defined.', weeksOut: 8 },
+      { title: 'Define what "better" looks like', description: 'Write a specific, measurable outcome for this goal.', weeksOut: 1 },
+      { title: 'Take first concrete action', description: 'Complete your first real step toward the outcome.', weeksOut: 3 },
+      { title: 'Reach your outcome', description: 'Achieve the specific result you defined.', weeksOut: 8 },
     ];
     weeklyCommitment = 3;
     suggestedSessionDuration = 45;
@@ -137,13 +107,13 @@ export function decomposeGoal(rawInput: string): DecomposedGoal {
 
   const deadline = new Date();
   deadline.setDate(deadline.getDate() + milestones[milestones.length - 1].weeksOut * 7);
+  const deadlineStr = deadline.toISOString().split('T')[0];
 
   return {
     outcome,
-    deadline: deadline.toISOString().split('T')[0],
+    deadline: deadlineStr,
     milestones,
     weeklyCommitment,
     suggestedSessionDuration,
-    armadillo: analyseGoalForEvidence(rawInput),
   };
 }
