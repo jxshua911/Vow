@@ -1,0 +1,1 @@
+The VOW knowledge base is maintained in the Supabase project. The runtime goal-AI function retrieves relevant entries through `match_vow_knowledge_keyword` and the semantic matcher. This repository migration directory contains the schema changes that are specific to VOW application logic.
