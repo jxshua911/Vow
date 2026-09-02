@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { addDays, toDateString, formatDate } from '@/lib/dates';
+import { addDays, toDateString } from '@/lib/dates';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
 import type { Session } from '@/types/database';
 import { PageHeader } from './AppShell';
-import { ArrowLeft, Check, Lock, Plus, X } from 'lucide-react';
+import { ArrowLeft, Lock, Plus, X } from 'lucide-react';
 
 type Horizon = 'auto' | '4w' | '8w' | '12w' | '26w';
 type Clarification = { questions: string[]; recommended_duration_weeks: number; rationale: string };
