@@ -3,47 +3,39 @@ import { LocalNotifications, type PermissionStatus } from '@capacitor/local-noti
 import type { Session } from '@/types/database';
 
 export type NotificationPermission = PermissionStatus['display'];
-export type NotificationPreferences = { sound: boolean; vibration: boolean };
+export type NotificationPreferences = { sound: true; vibration: true };
 
-const CHANNELS = {
-  silent: 'vow-reminders-silent-v2',
-  sound: 'vow-reminders-sound-v2',
-  vibration: 'vow-reminders-vibration-v2',
-  soundVibration: 'vow-reminders-sound-vibration-v2',
-} as const;
+const CHANNEL_ID = 'vow-reminders-default-v3';
 const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
 const PREF_KEY = 'vow:notification-preferences';
-const DEFAULT_PREFERENCES: NotificationPreferences = { sound: false, vibration: false };
+const DEFAULT_PREFERENCES: NotificationPreferences = { sound: true, vibration: true };
 
+/** VOW reminders intentionally use one sensible Android channel: sound + vibration on. */
 export function getNotificationPreferences(): NotificationPreferences {
   try {
-    const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}') as Partial<NotificationPreferences>;
-    return { sound: stored.sound === true, vibration: stored.vibration === true };
+    localStorage.setItem(PREF_KEY, JSON.stringify(DEFAULT_PREFERENCES));
   } catch {
-    return DEFAULT_PREFERENCES;
+    // Notification delivery should not depend on localStorage being available.
   }
+  return DEFAULT_PREFERENCES;
 }
 
-export async function setNotificationPreferences(preferences: NotificationPreferences): Promise<void> {
-  localStorage.setItem(PREF_KEY, JSON.stringify(preferences));
+export async function setNotificationPreferences(_preferences?: Partial<NotificationPreferences>): Promise<void> {
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(DEFAULT_PREFERENCES)); } catch { /* ignore */ }
   if (Capacitor.isNativePlatform()) await setupNotifications();
-}
-
-function channelFor(preferences: NotificationPreferences): string {
-  if (preferences.sound && preferences.vibration) return CHANNELS.soundVibration;
-  if (preferences.sound) return CHANNELS.sound;
-  if (preferences.vibration) return CHANNELS.vibration;
-  return CHANNELS.silent;
 }
 
 export async function setupNotifications(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  await Promise.all([
-    LocalNotifications.createChannel({ id: CHANNELS.silent, name: 'VOW reminders · Silent', description: 'Quiet scheduled reminders from VOW.', importance: 3, visibility: 1, vibration: false }),
-    LocalNotifications.createChannel({ id: CHANNELS.sound, name: 'VOW reminders · Sound', description: 'Scheduled VOW reminders with notification sound.', importance: 3, visibility: 1, vibration: false, sound: 'default' }),
-    LocalNotifications.createChannel({ id: CHANNELS.vibration, name: 'VOW reminders · Vibration', description: 'Scheduled VOW reminders with vibration.', importance: 3, visibility: 1, vibration: true }),
-    LocalNotifications.createChannel({ id: CHANNELS.soundVibration, name: 'VOW reminders · Sound & vibration', description: 'Scheduled VOW reminders with sound and vibration.', importance: 3, visibility: 1, vibration: true, sound: 'default' }),
-  ]);
+  await LocalNotifications.createChannel({
+    id: CHANNEL_ID,
+    name: 'VOW reminders',
+    description: 'Scheduled VOW reminders with sound and vibration.',
+    importance: 4,
+    visibility: 1,
+    vibration: true,
+    sound: 'default',
+  });
 }
 
 export async function getNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
@@ -55,7 +47,10 @@ export async function getNotificationPermission(): Promise<NotificationPermissio
 export async function requestNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
   if (!Capacitor.isNativePlatform()) return 'unsupported';
   const current = await LocalNotifications.checkPermissions();
-  if (current.display === 'granted') return current.display;
+  if (current.display === 'granted') {
+    await setupNotifications();
+    return current.display;
+  }
   const result = await LocalNotifications.requestPermissions();
   if (result.display === 'granted') await setupNotifications();
   return result.display;
@@ -65,8 +60,7 @@ export async function scheduleReminder(id: number, title: string, body: string, 
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
   if (await getNotificationPermission() !== 'granted') return;
   await setupNotifications();
-  const preferences = getNotificationPreferences();
-  await LocalNotifications.schedule({ notifications: [{ id, title, body, channelId: channelFor(preferences), smallIcon: VOW_NOTIFICATION_ICON, schedule: { at, allowWhileIdle: true } }] });
+  await LocalNotifications.schedule({ notifications: [{ id, title, body, channelId: CHANNEL_ID, smallIcon: VOW_NOTIFICATION_ICON, schedule: { at, allowWhileIdle: true } }] });
 }
 
 export async function cancelReminder(id: number): Promise<void> {
