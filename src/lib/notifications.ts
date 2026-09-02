@@ -20,7 +20,7 @@ export function getNotificationPreferences(): NotificationPreferences {
   return DEFAULT_PREFERENCES;
 }
 
-export async function setNotificationPreferences(_preferences?: Partial<NotificationPreferences>): Promise<void> {
+export async function setNotificationPreferences(): Promise<void> {
   try { localStorage.setItem(PREF_KEY, JSON.stringify(DEFAULT_PREFERENCES)); } catch { /* ignore */ }
   if (Capacitor.isNativePlatform()) await setupNotifications();
 }
