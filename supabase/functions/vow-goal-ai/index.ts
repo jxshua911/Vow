@@ -1,14 +1,51 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+function json(body: Record<string, unknown>, status = 200) { return new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } }); }
+
+const clarificationSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    questions: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 3 },
+    recommended_duration_weeks: { type: "integer", minimum: 2, maximum: 52 },
+    rationale: { type: "string" },
+  },
+  required: ["questions", "recommended_duration_weeks", "rationale"],
 };
 
-function json(body: Record<string, unknown>, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-}
+const planSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    outcome: { type: "string" },
+    success_metric: { type: "string" },
+    baseline: { type: "string" },
+    assumptions: { type: "array", items: { type: "string" } },
+    milestones: { type: "array", items: { type: "object", additionalProperties: false, properties: { title: { type: "string" }, description: { type: "string" }, week: { type: "integer", minimum: 1, maximum: 52 } }, required: ["title", "description", "week"] }, minItems: 2, maxItems: 8 },
+    weekly_schedule: { type: "array", items: { type: "object", additionalProperties: false, properties: { day: { type: "string" }, session: { type: "string" }, purpose: { type: "string" }, duration_minutes: { type: "integer", minimum: 10, maximum: 300 } }, required: ["day", "session", "purpose", "duration_minutes"] }, minItems: 1, maxItems: 14 },
+    progression: { type: "string" },
+    checkpoints: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 8 },
+    risks: { type: "array", items: { type: "string" }, maxItems: 6 },
+    fallback_rules: { type: "array", items: { type: "string" }, maxItems: 6 },
+    summary: { type: "string" },
+  },
+  required: ["outcome", "success_metric", "baseline", "assumptions", "milestones", "weekly_schedule", "progression", "checkpoints", "risks", "fallback_rules", "summary"],
+};
+
+const baseInstructions = `You are VOW AI, a rigorous goal-planning and accountability assistant. Your job is to design a plan for the user's actual goal, not produce motivational filler.
+
+NEVER use generic filler such as "generic plan", "Day 1", "Day 2", "Day 3", "stay consistent", "break it into smaller steps", "define what better looks like", or "set SMART goals" as the substance of a plan. Every action must be specific to the user's goal.
+
+Use the user's actual baseline, constraints, available days, preferred schedule, deadline/horizon, resources and references. If important information is missing, ask only 2–3 high-value follow-up questions. Do not interrogate the user.
+
+Choose a sensible time horizon based on the nature of the goal. Do not treat arbitrary 1-week/2-week/3-week choices as the plan itself. A time horizon is the container; the actual plan should have a logical progression inside it. If a longer horizon is appropriate, say so.
+
+For recurring goals, build a real weekly rhythm. For example, a running goal might have an easy run, a quality/hard session and a recovery/longer session on days the user says are suitable. Do not copy the same session repeatedly. Vary purpose, load and progression appropriately.
+
+Use the supplied calendar to avoid conflicts. Use references as evidence. Use web research only when current, specialised, empirical or time-sensitive information materially improves the plan. Do not invent sources or facts.
+
+Be concise, practical, honest about uncertainty and age-appropriate.`;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -18,54 +55,37 @@ Deno.serve(async (req: Request) => {
     const message = typeof payload?.message === "string" ? payload.message.trim() : "";
     const calendar = Array.isArray(payload?.calendar) ? payload.calendar : [];
     const references = Array.isArray(payload?.references) ? payload.references : [];
-    const scope = typeof payload?.scope === "string" ? payload.scope : "general-life-planning";
+    const scope = typeof payload?.scope === "string" ? payload.scope : "goal-planning";
+    const mode = payload?.mode === "goal-clarify" || payload?.mode === "goal-plan" ? payload.mode : "chat";
     if (!goal || !message) return json({ error: "A question is required." }, 400);
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) return json({ error: "VOW AI is temporarily unavailable. AI service configuration is incomplete." }, 503);
 
-    const instructions = `You are VOW AI, a rigorous goal-planning and accountability assistant. Turn the user's actual objective into useful, specific decisions and actions.
+    let instructions = `${baseInstructions}\nScope: ${scope}`;
+    let input = [`Goal/context: ${JSON.stringify(goal)}`, `Upcoming VOW calendar: ${JSON.stringify(calendar)}`, `Attached goal references: ${JSON.stringify(references)}`, `User request: ${message}`].join("\n\n");
+    let textFormat: Record<string, unknown> | undefined;
 
-NEVER pad an answer with generic coaching such as “define what better looks like”, “stay consistent”, “break it into smaller steps”, “believe in yourself”, or “set SMART goals” without immediately translating the idea into concrete, measurable actions for THIS goal. The user should leave with something they can actually do.
-
-For every goal, identify the real outcome and the metric that proves it. Reason from the deadline, baseline/current situation, constraints, available weekly capacity, dependencies and trade-offs. For measurable goals, calculate or estimate the required rate of progress when the information supports it. For skill goals, specify practice structure and progression. For projects, specify deliverables and dependencies. For study goals, specify topics, workload and assessment. For training goals, specify appropriate training variables, progression and recovery considerations. If a key piece of information materially changes the answer, ask only the minimum necessary question; otherwise make a reasonable assumption and state it.
-
-Use the supplied VOW calendar to avoid obvious conflicts and keep the plan within the user's capacity. Use attached references as evidence of the user's intended outcome. If a reference is a public web URL and inspecting it would improve the plan, use it.
-
-When the plan materially benefits from current, specialised, empirical or time-sensitive information, actually use the web-search tool before answering. Prefer primary, official, academic or otherwise authoritative recent sources. Do not invent sources, statistics, requirements or current facts. If research was used, briefly state the important finding(s) and how they changed the recommendation. If research is unnecessary, do not pretend that it was performed.
-
-Do not blindly encourage an impossible, unsafe, contradictory or overloaded commitment. Flag the problem and propose a realistic alternative. For health-related goals, give general evidence-based information and avoid diagnosis or pretending to provide medical care.
-
-Default response structure for a goal plan:
-1. Target and success metric
-2. Baseline/assumptions
-3. What the goal actually requires
-4. Milestones in order
-5. Concrete weekly actions/sessions
-6. Progression and checkpoints
-7. Risks, trade-offs and fallback rules
-8. Research findings/sources only when research was actually used
-
-Be concise, substantive, honest about uncertainty and age-appropriate.
-Scope: ${scope}`;
-    const input = [
-      `Goal/context: ${JSON.stringify(goal)}`,
-      `Upcoming VOW calendar: ${JSON.stringify(calendar)}`,
-      `Attached goal references: ${JSON.stringify(references)}`,
-      `User request: ${message}`,
-    ].join("\n\n");
-
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: "gpt-5.6-luna", instructions, input, tools: [{ type: "web_search" }] }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      console.error("OpenAI request failed", response.status, data?.error?.code || "unknown");
-      return json({ error: "VOW AI could not complete that request right now. Please try again." }, 502);
+    if (mode === "goal-clarify") {
+      instructions += `\n\nYou are in the CLARIFICATION stage. Ask exactly 2 or 3 questions that materially change the plan. Prioritise: current baseline/experience, the user's desired measurable outcome, and which days/times they can realistically commit. If the user already supplied one of these, ask something else useful. Also recommend a sensible duration in weeks based on the goal. Do not create the full plan yet.`;
+      textFormat = { type: "json_schema", name: "vow_goal_clarification", strict: true, schema: clarificationSchema };
+    } else if (mode === "goal-plan") {
+      instructions += `\n\nYou are in the PLAN stage. The user has answered the follow-up questions. Produce a fully custom plan. Use a concrete weekly schedule with real day names or the user's stated day labels. Each session must have a distinct purpose. Do not output numbered generic days. Include progression across the recommended horizon, milestones, checkpoints, risks and fallback rules. The weekly schedule should be directly usable by VOW to create calendar sessions.`;
+      textFormat = { type: "json_schema", name: "vow_goal_plan", strict: true, schema: planSchema };
+    } else {
+      instructions += `\n\nFor normal questions, answer directly with useful goal-specific reasoning and concrete actions.`;
     }
+
+    const requestBody: Record<string, unknown> = { model: "gpt-5.6-luna", instructions, input, tools: [{ type: "web_search" }] };
+    if (textFormat) requestBody.text = { format: textFormat, verbosity: "medium" };
+
+    const response = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(requestBody) });
+    const data = await response.json();
+    if (!response.ok) { console.error("OpenAI request failed", response.status, data?.error?.code || "unknown"); return json({ error: "VOW AI could not complete that request right now. Please try again." }, 502); }
     const text = typeof data?.output_text === "string" ? data.output_text.trim() : Array.isArray(data?.output) ? data.output.flatMap((item: { content?: Array<{ text?: string }> }) => item.content || []).map((part: { text?: string }) => part.text || "").join(" ").trim() : "";
     if (!text) return json({ error: "VOW AI did not return a usable response." }, 502);
+    if (textFormat) {
+      try { return json({ structured: JSON.parse(text), text }); } catch { return json({ error: "VOW AI returned an invalid structured plan. Please try again." }, 502); }
+    }
     return json({ text });
   } catch (error) {
     console.error("VOW AI function error", error instanceof Error ? error.message : "unknown");
