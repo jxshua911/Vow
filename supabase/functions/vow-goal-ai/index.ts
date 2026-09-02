@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
     if (!apiKey) return json({ error: "VOW AI is temporarily unavailable. AI service configuration is incomplete." }, 503);
 
     let instructions = `${baseInstructions}\nScope: ${scope}`;
-    let input = [`Goal/context: ${JSON.stringify(goal)}`, `Upcoming VOW calendar: ${JSON.stringify(calendar)}`, `Attached goal references: ${JSON.stringify(references)}`, `User request: ${message}`].join("\n\n");
+    const input = [`Goal/context: ${JSON.stringify(goal)}`, `Upcoming VOW calendar: ${JSON.stringify(calendar)}`, `Attached goal references: ${JSON.stringify(references)}`, `User request: ${message}`].join("\n\n");
     let textFormat: Record<string, unknown> | undefined;
 
     if (mode === "goal-clarify") {
