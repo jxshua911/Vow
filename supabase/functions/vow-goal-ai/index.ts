@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -5,8 +6,8 @@ const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"au
 const MAX={plan:4000,clarify:1200,chat:700};
 const COOLDOWN={plan:120000,clarify:30000,chat:10000};
 const json=(x:unknown,s=200,e:Record<string,string>={})=>new Response(JSON.stringify(x),{status:s,headers:{...CORS,...e}});
-function secret(){try{const x=JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}");if(x.default)return x.default;}catch{}return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";}
-function client(req:Request){let k=Deno.env.get("SUPABASE_ANON_KEY")||"";if(!k){try{k=JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")||"{}").default||"";}catch{}}return createClient(Deno.env.get("SUPABASE_URL")!,k,{global:{headers:{Authorization:req.headers.get("Authorization")||""}}});}
+function secret(){try{const x=JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}");if(x.default)return x.default;}catch{console.warn("Invalid SUPABASE_SECRET_KEYS JSON; using service role fallback.");}return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";}
+function client(req:Request){let k=Deno.env.get("SUPABASE_ANON_KEY")||"";if(!k){try{k=JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")||"{}").default||"";}catch{console.warn("Invalid SUPABASE_PUBLISHABLE_KEYS JSON; using empty publishable key.");}}return createClient(Deno.env.get("SUPABASE_URL")!,k,{global:{headers:{Authorization:req.headers.get("Authorization")||""}}});}
 const db=()=>createClient(Deno.env.get("SUPABASE_URL")!,secret(),{auth:{persistSession:false,autoRefreshToken:false}});
 const str=(x:unknown,n=500)=>typeof x==="string"?x.trim().slice(0,n):"";
 const arr=(x:unknown,n=8)=>Array.isArray(x)?x.slice(0,n).map(v=>str(v,500)).filter(Boolean):[];
