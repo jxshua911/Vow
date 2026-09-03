@@ -6,6 +6,7 @@ import { weekRange, toDateString, formatDate, startOfWeek, endOfWeek, addDays } 
 import { detectPatterns } from '@/lib/patterns';
 import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
+import { RavenReviewSection } from './Raven';
 import { Check, ArrowRight, RotateCcw } from 'lucide-react';
 
 export function ReviewPage() {
@@ -204,6 +205,7 @@ export function ReviewPage() {
     <div>
       <PageHeader title="Weekly Review" subtitle={`${formatDate(toDateString(start))} — ${formatDate(toDateString(end))}`} />
       <ReviewContent review={review!} />
+      <RavenReviewSection />
       <div className="border-t border-vow-border pt-8 mt-10">
         <h3 className="vow-label mb-4">Confirm next week's commitments</h3>
         <div className="space-y-px border border-vow-border mb-6">
@@ -240,7 +242,7 @@ function ReviewContent({ review }: { review: Review }) {
 }
 
 function ConfirmedReviewView({ review, pastReviews }: { review: Review; pastReviews: Review[] }) {
-  return <div><PageHeader title="Weekly Review" subtitle={`${formatDate(review.week_start)} — ${formatDate(review.week_end)}`} /><div className="border-l-2 border-vow-success pl-4 mb-10"><p className="text-sm text-vow-ink font-medium">Review confirmed</p><p className="text-xs text-vow-muted mt-0.5">Next week's commitments are locked in and sessions are scheduled.</p></div><ReviewContent review={review} />{pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}</div>;
+  return <div><PageHeader title="Weekly Review" subtitle={`${formatDate(review.week_start)} — ${formatDate(review.week_end)}`} /><div className="border-l-2 border-vow-success pl-4 mb-10"><p className="text-sm text-vow-ink font-medium">Review confirmed</p><p className="text-xs text-vow-muted mt-0.5">Next week's commitments are locked in and sessions are scheduled.</p></div><ReviewContent review={review} /><RavenReviewSection />{pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}</div>;
 }
 
 function PastReviewsList({ reviews }: { reviews: Review[] }) {
