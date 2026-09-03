@@ -1,2 +1,2 @@
 VOW mobile build trigger
-Raven source restoration: 6ce883875d0103b6093a2358a1cc75230bb5d8be
+Raven restoration verified; planner compatibility fix included.
