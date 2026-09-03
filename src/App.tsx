@@ -10,7 +10,6 @@ import { Dashboard } from '@/components/Dashboard';
 import { GoalHistoryActions } from '@/components/GoalHistoryActions';
 import { GoalsJournalWorkspace } from '@/components/GoalsJournalWorkspace';
 import { ReviewPage } from '@/components/WeeklyReview';
-import { RavenPage } from '@/components/Raven';
 import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
@@ -87,7 +86,6 @@ function AppContent() {
     {view === 'dashboard' && <Dashboard onNavigate={navigate} />}
     {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
     {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
-    {view === 'raven' && <RavenPage />}
     {view === 'review' && <ReviewPage />}
     {view === 'profile' && <ProfilePage onLegal={() => navigate('legal')} />}
   </AppShell>;
