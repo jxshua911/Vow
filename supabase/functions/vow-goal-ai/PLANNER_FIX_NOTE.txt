@@ -1,1 +1,0 @@
-Planner fix prepared: long plans must not fail when AI output is truncated or invalid. The live function has been hardened with adaptive completion budget and a deterministic goal-specific fallback, including football/LW/striker handling.
