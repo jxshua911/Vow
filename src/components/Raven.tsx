@@ -5,6 +5,14 @@ import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
 import { calculateRavenSnapshot, getRavenAwards, goalProgress, type RavenAward, type RavenSnapshot } from '@/lib/raven';
 
+function currentWeekStart() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay();
+  date.setDate(date.getDate() + (day === 0 ? -6 : 1 - day));
+  return date.toISOString().slice(0, 10);
+}
+
 export function RavenReviewSection() {
   const { session } = useAuth();
   const [snapshot, setSnapshot] = useState<RavenSnapshot | null>(null);
@@ -23,25 +31,54 @@ export function RavenReviewSection() {
         supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true }),
         supabase.from('goals').select('*').eq('user_id', session.user.id).in('status', ['active', 'locked', 'completed', 'abandoned']),
         supabase.from('raven_awards').select('*').eq('user_id', session.user.id).order('earned_at', { ascending: false }),
-        supabase.from('raven_weekly_snapshots').select('*').eq('user_id', session.user.id).order('week_start', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('raven_weekly_snapshots').select('*').eq('user_id', session.user.id).order('week_start', { ascending: false }).limit(8),
       ]);
       if (sessionsRes.error) throw sessionsRes.error;
       if (goalsRes.error) throw goalsRes.error;
+      if (awardsRes.error) throw awardsRes.error;
+      if (snapshotRes.error) throw snapshotRes.error;
+
       const allSessions = (sessionsRes.data || []) as Session[];
       const allGoals = (goalsRes.data || []) as Goal[];
       const storedAwards = (awardsRes.data || []) as RavenAward[];
-      const previous = snapshotRes.data?.snapshot as RavenSnapshot | null;
-      const next = calculateRavenSnapshot(allSessions, previous);
+      const storedSnapshots = (snapshotRes.data || []) as Array<{ week_start: string; snapshot: RavenSnapshot }>;
+      const weekStart = currentWeekStart();
+      const previousStored = storedSnapshots.find((row) => row.week_start < weekStart)?.snapshot || null;
+      const next = calculateRavenSnapshot(allSessions, previousStored);
       const earned = getRavenAwards(next, storedAwards);
 
       if (earned.length) {
-        const { error: awardError } = await supabase.from('raven_awards').insert(earned.map((award) => ({ user_id: session.user.id, award_key: award.key, title: award.title, description: award.description, earned_at: award.earned_at })));
-        if (awardError && !awardError.message.toLowerCase().includes('duplicate')) throw awardError;
+        const { error: awardError } = await supabase
+          .from('raven_awards')
+          .upsert(
+            earned.map((award) => ({
+              user_id: session.user.id,
+              award_key: award.key,
+              title: award.title,
+              description: award.description,
+              earned_at: award.earned_at,
+            })),
+            { onConflict: 'user_id,award_key', ignoreDuplicates: true },
+          );
+        if (awardError) throw awardError;
       }
 
-      const currentWeek = next.recent_weeks[next.recent_weeks.length - 1];
+      const currentWeek = next.recent_weeks.find((week) => week.week_start === weekStart) || next.recent_weeks[next.recent_weeks.length - 1];
       if (currentWeek) {
-        await supabase.from('raven_weekly_snapshots').upsert({ user_id: session.user.id, week_start: currentWeek.week_start, week_end: currentWeek.week_end, score: next.score, completion_pct: currentWeek.completion_pct, snapshot: next }, { onConflict: 'user_id,week_start' });
+        const { error: snapshotError } = await supabase
+          .from('raven_weekly_snapshots')
+          .upsert(
+            {
+              user_id: session.user.id,
+              week_start: currentWeek.week_start,
+              week_end: currentWeek.week_end,
+              score: next.score,
+              completion_pct: currentWeek.completion_pct,
+              snapshot: next,
+            },
+            { onConflict: 'user_id,week_start' },
+          );
+        if (snapshotError) throw snapshotError;
       }
 
       setSnapshot(next);
@@ -57,7 +94,7 @@ export function RavenReviewSection() {
 
   useEffect(() => { load(); }, [load]);
 
-  const progress = useMemo(() => snapshot ? goalProgress(sessions, goals).filter((x) => x.total > 0) : [], [snapshot, sessions, goals]);
+  const progress = useMemo(() => snapshot ? goalProgress(sessions, goals) : [], [snapshot, sessions, goals]);
 
   if (loading) return <section className="border-t border-vow-border pt-8"><p className="vow-label mb-3">Turtle score</p><p className="text-sm text-vow-muted">Reading your progress...</p></section>;
   if (error) return <section className="border-t border-vow-border pt-8"><p className="vow-label mb-3">Turtle score</p><p className="text-sm text-vow-muted">{error}</p></section>;
@@ -85,7 +122,7 @@ export function RavenReviewSection() {
     {snapshot.trend === 'up' && <div className="border-l-2 border-vow-ink pl-3 mb-6"><p className="text-sm text-vow-ink font-medium">Your consistency is moving up.</p><p className="text-xs text-vow-muted mt-1">Keep doing the work. The pattern is improving.</p></div>}
     <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border border border-vow-border mb-6"><Metric label="Completion" value={`${snapshot.completion_pct}%`} /><Metric label="Completed" value={snapshot.total_completed} /><Metric label="Best week" value={`${snapshot.best_weekly_completion_pct}%`} /><Metric label="Weeks tracked" value={snapshot.weeks_observed} /></div>
     {snapshot.signals.length > 0 && <div className="mb-6"><p className="vow-label mb-3">What we noticed</p><div className="space-y-2">{snapshot.signals.map((signal) => <div key={signal} className="text-sm text-vow-ink border-l border-vow-border pl-3">{signal}</div>)}</div></div>}
-    {progress.length > 0 && <div className="mb-6"><p className="vow-label mb-3">Goal progress</p><div className="space-y-4">{progress.map(({ goal, completed, total, pct }) => <div key={goal.id}><div className="flex items-center justify-between gap-4 mb-1.5"><p className="text-sm text-vow-ink truncate">{goal.outcome}</p><p className="text-xs text-vow-muted shrink-0">{completed}/{total} · {pct}%</p></div><div className="h-1 bg-vow-border"><div className="h-full bg-vow-ink" style={{ width: `${pct}%` }} /></div></div>)}</div></div>}
+    {progress.filter((x) => x.total > 0).length > 0 && <div className="mb-6"><p className="vow-label mb-3">Goal progress</p><div className="space-y-4">{progress.filter((x) => x.total > 0).map(({ goal, completed, total, pct }) => <div key={goal.id}><div className="flex items-center justify-between gap-4 mb-1.5"><p className="text-sm text-vow-ink truncate">{goal.outcome}</p><p className="text-xs text-vow-muted shrink-0">{completed}/{total} · {pct}%</p></div><div className="h-1 bg-vow-border"><div className="h-full bg-vow-ink" style={{ width: `${pct}%` }} /></div></div>)}</div></div>}
     <div className="grid grid-cols-2 gap-px bg-vow-border border border-vow-border mb-6"><Metric label="Longest streak" value={`${snapshot.best_streak} days`} /><Metric label="Most completed in a week" value={snapshot.weekly_completed_best} /></div>
     {awards.length > 0 && <div><div className="flex items-center gap-2 mb-3"><Award className="w-4 h-4" /><p className="vow-label">Awards</p></div><div className="border-t border-vow-border">{awards.slice(0, 6).map((award) => <div key={`${award.key}-${award.earned_at}`} className="border-b border-vow-border py-3 flex items-center gap-3"><div className="w-7 h-7 border border-vow-border flex items-center justify-center shrink-0"><Award className="w-3.5 h-3.5" /></div><div><p className="text-sm text-vow-ink font-medium">{award.title}</p><p className="text-xs text-vow-muted mt-0.5">{award.description}</p></div></div>)}</div></div>}
   </section>;
