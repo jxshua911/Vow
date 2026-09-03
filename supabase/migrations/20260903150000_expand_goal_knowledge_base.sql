@@ -80,7 +80,7 @@ values
    '["Define the finished outcome","Identify dependencies","Ship small increments","Review evidence at checkpoints","Finish rather than endlessly expand scope"]'::jsonb,
    '["Write acceptance criteria","Break the outcome into deliverables","Schedule the first useful output","Review blockers","Complete and verify the final outcome"]'::jsonb,
    '["deliverables_completed","milestones_completed","blocked_items","acceptance_criteria_met"]'::jsonb,
-   '["Do not create activity for activity's sake","Avoid adding scope that does not serve the stated outcome"]'::jsonb,
+   '["Do not create activity for activity sake","Avoid adding scope that does not serve the stated outcome"]'::jsonb,
    true)
 on conflict (domain, topic, title) do update set
   content = excluded.content,
