@@ -71,9 +71,9 @@ export function calculateStreaks(sessions: Session[], now = new Date()) {
   }
   const today = isoDate(now);
   const yesterday = isoDate(new Date(now.getTime() - 86400000));
-  let current = 0;
   const cursorStart = completedDays.has(today) ? today : completedDays.has(yesterday) ? yesterday : null;
-  let cursor = cursorStart ? dateOnly(cursorStart) : null;
+  const cursor = cursorStart ? dateOnly(cursorStart) : null;
+  let current = 0;
   while (cursor && completedDays.has(isoDate(cursor))) { current += 1; cursor.setDate(cursor.getDate() - 1); }
   return { current, best };
 }
