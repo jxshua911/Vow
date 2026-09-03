@@ -11,7 +11,7 @@ begin
   join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public'
     and p.proname='armadillo_analyse_goal'
-    and pg_get_function_identity_arguments(p.oid)='goal_title text, goal_outcome text DEFAULT NULL::text, goal_why text DEFAULT NULL::text';
+    and pg_get_function_identity_arguments(p.oid)='goal_title text, goal_outcome text, goal_why text';
 
   if fn is null then
     raise exception 'armadillo_analyse_goal(text,text,text) not found';
