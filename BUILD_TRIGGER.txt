@@ -1,1 +1,2 @@
-VOW — trigger a fresh Android build after the latest Profile → Customise navigation/icon changes.
+VOW mobile build trigger
+Raven source restoration: 6ce883875d0103b6093a2358a1cc75230bb5d8be
