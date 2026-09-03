@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Award, ArrowUpRight, ArrowDownRight, Minus, Flame, Trophy } from 'lucide-react';
+import { Award, ArrowUpRight, ArrowDownRight, Minus, Flame } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
@@ -71,6 +71,7 @@ export function RavenReviewSection() {
       <div>
         <p className="vow-label mb-2">Turtle score</p>
         <div className="flex items-end gap-3"><span className="vow-heading text-4xl text-vow-ink">{snapshot.score}</span><span className="text-sm text-vow-muted mb-1.5">/ 100</span></div>
+        <p className="text-xs text-vow-muted mt-1">Slowly but surely, with VOW 🐢🤍</p>
         <div className="flex items-center gap-1 mt-2 text-xs text-vow-muted"><TrendIcon className="w-3.5 h-3.5" />{trendText}</div>
       </div>
       <div className="text-right">
