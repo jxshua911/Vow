@@ -35,6 +35,32 @@ function normalise(value: string) {
   return value.normalize("NFKC").toLowerCase().replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000);
 }
 
+function clientIp(req: Request) {
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return req.headers.get("cf-connecting-ip")?.trim() || forwarded || req.headers.get("x-real-ip")?.trim() || null;
+}
+
+async function hashIp(ip: string) {
+  const material = `${secret()}:${ip.trim()}`;
+  const bytes = new TextEncoder().encode(material);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function getActiveIpBan(ip: string | null) {
+  if (!ip || !secret()) return null;
+  const ipHash = await hashIp(ip);
+  const { data, error } = await adminClient()
+    .from("moderation_ip_bans")
+    .select("banned_until, reason")
+    .eq("ip_hash", ipHash)
+    .maybeSingle();
+  if (error) throw new Error("MODERATION_IP_LOOKUP_FAILED");
+  if (!data) return null;
+  if (data.banned_until && new Date(data.banned_until).getTime() <= Date.now()) return null;
+  return data;
+}
+
 type Classification = {
   status: "safe" | "ambiguous" | "blocked";
   category: "none" | "threat" | "sexual_violence" | "child_safety" | "violent_harm" | "self_harm" | "abuse" | "ambiguous_action";
@@ -85,7 +111,26 @@ function addMonths(date: Date, months: number) {
   return result;
 }
 
-async function enforceSeriousViolation(userId: string, classification: Classification) {
+async function upsertIpBan(ip: string | null, userId: string, bannedUntil: Date | null, reason: string) {
+  if (!ip || !secret()) return;
+  const ipHash = await hashIp(ip);
+  const db = adminClient();
+  const { data: existing, error: existingError } = await db
+    .from("moderation_ip_bans")
+    .select("id, banned_until")
+    .eq("ip_hash", ipHash)
+    .maybeSingle();
+  if (existingError) throw new Error("MODERATION_IP_LOOKUP_FAILED");
+
+  if (existing?.banned_until === null) return;
+
+  const { error } = existing
+    ? await db.from("moderation_ip_bans").update({ user_id: userId, banned_until: bannedUntil?.toISOString() ?? null, reason }).eq("id", existing.id)
+    : await db.from("moderation_ip_bans").insert({ ip_hash: ipHash, user_id: userId, banned_until: bannedUntil?.toISOString() ?? null, reason });
+  if (error) throw new Error("MODERATION_IP_BAN_FAILED");
+}
+
+async function enforceSeriousViolation(userId: string, classification: Classification, ip: string | null) {
   const db = adminClient();
   const { count, error: countError } = await db.from("moderation_events").select("id", { count: "exact", head: true }).eq("user_id", userId).in("severity", ["high", "critical"]);
   if (countError) throw new Error("MODERATION_HISTORY_FAILED");
@@ -103,6 +148,7 @@ async function enforceSeriousViolation(userId: string, classification: Classific
   const nextMeta = { ...existingMeta, moderation_strikes: strikeNumber, moderation_status: action === "banned" ? "permanently_banned" : "suspended", moderation_banned_until: bannedUntil ? bannedUntil.toISOString() : null };
   const { error: banError } = await db.auth.admin.updateUserById(userId, { ban_duration: banDuration, app_metadata: nextMeta });
   if (banError) throw new Error("MODERATION_ENFORCEMENT_FAILED");
+  await upsertIpBan(ip, userId, bannedUntil, `VOW moderation strike ${strikeNumber}: ${classification.category}`);
   const { error: eventError } = await db.from("moderation_events").insert({ user_id: userId, category: classification.category, severity: classification.severity, confidence: clamp(classification.confidence), action, strike_number: strikeNumber });
   if (eventError) throw new Error("MODERATION_EVENT_RECORD_FAILED");
   return { action, strikeNumber, retryAfterSeconds: bannedUntil ? Math.max(1, Math.ceil((bannedUntil.getTime() - Date.now()) / 1000)) : null };
@@ -112,6 +158,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
   try {
+    const ip = clientIp(req);
+    const ipBan = await getActiveIpBan(ip);
+    if (ipBan) {
+      return json({ status: "suspended", category: "access_restricted", confidence: 1, message: "Access to VOW is temporarily or permanently restricted from this network address." }, 403);
+    }
+
     if (!(req.headers.get("Authorization") || "").startsWith("Bearer ")) return json({ error: "Authentication required." }, 401);
     const { data, error } = await authClient(req).auth.getUser();
     if (error || !data.user) return json({ error: "Authentication required." }, 401);
@@ -125,12 +177,12 @@ Deno.serve(async (req) => {
       }
       return json({ status: classification.status, category: classification.category, confidence: classification.confidence, message: classification.message });
     }
-    const enforcement = await enforceSeriousViolation(data.user.id, classification);
+    const enforcement = await enforceSeriousViolation(data.user.id, classification, ip);
     const message = enforcement.action === "banned"
-      ? "This account has been permanently banned because of repeated serious safety violations."
+      ? "This account has been permanently banned because of repeated serious safety violations, and this network address has also been blocked."
       : enforcement.strikeNumber === 1
-        ? "This content was blocked and your VOW account has been suspended for 7 days because of a serious safety violation."
-        : "This content was blocked and your VOW account has been suspended for 2 months because of a repeated serious safety violation.";
+        ? "This content was blocked and access to your VOW account and network address has been suspended for 7 days because of a serious safety violation."
+        : "This content was blocked and access to your VOW account and network address has been suspended for 2 months because of a repeated serious safety violation.";
     return json({ status: "suspended", category: classification.category, confidence: classification.confidence, message, strike_number: enforcement.strikeNumber, retry_after_seconds: enforcement.retryAfterSeconds });
   } catch (error) {
     console.error("content safety", error);
