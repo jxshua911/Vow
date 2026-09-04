@@ -24,10 +24,7 @@ public class VowIconPlugin extends Plugin {
         String variant = call.getString("variant", "purple-green").toLowerCase();
         boolean valid = false;
         for (String value : VARIANTS) if (value.equals(variant)) valid = true;
-        if (!valid) {
-            call.reject("Unsupported VOW icon variant");
-            return;
-        }
+        if (!valid) { call.reject("Unsupported VOW icon variant"); return; }
         Context context = getContext();
         PackageManager pm = context.getPackageManager();
         String packageName = context.getPackageName();
@@ -38,8 +35,6 @@ public class VowIconPlugin extends Plugin {
                 value.equals(variant) ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                 PackageManager.DONT_KILL_APP);
         }
-        JSObject result = new JSObject();
-        result.put("variant", variant);
-        call.resolve(result);
+        JSObject result = new JSObject(); result.put("variant", variant); call.resolve(result);
     }
 }
