@@ -34,7 +34,14 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        uses: google/osv-scanner-action/osv-scanner-action@06b2ab4348248b456ee06c9e953637f55e03504f
+        with:
+          scan-args: |-
+            --format=table
+            --ignore-dev
+            --min-severity=7
+            --recursive
+            ./
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
