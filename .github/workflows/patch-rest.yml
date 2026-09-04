@@ -74,10 +74,11 @@ jobs:
           j = journal.read_text()
           if "import { checkContentSafety } from '@/lib/contentSafety';" not in j:
               j = j.replace("import { supabase } from '@/lib/supabase';", "import { supabase } from '@/lib/supabase';\nimport { checkContentSafety } from '@/lib/contentSafety';", 1)
-          old3 = "setActionError('');const { data, error } = await supabase.from('journal_entries').insert({"
+          old3 = "    setActionError('');\n    const { data, error } = await supabase.from('journal_entries').insert({"
           if old3 not in j:
               raise SystemExit('Journal create anchor not found')
-          j = j.replace(old3, "setActionError('');const safety = await checkContentSafety([body.trim(), tag?.trim()].filter(Boolean).join('\\n'));if(safety.status !== 'safe') throw new Error(safety.message || 'Please reword this entry and try again.');const { data, error } = await supabase.from('journal_entries').insert({", 1)
+          new3 = "    setActionError('');\n    const safety = await checkContentSafety([body.trim(), tag?.trim()].filter(Boolean).join('\\n'));\n    if (safety.status !== 'safe') throw new Error(safety.message || 'Please reword this entry and try again.');\n    const { data, error } = await supabase.from('journal_entries').insert({"
+          j = j.replace(old3, new3, 1)
           journal.write_text(j)
 
           print('VOW patch files updated')
@@ -89,8 +90,8 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -f .github/workflows/patch-rest.yml
-          git add src/components/Goals.tsx src/components/GoalPlanner.tsx src/components/Journal.tsx .github/workflows/patch-rest.yml
+          rm -f .github/workflows/patch-rest.yml PATCH_TRIGGER.txt
+          git add src/components/Goals.tsx src/components/GoalPlanner.tsx src/components/Journal.tsx .github/workflows/patch-rest.yml PATCH_TRIGGER.txt
           if git diff --cached --quiet; then
             echo "No patch changes required."
             exit 0
