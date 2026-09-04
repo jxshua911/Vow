@@ -6,7 +6,8 @@ import { useAuth } from '@/lib/auth';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { NATIVE_CALENDAR_REDIRECT } from '@/lib/nativeAuth';
-import { ArrowLeft } from 'lucide-react';
+
+function Glyph({ children, className = '' }: { children: string; className?: string }) { return <span aria-hidden="true" className={`inline-flex items-center justify-center font-medium leading-none ${className}`}>{children}</span>; }
 
 type ConnectState = Record<string, 'connected' | 'setup'>;
 const categories: { id: IntegrationCategory | 'all'; label: string }[] = [
@@ -87,7 +88,7 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
   const isLimited = !showAll && !query.trim() && category === 'all' && integrations.length < INTEGRATIONS.length;
 
   return <div>
-    {onBack && <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors"><ArrowLeft className="w-4 h-4" />Back to profile</button>}
+    {onBack && <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors"><Glyph>←</Glyph>Back to profile</button>}
     <PageHeader title="Connect" subtitle="Connect the services that can give VOW reliable evidence for your routines and commitments." />
     <section className="mb-8 border border-vow-border p-5 md:p-6"><h2 className="text-sm font-medium text-vow-ink mb-1">One place for your evidence</h2><p className="text-sm text-vow-muted leading-relaxed">VOW starts with a small set of immediately useful connections instead of overwhelming you with a catalogue. Connected and first-hand sources are prioritised; broader discovery is available when you want it.</p></section>
     <div className="mb-5"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search connections" aria-label="Search connections" className="w-full border border-vow-border bg-transparent px-4 py-3 text-sm text-vow-ink outline-none focus:border-vow-ink" /></div>
