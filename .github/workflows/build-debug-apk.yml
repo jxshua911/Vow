@@ -17,8 +17,10 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
       - name: Enforce no Lucide icons
+        shell: bash
         run: |
-          if grep -R "lucide-react\|from 'lucide\|from \"lucide" src App.tsx package.json 2>/dev/null; then
+          set -euo pipefail
+          if git grep -n -E "lucide-react|from[[:space:]]+['\"]lucide" -- src App.tsx package.json; then
             echo "Lucide icon usage is forbidden in VOW."
             exit 1
           fi
