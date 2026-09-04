@@ -14,9 +14,12 @@ export function GoalReferenceList({ goalId }: { goalId: string }) {
   const [resources, setResources] = useState<Array<GoalResource & { displayUrl: string }>>([]);
   useEffect(() => {
     let cancelled = false;
-    supabase.from('goal_resources').select('id,url,title,resource_type,created_at').eq('goal_id', goalId).order('created_at', { ascending: true }).then(async ({ data }) => {
-      const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await displayUrl(resource.url) })));
-      if (!cancelled) setResources(next);
+    supabase.auth.getUser().then(({ data: userData }) => {
+      if (!userData.user) return;
+      return supabase.from('goal_resources').select('id,url,title,resource_type,created_at').eq('goal_id', goalId).eq('user_id', userData.user.id).order('created_at', { ascending: true }).then(async ({ data }) => {
+        const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await displayUrl(resource.url) })));
+        if (!cancelled) setResources(next);
+      });
     });
     return () => { cancelled = true; };
   }, [goalId]);

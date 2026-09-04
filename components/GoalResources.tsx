@@ -15,10 +15,10 @@ type GoalResource = {
 
 function inferType(url: string): GoalResource['resource_type'] {
   const value = url.toLowerCase();
-  if (/youtube\\.com|youtu\\.be/.test(value)) return 'youtube';
-  if (/instagram\\.com/.test(value)) return 'instagram';
-  if (/\\.(mp4|webm|mov|m4v)(\\?.*)?$/.test(value)) return 'video';
-  if (/\\.(png|jpe?g|webp|gif)(\\?.*)?$/.test(value)) return 'image';
+  if (/youtube\.com|youtu\.be/.test(value)) return 'youtube';
+  if (/instagram\.com/.test(value)) return 'instagram';
+  if (/\.(mp4|webm|mov|m4v)(\?.*)?$/.test(value)) return 'video';
+  if (/\.(png|jpe?g|webp|gif)(\?.*)?$/.test(value)) return 'image';
   return 'link';
 }
 
@@ -45,7 +45,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
 
   async function loadResources() {
     if (!goalId) return;
-    const { data, error: resourceError } = await supabase.from('goal_resources').select('*').eq('goal_id', goalId).order('created_at', { ascending: false });
+    const { data, error: resourceError } = await supabase.from('goal_resources').select('*').eq('goal_id', goalId).eq('user_id', (await supabase.auth.getUser()).data.user?.id || '').order('created_at', { ascending: false });
     if (resourceError) { setError('Could not load goal references.'); return; }
     const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await signedDisplayUrl(resource.url) })));
     setResources(next);
@@ -89,7 +89,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
   async function removeResource(id: string) {
     const resource = resources.find((item) => item.id === id);
     if (resource?.url.startsWith('storage://')) await supabase.storage.from('goal-resources').remove([resource.url.slice('storage://'.length)]);
-    const { error: deleteError } = await supabase.from('goal_resources').delete().eq('id', id);
+    const { error: deleteError } = await supabase.from('goal_resources').delete().eq('id', id).eq('user_id', (await supabase.auth.getUser()).data.user?.id || '');
     if (deleteError) setError('Could not remove that reference.');
     await loadResources();
   }
