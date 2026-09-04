@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Session, Goal, JournalEntry, UserSettings, Review, PatternFinding, ProposedCommitment } from '@/types/database';
 import { weekRange, toDateString, formatDate, startOfWeek, endOfWeek, addDays } from '@/lib/dates';
+import { allocateSameDaySlot, reserveSlot, toOccupiedSlots } from '@/lib/scheduling';
 import { detectPatterns } from '@/lib/patterns';
 import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
@@ -144,12 +145,14 @@ export function ReviewPage() {
     setConfirming(true);
 
     try {
-      await supabase.from('reviews').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', review.id);
+      const { error: reviewError } = await supabase.from('reviews').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', review.id).eq('user_id', session.user.id);
+      if (reviewError) throw reviewError;
       const nextWeekStart = toDateString(addDays(startOfWeek(), 7));
       const nextWeekEnd = toDateString(addDays(endOfWeek(), 7));
 
-      for (const commitment of review.proposed_commitments as unknown as ProposedCommitment[]) {
-        await supabase.from('commitment_log').insert({
+      const proposed = review.proposed_commitments as unknown as ProposedCommitment[];
+      for (const commitment of proposed) {
+        const { error } = await supabase.from('commitment_log').insert({
           user_id: session.user.id,
           week_start: nextWeekStart,
           week_end: nextWeekEnd,
@@ -160,20 +163,38 @@ export function ReviewPage() {
           moved_sessions: 0,
           snapshot: { notes: commitment.notes, goal_title: commitment.goal_title },
         });
+        if (error) throw error;
       }
 
-      for (const commitment of review.proposed_commitments as unknown as ProposedCommitment[]) {
+      const { data: existingSessions, error: existingError } = await supabase
+        .from('sessions')
+        .select('scheduled_at,duration_minutes')
+        .eq('user_id', session.user.id)
+        .eq('status', 'scheduled');
+      if (existingError) throw existingError;
+
+      const occupied = toOccupiedSlots((existingSessions || []).map((row) => ({
+        scheduledAt: row.scheduled_at,
+        durationMinutes: row.duration_minutes,
+      })));
+
+      for (const commitment of proposed) {
         for (let i = 0; i < commitment.sessions_per_week; i++) {
           const sessionDate = addDays(new Date(nextWeekStart), i + 1);
           sessionDate.setHours(9, 0, 0, 0);
-          await supabase.from('sessions').insert({
+          const slot = allocateSameDaySlot(sessionDate, 45, occupied);
+          if (!slot) throw new Error(`No available time remains for ${commitment.goal_title}. Choose another day before confirming.`);
+
+          const { error } = await supabase.from('sessions').insert({
             goal_id: commitment.goal_id,
             user_id: session.user.id,
             title: commitment.goal_title,
-            scheduled_at: sessionDate.toISOString(),
-            duration_minutes: 45,
+            scheduled_at: slot.date.toISOString(),
+            duration_minutes: slot.durationMinutes,
             status: 'scheduled',
           });
+          if (error) throw error;
+          reserveSlot(slot, occupied);
         }
       }
       await load();
