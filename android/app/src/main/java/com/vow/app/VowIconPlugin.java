@@ -8,11 +8,11 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.PluginMethod;
 
 @CapacitorPlugin(name = "VowIcon")
 public class VowIconPlugin extends Plugin {
-    private static final String[] COLOURS = {"white", "black", "gold", "blue"};
+    private static final String[] COLOURS = {"white", "black", "gold", "blue", "red", "green", "purple", "orange", "pink", "teal"};
 
     @PluginMethod
     public void setColour(PluginCall call) {
