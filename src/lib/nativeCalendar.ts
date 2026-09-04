@@ -15,21 +15,22 @@ export async function requestNativeCalendarAccess(): Promise<boolean> {
 
 async function getCalendarId(preferredAccountEmail?: string): Promise<string | undefined> {
   const { result: calendars } = await CapacitorCalendar.listCalendars();
-  const { result: defaultCalendar } = await CapacitorCalendar.getDefaultCalendar();
-  const writable = calendars.filter((calendar) => calendar.visible !== false && calendar.allowsContentModifications !== false);
   if (preferredAccountEmail) {
-    const exact = writable.find((calendar) => calendar.accountName?.toLowerCase() === preferredAccountEmail.toLowerCase() || calendar.ownerAccount?.toLowerCase() === preferredAccountEmail.toLowerCase());
-    if (exact) return exact.id;
+    const email = preferredAccountEmail.toLowerCase();
+    const exact = calendars.find((calendar) => {
+      if (calendar.visible === false || calendar.allowsContentModifications === false) return false;
+      return calendar.accountName?.toLowerCase() === email || calendar.ownerAccount?.toLowerCase() === email;
+    });
+    return exact?.id;
   }
-  const googleCalendar = writable.find((calendar) => /@gmail\.com$/i.test(calendar.accountName || '') || /@googlemail\.com$/i.test(calendar.accountName || '') || /@gmail\.com$/i.test(calendar.ownerAccount || '') || /@googlemail\.com$/i.test(calendar.ownerAccount || ''));
-  if (googleCalendar) return googleCalendar.id;
-  return defaultCalendar?.id ?? writable[0]?.id ?? calendars[0]?.id;
+  return undefined;
 }
 
 export async function addSessionToNativeCalendar(session: Session, preferredAccountEmail?: string): Promise<string | null> {
   if (!Capacitor.isNativePlatform()) return null;
   if (!await requestNativeCalendarAccess()) throw new Error('Calendar access was not granted.');
   const calendarId = await getCalendarId(preferredAccountEmail);
+  if (!calendarId) throw new Error('No writable calendar was found for this VOW account.');
   const startDate = new Date(session.scheduled_at).getTime();
   const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
   const { id } = await CapacitorCalendar.createEvent({ calendarId, title: `VOW · ${session.title}`, description: `${session.duration_minutes} min commitment created from VOW.`, startDate, endDate, alerts: [-15, 0] });
@@ -42,6 +43,7 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
   const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now() && !isSynced(session.id));
   if (!upcoming.length || !await requestNativeCalendarAccess()) return 0;
   const calendarId = await getCalendarId(preferredAccountEmail);
+  if (!calendarId) throw new Error('No writable calendar was found for this VOW account.');
   let created = 0;
   for (const session of upcoming) {
     const startDate = new Date(session.scheduled_at).getTime();
