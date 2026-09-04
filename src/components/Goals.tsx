@@ -11,6 +11,32 @@ import { Plus, Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDow
 
 const OPEN_GOAL_PREFIX = 'vow:open-goal:';
 
+type PlanDetails = {
+  success_metric?: string;
+  baseline?: string;
+  progression?: string;
+  summary?: string;
+  assumptions?: string[];
+  checkpoints?: string[];
+  weekly_focus?: string[];
+  risks?: string[];
+  fallback_rules?: string[];
+};
+
+type ArmadilloDetails = {
+  category?: string;
+  goal_type?: string;
+  metric?: string;
+  target?: string;
+  direction?: string;
+  planning_strategy?: string;
+  evidence?: string[];
+};
+
+function textList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+}
+
 export function GoalsPage() {
   const { session } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -83,9 +109,40 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
   const pct = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
   const movedCount = sessions.filter((s) => s.moved_count > 0).reduce((sum, s) => sum + s.moved_count, 0);
   const statusIcons: Record<string, typeof CheckCircle2> = { completed: CheckCircle2, scheduled: Circle, skipped: SkipForward, moved: Move };
+  const plan = (goal.plan_json || {}) as PlanDetails;
+  const armadillo = (goal.armadillo || {}) as ArmadilloDetails;
+  const weeklyFocus = textList(plan.weekly_focus);
+  const checkpoints = textList(plan.checkpoints);
+  const assumptions = textList(plan.assumptions);
+  const risks = textList(plan.risks);
+  const fallbackRules = textList(plan.fallback_rules);
+  const evidence = textList(armadillo.evidence);
   return <div className="min-w-0 overflow-hidden">
     <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors"><ArrowLeft className="w-4 h-4" />Back to goals</button>
     <div className="border-t border-vow-border pt-8 mb-8"><div className="flex items-start justify-between gap-4 mb-4"><h1 className="vow-heading text-2xl text-vow-ink min-w-0 break-words">{goal.outcome}</h1><span className="text-xs uppercase tracking-wide text-vow-muted shrink-0">{goal.status}</span></div>{goal.why_it_matters && <p className="text-sm text-vow-muted italic mb-6 break-words">"{goal.why_it_matters}"</p>}<div className="grid grid-cols-3 gap-4 border-t border-vow-border pt-4"><div><p className="vow-label">Progress</p><p className="text-lg text-vow-ink mt-1">{pct}%</p></div><div><p className="vow-label">Sessions</p><p className="text-lg text-vow-ink mt-1">{completedSessions}/{totalSessions}</p></div><div><p className="vow-label">Moved</p><p className="text-lg text-vow-ink mt-1">{movedCount}</p></div></div></div>
+    <div className="mb-10 min-w-0">
+      <div className="border-t border-vow-border pt-8">
+        <p className="vow-label mb-4">VOW plan & progression</p>
+        {plan.summary && <p className="text-sm text-vow-ink leading-relaxed break-words mb-5">{plan.summary}</p>}
+        <div className="grid gap-4 md:grid-cols-2">
+          {plan.success_metric && <div className="border border-vow-border p-4 min-w-0"><p className="vow-label mb-2">Success metric</p><p className="text-sm text-vow-ink break-words">{plan.success_metric}</p></div>}
+          {plan.baseline && <div className="border border-vow-border p-4 min-w-0"><p className="vow-label mb-2">Baseline</p><p className="text-sm text-vow-ink break-words">{plan.baseline}</p></div>}
+        </div>
+        {plan.progression && <div className="border border-vow-border p-4 mt-4 min-w-0"><p className="vow-label mb-2">Progression notes</p><p className="text-sm text-vow-ink leading-relaxed break-words">{plan.progression}</p></div>}
+        {weeklyFocus.length > 0 && <div className="mt-6"><p className="vow-label mb-3">Weekly focus</p><div className="space-y-2">{weeklyFocus.map((item, index) => <div key={index} className="border-b border-vow-border py-3 text-sm text-vow-ink break-words">{item}</div>)}</div></div>}
+        {checkpoints.length > 0 && <div className="mt-6"><p className="vow-label mb-3">Checkpoints</p><ul className="space-y-2">{checkpoints.map((item, index) => <li key={index} className="text-sm text-vow-muted break-words">{item}</li>)}</ul></div>}
+        {(assumptions.length > 0 || risks.length > 0 || fallbackRules.length > 0) && <div className="grid gap-4 md:grid-cols-3 mt-6">{assumptions.length > 0 && <div className="border border-vow-border p-4 min-w-0"><p className="vow-label mb-2">Assumptions</p><ul className="space-y-2">{assumptions.map((item, index) => <li key={index} className="text-xs text-vow-muted break-words">{item}</li>)}</ul></div>}{risks.length > 0 && <div className="border border-vow-border p-4 min-w-0"><p className="vow-label mb-2">Watch-outs</p><ul className="space-y-2">{risks.map((item, index) => <li key={index} className="text-xs text-vow-muted break-words">{item}</li>)}</ul></div>}{fallbackRules.length > 0 && <div className="border border-vow-border p-4 min-w-0"><p className="vow-label mb-2">If a session is missed</p><ul className="space-y-2">{fallbackRules.map((item, index) => <li key={index} className="text-xs text-vow-muted break-words">{item}</li>)}</ul></div>}</div>}
+      </div>
+    </div>
+    <div className="mb-10 min-w-0">
+      <div className="border-t border-vow-border pt-8">
+        <p className="vow-label mb-4">Goal interpretation</p>
+        <div className="grid grid-cols-2 gap-px bg-vow-border border border-vow-border md:grid-cols-3">
+          {([['Category', armadillo.category], ['Goal type', armadillo.goal_type], ['Metric', armadillo.metric], ['Target', armadillo.target], ['Direction', armadillo.direction], ['Planning strategy', armadillo.planning_strategy]] as Array<[string, string | undefined]>).filter(([, value]) => value).map(([label, value]) => <div key={label} className="bg-vow-bg p-4 min-w-0"><p className="vow-label mb-1">{label}</p><p className="text-sm text-vow-ink break-words">{value}</p></div>)}
+        </div>
+        {evidence.length > 0 && <div className="mt-4 border border-vow-border p-4 min-w-0"><p className="vow-label mb-2">Evidence used</p><ul className="space-y-2">{evidence.map((item, index) => <li key={index} className="text-xs text-vow-muted break-words">{item}</li>)}</ul></div>}
+      </div>
+    </div>
     <GoalResources goalId={goalId} />
     <GoalReferenceList goalId={goalId} />
     <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Milestones</h2><button onClick={() => setExpandedMilestone(expandedMilestone ? null : milestones[0]?.id || null)} className="vow-btn-soft text-xs">{expandedMilestone ? 'Collapse' : 'Expand'}</button></div><div className="border-t border-vow-border">{milestones.map((ms) => { const Icon = ms.status === 'completed' ? CheckCircle2 : Circle; return <div key={ms.id} className="border-b border-vow-border py-4"><button className="w-full text-left flex items-start gap-3 min-w-0" onClick={() => setExpandedMilestone(expandedMilestone === ms.id ? null : ms.id)}><Icon className="w-4 h-4 mt-0.5 shrink-0" /><div className="flex-1 min-w-0"><p className="text-sm text-vow-ink break-words">{ms.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(ms.deadline)}</p>{expandedMilestone === ms.id && <p className="text-xs text-vow-muted mt-2 break-words">{ms.description}</p>}</div><ChevronDown className={`w-4 h-4 transition-transform shrink-0 ${expandedMilestone === ms.id ? 'rotate-180' : ''}`} /></button><button onClick={() => toggleMilestoneStatus(ms)} className="vow-btn-soft text-xs ml-7 mt-2">{ms.status === 'completed' ? 'Mark pending' : 'Mark completed'}</button></div>; })}</div></div>

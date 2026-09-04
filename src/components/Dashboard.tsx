@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
-import { isThisWeek, formatTime, formatRelative, dayName } from '@/lib/dates';
+import { formatTime, formatRelative, dayName } from '@/lib/dates';
 import { PageHeader } from './AppShell';
 import type { View } from './AppShell';
 
@@ -37,12 +37,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   useEffect(() => { load(); }, [load]);
   const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
-  const thisWeekSessions = sessions.filter((s) => isThisWeek(s.scheduled_at));
-  const completedThisWeek = thisWeekSessions.filter((s) => s.status === 'completed');
-  const completionPct = thisWeekSessions.length > 0 ? Math.round((completedThisWeek.length / thisWeekSessions.length) * 100) : 0;
-  const sortedByDate = [...sessions].sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
-  let streak = 0;
-  for (const s of sortedByDate) { if (s.status === 'completed') streak++; else break; }
   const now = new Date();
   const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 5);
 
@@ -50,7 +44,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   return <div className="min-w-0 overflow-hidden">
     <PageHeader title={`Welcome back, ${displayName}`} subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`} />
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-10 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="This week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} /><StatCell label="Completion" value={`${completionPct}%`} /><StatCell label="Streak" value={`${streak}`} subtitle={streak === 0 ? 'Broken — honest count' : undefined} /></div>
     <div className="grid md:grid-cols-2 gap-8 lg:gap-12 min-w-0">
       <div className="min-w-0">
         <h2 className="vow-label mb-4">Upcoming sessions</h2>
@@ -64,5 +57,3 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     <div className="mt-8 border-t border-vow-border pt-5"><p className="text-xs text-vow-muted">Your journal remains private and is available within your Goals workspace.</p></div>
   </div>;
 }
-
-function StatCell({ label, value, subtitle }: { label: string; value: string | number; subtitle?: string }) { return <div className="bg-vow-bg px-4 py-5 min-w-0 overflow-hidden"><div className="text-3xl vow-heading text-vow-ink truncate">{value}</div><div className="vow-label mt-1.5 truncate">{label}</div>{subtitle && <div className="text-xs text-vow-muted mt-0.5 truncate">{subtitle}</div>}</div>; }
