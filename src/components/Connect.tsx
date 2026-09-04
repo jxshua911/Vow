@@ -15,19 +15,27 @@ const categories: { id: IntegrationCategory | 'all'; label: string }[] = [
   { id: 'mindfulness', label: 'Mindfulness' }, { id: 'faith', label: 'Faith' },
 ];
 const FIRST_VIEW_LIMIT = 6;
-const FIRST_VIEW_KEY = 'vow:connect-first-view-complete';
 
 export function ConnectPage({ onBack }: { onBack?: () => void }) {
   const { session } = useAuth();
+  const userId = session?.user.id;
+  const connectionKey = userId ? `vow:connections:${userId}` : '';
+  const firstViewKey = userId ? `vow:connect-first-view-complete:${userId}` : '';
   const [category, setCategory] = useState<IntegrationCategory | 'all'>('all');
   const [query, setQuery] = useState('');
-  const [connected, setConnected] = useState<ConnectState>(() => { try { return JSON.parse(localStorage.getItem('vow:connections') || '{}'); } catch { return {}; } });
+  const [connected, setConnected] = useState<ConnectState>({});
   const [connecting, setConnecting] = useState<string | null>(null);
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
   const [googleCalendarAvailable, setGoogleCalendarAvailable] = useState(false);
-  const [showAll, setShowAll] = useState(() => localStorage.getItem(FIRST_VIEW_KEY) === 'true');
+  const [showAll, setShowAll] = useState(false);
 
-  useEffect(() => { localStorage.setItem('vow:connections', JSON.stringify(connected)); }, [connected]);
+  useEffect(() => {
+    if (!userId) { setConnected({}); setShowAll(false); return; }
+    try { setConnected(JSON.parse(localStorage.getItem(connectionKey) || '{}')); } catch { setConnected({}); }
+    setShowAll(localStorage.getItem(firstViewKey) === 'true');
+  }, [userId, connectionKey, firstViewKey]);
+
+  useEffect(() => { if (userId) localStorage.setItem(connectionKey, JSON.stringify(connected)); }, [connected, userId, connectionKey]);
 
   useEffect(() => {
     if (!session) return;
@@ -68,12 +76,11 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
       } catch {
         setGoogleCalendarAvailable(false);
       } finally { setConnecting(null); }
-      return;
     }
   }
 
   function revealAll() {
-    localStorage.setItem(FIRST_VIEW_KEY, 'true');
+    if (firstViewKey) localStorage.setItem(firstViewKey, 'true');
     setShowAll(true);
   }
 
