@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: android-debug-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -34,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Audit production dependencies
-        uses: google/osv-scanner-action/osv-scanner-action@06b2ab4348248b456c9e953637f55e03504f
+        uses: google/osv-scanner-action/osv-scanner-action@06b2ab4348248b456ee06c9e953637f55e03504f
         with:
           scan-args: |-
             --format=table
@@ -61,11 +57,11 @@ jobs:
           test -s "$APK"
           echo "APK size: $(stat -c%s "$APK") bytes"
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.0.9.apk"
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.1.apk"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.0.9-debug
-          path: "VOW APK 1.0.9.apk"
+          name: VOW APK 1.1-debug
+          path: "VOW APK 1.1.apk"
           if-no-files-found: error
           retention-days: 14
