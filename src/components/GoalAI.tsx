@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { checkContentSafety } from '@/lib/contentSafety';
 import type { Goal, Session } from '@/types/database';
 
 function readAIText(data: unknown): string {
@@ -25,6 +26,20 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
     setLoading(true);
     setError('');
     try {
+      const safety = await checkContentSafety(question);
+      if (safety.status === 'ambiguous') {
+        setAnswer('');
+        setError(safety.message || 'VOW needs that wording to be clearer. Please reword it so the intended activity is explicit.');
+        setLoading(false);
+        return;
+      }
+      if (safety.status === 'blocked' || safety.status === 'suspended') {
+        setAnswer('');
+        setError(safety.message || 'This content cannot be used in VOW.');
+        setLoading(false);
+        return;
+      }
+
       let upcoming: Session[] = [];
       if (session) {
         const start = new Date();
@@ -75,7 +90,7 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
       {error && <p className="text-xs text-vow-muted mb-3">{error}</p>}
       <div className="flex flex-col sm:flex-row gap-2">
         <textarea value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') ask(); }} rows={2} placeholder="e.g. Build me a realistic plan to reach this goal." className="flex-1 border border-vow-border bg-transparent px-3 py-2 text-sm text-vow-ink outline-none resize-none" />
-        <button onClick={ask} disabled={loading || !message.trim()} className="min-h-11 border border-vow-ink px-4 text-xs text-vow-ink disabled:opacity-50">{loading ? 'Researching…' : 'Ask VOW AI'}</button>
+        <button onClick={ask} disabled={loading || !message.trim()} className="min-h-11 border border-vow-ink px-4 text-xs text-vow-ink disabled:opacity-50">{loading ? 'Checking…' : 'Ask VOW AI'}</button>
       </div>
     </section>
   );
