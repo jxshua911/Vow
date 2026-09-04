@@ -109,8 +109,9 @@ function CustomisePage({ selectedIcon, message, onIconChange, onBack }: { select
 function SharedInformationPage({ session, displayName, onBack }: { session: ReturnType<typeof useAuth>['session']; displayName: string; onBack: () => void }) {
   const name = displayName;
   const email = session?.user?.email || '';
-  const phoneCalendarConnected = Boolean(session?.user?.id && localStorage.getItem(`vow:native-calendar-sync:${session.user.id}`) === 'true');
-  const googleCalendarConnected = localStorage.getItem('vow:connections')?.includes('google-calendar') === true;
+  const userId = session?.user?.id;
+  const phoneCalendarConnected = Boolean(userId && localStorage.getItem(`vow:native-calendar-sync:${userId}`) === 'true');
+  const googleCalendarConnected = Boolean(userId && localStorage.getItem(`vow:connections:${userId}`) && localStorage.getItem(`vow:connections:${userId}`)?.includes('google-calendar'));
   const rows = [
     { label: 'Name', value: name || 'Not provided' },
     { label: 'Email', value: email || 'Not provided' },
