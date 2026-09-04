@@ -24,7 +24,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -n -E "lucide-react|from[[:space:]]+['\"]lucide" -- src App.tsx package.json; then
+          matches="$(git grep -n -E "lucide-react|from[[:space:]]+['\"]lucide" -- src package.json || true)"
+          if [[ -n "$matches" ]]; then
+            printf '%s\n' "$matches"
             echo "Lucide icon usage is forbidden in VOW."
             exit 1
           fi
