@@ -40,7 +40,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [iconMessage, setIconMessage] = useState('');
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-  useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
+  useEffect(() => { getNotificationPermission().then(setNotificationStatus).catch(() => setNotificationStatus('unsupported')); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
   useEffect(() => {
     const userId = session?.user.id;
@@ -71,13 +71,20 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 
   async function handleEnableNotifications() {
     setRequesting(true);
-    const status = await requestNotificationPermission();
-    setNotificationStatus(status);
-    if (status === 'granted' && session) {
-      const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
-      if (data) await syncUpcomingSessionNotifications(data);
+    try {
+      const status = await requestNotificationPermission();
+      setNotificationStatus(status);
+      if (status === 'granted' && session) {
+        const { data, error } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
+        if (error) throw error;
+        if (data) await syncUpcomingSessionNotifications(data);
+      }
+    } catch (error) {
+      console.error('[VOW] Failed to enable notifications:', error);
+      setNotificationStatus('denied');
+    } finally {
+      setRequesting(false);
     }
-    setRequesting(false);
   }
 
   async function handleIconChange(colour: IconColour) {
@@ -120,7 +127,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
         <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
         <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">Privacy, connected services, security and service terms.</p></button>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
-        <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">Turn on reminders for your scheduled VOW sessions.</p></div>{!notificationsEnabled && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft shrink-0 disabled:opacity-50">{requesting ? 'Enabling…' : 'Enable notifications'}</button>}</div></div>
+        <div className="p-5"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">Turn on reminders for your scheduled VOW sessions.</p>{notificationStatus === 'denied' && <p className="text-xs text-vow-muted mt-2">Notifications are blocked. Enable them in your device settings, then return to VOW.</p>}{notificationStatus === 'unsupported' && <p className="text-xs text-vow-muted mt-2">Notifications are not available on this device.</p>}</div>{!notificationsEnabled && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft shrink-0 disabled:opacity-50">{requesting ? 'Enabling…' : 'Enable notifications'}</button>}</div></div>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">My name</p><p className="text-xs text-vow-muted mt-1 truncate">{name || 'Not provided'}</p></div><button onClick={() => { setEditingName(true); setNameMessage(''); }} className="vow-btn-soft shrink-0">Change Name</button></div>{editingName && <div className="mt-4 border-t border-vow-border pt-4"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus className="vow-input" placeholder="What should VOW call you?" /><div className="flex gap-2 mt-2"><button onClick={handleSaveName} disabled={savingName || !name.trim()} className="vow-btn-primary disabled:opacity-50">{savingName ? 'Saving…' : 'Save name'}</button><button onClick={() => { setEditingName(false); setName(displayName); }} className="vow-btn-ghost">Cancel</button></div>{nameMessage && <p className="text-xs text-vow-muted mt-2">{nameMessage}</p>}</div>}</div>
         <div className="p-5"><p className="text-sm text-vow-ink">Account email</p><p className="text-xs text-vow-muted mt-1 break-words">{session?.user?.email || 'Not provided'}</p></div>
         <button onClick={() => setConfirmSignOut(true)} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Sign out</p><p className="text-xs text-vow-muted mt-1">Sign out of this VOW account.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
