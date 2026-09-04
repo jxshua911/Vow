@@ -4,85 +4,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { requestNativeCalendarAccess, syncSessionsToNativeCalendar } from '@/lib/nativeCalendar';
 import type { Session } from '@/types/database';
-
 function storageKey(prefix: string, userId: string, accountEmail?: string) { return `${prefix}:${userId}:${(accountEmail || 'unbound').toLowerCase()}`; }
-
-export function NativeCalendarSync() {
-  const { session } = useAuth();
-  const userId = session?.user.id;
-  const [accountEmail, setAccountEmail] = useState<string | null>(null);
-  const enableKey = userId ? storageKey('vow:native-calendar-sync', userId, accountEmail || undefined) : '';
-  const dismissedKey = userId ? storageKey('vow:native-calendar-sync-ui-dismissed', userId, accountEmail || undefined) : '';
-  const [enabled, setEnabled] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
-  const [dismissed, setDismissed] = useState(false);
-  const [hiding, setHiding] = useState(false);
-
-  const loadGoogleAccount = useCallback(async () => {
-    if (!session) { setAccountEmail(null); return; }
-    try {
-      const { data, error } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'status' } });
-      if (error || !data?.connected || !data?.googleAccountEmail) { setAccountEmail(null); return; }
-      setAccountEmail(String(data.googleAccountEmail).toLowerCase());
-    } catch { setAccountEmail(null); }
-  }, [session]);
-
+export function NativeCalendarSync() { const { session } = useAuth(); const userId = session?.user.id; const [accountEmail, setAccountEmail] = useState<string | null>(null); const enableKey = userId ? storageKey('vow:native-calendar-sync', userId, accountEmail || undefined) : ''; const dismissedKey = userId ? storageKey('vow:native-calendar-sync-ui-dismissed', userId, accountEmail || undefined) : ''; const [enabled, setEnabled] = useState(false); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [dismissed, setDismissed] = useState(false); const [hiding, setHiding] = useState(false);
+  const loadGoogleAccount = useCallback(async () => { if (!session) { setAccountEmail(null); return; } try { const { data, error } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'status' } }); if (error || !data?.connected || !data?.googleAccountEmail) { setAccountEmail(null); return; } setAccountEmail(String(data.googleAccountEmail).toLowerCase()); } catch { setAccountEmail(null); } }, [session]);
   useEffect(() => { loadGoogleAccount(); }, [loadGoogleAccount]);
-  useEffect(() => {
-    if (!userId || !accountEmail) { setEnabled(false); setDismissed(false); return; }
-    setEnabled(localStorage.getItem(enableKey) === 'true');
-    setDismissed(localStorage.getItem(dismissedKey) === 'true');
-    setHiding(false);
-  }, [userId, accountEmail, enableKey, dismissedKey]);
-
-  const dismissAfterSuccess = useCallback((text: string) => {
-    setMessage(text);
-    window.setTimeout(() => setHiding(true), 850);
-    window.setTimeout(() => {
-      setDismissed(true);
-      if (dismissedKey) localStorage.setItem(dismissedKey, 'true');
-    }, 1320);
-  }, [dismissedKey]);
-
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !userId || !accountEmail || !enabled || dismissed) return;
-    let cancelled = false;
-    async function sync() {
-      const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
-      if (cancelled) return;
-      try {
-        const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail) : 0;
-        if (!cancelled) dismissAfterSuccess(created ? `${created} upcoming VOW sessions are synced to ${accountEmail}.` : 'Calendar sync is up to date.');
-      } catch (error) { console.error('[VOW] Native calendar sync failed:', error); }
-    }
-    sync();
-    return () => { cancelled = true; };
-  }, [enabled, userId, accountEmail, dismissed, dismissAfterSuccess]);
-
+  useEffect(() => { if (!userId || !accountEmail) { setEnabled(false); setDismissed(false); return; } setEnabled(localStorage.getItem(enableKey) === 'true'); setDismissed(localStorage.getItem(dismissedKey) === 'true'); setHiding(false); }, [userId, accountEmail, enableKey, dismissedKey]);
+  const dismissAfterSuccess = useCallback((text: string) => { setMessage(text); window.setTimeout(() => setHiding(true), 850); window.setTimeout(() => { setDismissed(true); if (dismissedKey) localStorage.setItem(dismissedKey, 'true'); }, 1320); }, [dismissedKey]);
+  useEffect(() => { if (!Capacitor.isNativePlatform() || !userId || !accountEmail || !enabled || dismissed) return; let cancelled = false; async function sync() { const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true }); if (cancelled) return; try { const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail || undefined) : 0; if (!cancelled) dismissAfterSuccess(created ? `${created} upcoming VOW sessions are synced to ${accountEmail}.` : 'Calendar sync is up to date.'); } catch (error) { console.error('[VOW] Native calendar sync failed:', error); } } sync(); return () => { cancelled = true; }; }, [enabled, userId, accountEmail, dismissed, dismissAfterSuccess]);
   if (!Capacitor.isNativePlatform() || !session || !accountEmail || dismissed) return null;
-
-  async function toggle() {
-    if (busy || !userId || !accountEmail) return;
-    setBusy(true); setMessage('');
-    try {
-      if (!enabled) {
-        const granted = await requestNativeCalendarAccess();
-        if (!granted) throw new Error('Calendar access was not granted.');
-        localStorage.setItem(enableKey, 'true');
-        localStorage.removeItem(dismissedKey);
-        setEnabled(true);
-        const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
-        const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail) : 0;
-        dismissAfterSuccess(created ? `${created} upcoming VOW sessions added to ${accountEmail}.` : 'Calendar sync is on.');
-      } else {
-        localStorage.setItem(enableKey, 'false');
-        setEnabled(false);
-        dismissAfterSuccess('Automatic calendar sync is off. Existing calendar events are unchanged.');
-      }
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not update calendar sync.'); }
-    finally { setBusy(false); }
-  }
-
+  async function toggle() { if (busy || !userId || !accountEmail) return; setBusy(true); setMessage(''); try { if (!enabled) { const granted = await requestNativeCalendarAccess(); if (!granted) throw new Error('Calendar access was not granted.'); localStorage.setItem(enableKey, 'true'); localStorage.removeItem(dismissedKey); setEnabled(true); const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true }); const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail) : 0; dismissAfterSuccess(created ? `${created} upcoming VOW sessions added to ${accountEmail}.` : 'Calendar sync is on.'); } else { localStorage.setItem(enableKey, 'false'); setEnabled(false); dismissAfterSuccess('Automatic calendar sync is off. Existing calendar events are unchanged.'); } } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not update calendar sync.'); } finally { setBusy(false); } }
   return <div className={`border border-vow-border p-5 mb-8 vow-calendar-sync-panel${hiding ? ' vow-calendar-sync-panel-hiding' : ''}`}><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-medium text-vow-ink">Calendar sync</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">VOW only syncs sessions into the Google account explicitly connected to this VOW profile: {accountEmail}.</p>{message && <p className="text-xs text-vow-ink mt-2">{message}</p>}</div><button onClick={toggle} disabled={busy} className="vow-btn-primary disabled:opacity-50">{busy ? 'Updating…' : enabled ? 'Calendar sync on' : 'Sync VOW with calendar'}</button></div></div>;
 }
