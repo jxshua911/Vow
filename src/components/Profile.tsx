@@ -36,12 +36,38 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState<IconColour>(() => (localStorage.getItem('vow:icon-colour') as IconColour) || 'white');
+  const [selectedIcon, setSelectedIcon] = useState<IconColour>('white');
   const [iconMessage, setIconMessage] = useState('');
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
+  useEffect(() => {
+    const userId = session?.user.id;
+    if (!userId) {
+      setSelectedIcon('white');
+      return;
+    }
+
+    const scopedKey = `vow:icon-colour:${userId}`;
+    const stored = localStorage.getItem(scopedKey);
+    const legacy = localStorage.getItem('vow:icon-colour');
+    const validColours = new Set<IconColour>(ICON_OPTIONS.map((option) => option.value));
+
+    if (stored && validColours.has(stored as IconColour)) {
+      setSelectedIcon(stored as IconColour);
+      return;
+    }
+
+    if (legacy && validColours.has(legacy as IconColour)) {
+      localStorage.setItem(scopedKey, legacy);
+      localStorage.removeItem('vow:icon-colour');
+      setSelectedIcon(legacy as IconColour);
+      return;
+    }
+
+    setSelectedIcon('white');
+  }, [session?.user.id]);
 
   async function handleEnableNotifications() {
     setRequesting(true);
@@ -57,7 +83,9 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   async function handleIconChange(colour: IconColour) {
     setIconMessage('');
     setSelectedIcon(colour);
-    localStorage.setItem('vow:icon-colour', colour);
+    if (session?.user.id) {
+      localStorage.setItem(`vow:icon-colour:${session.user.id}`, colour);
+    }
     try {
       await VowIcon.setColour({ colour });
       setIconMessage(`${colour[0].toUpperCase()}${colour.slice(1)} VOW icon selected.`);
