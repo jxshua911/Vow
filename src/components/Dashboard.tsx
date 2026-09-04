@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ArrowRight, CheckCircle2, Flame, Target } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Flame, CalendarDays } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
@@ -60,7 +60,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-vow-border border border-vow-border mb-8">
       <DashboardMetric label="Raven" value={raven ? `${raven.score}/100` : '—'} detail={raven ? raven.trend === 'up' ? `↑ ${raven.score_delta} this week` : raven.trend === 'down' ? `↓ ${Math.abs(raven.score_delta || 0)} this week` : 'Holding steady' : 'Start tracking'} icon={<Flame className="w-4 h-4" />} />
       <DashboardMetric label="Completion" value={`${raven?.completion_pct ?? completion}%`} detail={`${completed} completed`} icon={<CheckCircle2 className="w-4 h-4" />} />
-      <DashboardMetric label="Next 7 days" value={nextSevenDays.length} detail={nextSevenDays.length === 1 ? 'session planned' : 'sessions planned'} icon={<Target className="w-4 h-4" />} />
+      <DashboardMetric label="Next 7 days" value={nextSevenDays.length} detail={nextSevenDays.length === 1 ? 'session planned' : 'sessions planned'} icon={<CalendarDays className="w-4 h-4" />} />
       <DashboardMetric label="Active VOWs" value={activeGoals.length} detail="goals in motion" icon={<ArrowRight className="w-4 h-4" />} />
     </div>
 
