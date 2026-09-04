@@ -38,10 +38,7 @@ jobs:
         with:
           scan-args: |-
             --format=table
-            --ignore-dev
-            --min-severity=7
-            --recursive
-            ./
+            --lockfile=package-lock.json
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
