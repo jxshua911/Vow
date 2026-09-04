@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { CapacitorCalendar } from '@ebarooni/capacitor-calendar';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { requestNativeCalendarAccess, syncSessionsToNativeCalendar } from '@/lib/nativeCalendar';
