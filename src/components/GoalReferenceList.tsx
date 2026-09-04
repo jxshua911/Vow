@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+
+type GlyphProps = { className?: string };
+const Link2 = ({ className = '' }: GlyphProps) => <span aria-hidden="true" className={`inline-flex items-center justify-center leading-none ${className}`}>↗</span>;
 
 type GoalResource = { id: string; url: string; title: string | null; resource_type: string; created_at: string };
 
