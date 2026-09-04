@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   prepare-ios:
-    if: ${{ hashFiles('ios/**') == '' }}
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -21,28 +20,44 @@ jobs:
           fetch-depth: 0
           ref: capacitor-mobile
 
+      - name: Stop if iOS project already exists
+        id: existing
+        shell: bash
+        run: |
+          if [ -d ios/App ] && [ -f ios/App/App/Info.plist ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Node.js
+        if: steps.existing.outputs.exists != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
+        if: steps.existing.outputs.exists != 'true'
         run: npm install --no-audit --no-fund
 
       - name: Build web app
+        if: steps.existing.outputs.exists != 'true'
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Add iOS platform
+        if: steps.existing.outputs.exists != 'true'
         run: npx cap add ios
 
       - name: Sync Capacitor iOS
+        if: steps.existing.outputs.exists != 'true'
         run: npx cap sync ios
 
       - name: Configure iOS calendar permissions
+        if: steps.existing.outputs.exists != 'true'
         run: |
           PLIST="ios/App/App/Info.plist"
           /usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string VOW needs calendar access to add your scheduled commitments." "$PLIST" 2>/dev/null || true
@@ -50,12 +65,13 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string VOW needs calendar access to read and manage your commitments." "$PLIST" 2>/dev/null || true
 
       - name: Commit generated iOS project
+        if: steps.existing.outputs.exists != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ios
           if git diff --cached --quiet; then
-            echo "iOS project already up to date."
+            echo "No iOS changes to commit."
             exit 0
           fi
           git commit -m "Add generated iOS Capacitor project"
