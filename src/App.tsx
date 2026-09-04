@@ -19,6 +19,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 
 const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
+const CALENDAR_CACHE_KEY = 'vow:calendar-events';
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) { const { theme } = useTheme(); return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} data-theme={theme} aria-hidden={fadingOut}><BrandLogo className="vow-splash-logo" /></div>; }
 
@@ -63,6 +64,7 @@ function AppContent() {
   useEffect(() => {
     let cancelled = false;
     if (!session) { setSettings(null); setSettingsLoading(false); return; }
+    localStorage.removeItem(CALENDAR_CACHE_KEY);
     setSettingsLoading(true);
     supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle().then(({ data, error }) => { if (cancelled) return; if (error) console.error('[VOW] Failed to load user settings:', error); setSettings(data as UserSettings | null); setSettingsLoading(false); });
     return () => { cancelled = true; };
