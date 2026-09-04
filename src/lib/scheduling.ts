@@ -10,7 +10,6 @@ export type OccupiedSlot = {
 
 const WORKDAY_START_HOUR = 7;
 const WORKDAY_END_HOUR = 22;
-const SLOT_STEP_MINUTES = 30;
 
 function overlaps(start: number, durationMinutes: number, occupied: OccupiedSlot): boolean {
   const occupiedStart = new Date(occupied.scheduledAt).getTime();
