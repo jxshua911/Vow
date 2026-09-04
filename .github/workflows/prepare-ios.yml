@@ -1,0 +1,62 @@
+name: Prepare iOS Project
+
+on:
+  push:
+    branches:
+      - capacitor-mobile
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-ios:
+    if: ${{ hashFiles('ios/**') == '' }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: capacitor-mobile
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build web app
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Add iOS platform
+        run: npx cap add ios
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Configure iOS calendar permissions
+        run: |
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string VOW needs calendar access to add your scheduled commitments." "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSCalendarsWriteOnlyAccessUsageDescription string VOW needs permission to create your scheduled commitments." "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string VOW needs calendar access to read and manage your commitments." "$PLIST" 2>/dev/null || true
+
+      - name: Commit generated iOS project
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios
+          if git diff --cached --quiet; then
+            echo "iOS project already up to date."
+            exit 0
+          fi
+          git commit -m "Add generated iOS Capacitor project"
+          git push origin HEAD:capacitor-mobile
