@@ -7,7 +7,19 @@ import { PageHeader, NewButton } from './AppShell';
 import { GoalPlanner } from './GoalPlanner';
 import { GoalReferenceList } from './GoalReferenceList';
 import { GoalResources } from '../../components/GoalResources';
-import { Plus, Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from 'lucide-react';
+type GlyphProps = { className?: string };
+const makeGlyph = (symbol: string) => ({ className }: GlyphProps) => <span aria-hidden="true" className={`inline-flex items-center justify-center leading-none ${className || ''}`}>{symbol}</span>;
+const Plus = makeGlyph('+');
+const Check = makeGlyph('✓');
+const Circle = makeGlyph('○');
+const CheckCircle2 = makeGlyph('✓');
+const SkipForward = makeGlyph('›');
+const Move = makeGlyph('↗');
+const Pause = makeGlyph('Ⅱ');
+const ChevronDown = makeGlyph('⌄');
+const ArrowLeft = makeGlyph('←');
+const Calendar = makeGlyph('□');
+const Clock = makeGlyph('◷');
 
 const OPEN_GOAL_PREFIX = 'vow:open-goal:';
 

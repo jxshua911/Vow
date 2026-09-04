@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { checkContentSafety } from '@/lib/contentSafety';
 import { useAuth } from '@/lib/auth';
 import type { JournalEntry, Goal } from '@/types/database';
 import { formatDateLong } from '@/lib/dates';
@@ -44,6 +45,8 @@ export function JournalPage({ embedded = false }: { embedded?: boolean }) {
   async function handleCreate(body: string, tag: string | null, linkedGoalId: string | null) {
     if (!session) return;
     setActionError('');
+    const safety = await checkContentSafety([body.trim(), tag?.trim()].filter(Boolean).join('\n'));
+    if (safety.status !== 'safe') throw new Error(safety.message || 'Please reword this entry and try again.');
     const { data, error } = await supabase.from('journal_entries').insert({ user_id: session.user.id, body, tag, linked_goal_id: linkedGoalId }).select('*').maybeSingle();
     if (error) { setActionError(error.message); return; }
     if (data) setEntries((current) => [data as JournalEntry, ...current]);
