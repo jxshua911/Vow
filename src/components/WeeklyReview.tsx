@@ -18,6 +18,7 @@ export function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const { start, end } = weekRange();
 
@@ -25,31 +26,34 @@ export function ReviewPage() {
     if (!session) return;
     const weekStart = toDateString(start);
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('reviews')
       .select('*')
       .eq('user_id', session.user.id)
       .eq('week_start', weekStart)
       .maybeSingle();
+    if (existingError) throw existingError;
     setExistingReview(existing as Review | null);
 
-    const { data: past } = await supabase
+    const { data: past, error: pastError } = await supabase
       .from('reviews')
       .select('*')
       .eq('user_id', session.user.id)
       .order('week_start', { ascending: false })
       .limit(10);
+    if (pastError) throw pastError;
     setPastReviews((past || []) as Review[]);
 
     if (existing) setReview(existing as Review);
     setLoading(false);
   }, [session, start, end]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load().catch((err) => { console.error('Review load failed:', err); setActionError(err instanceof Error ? err.message : 'Could not load your weekly review.'); setLoading(false); }); }, [load]);
 
   async function generateReview() {
     if (!session) return;
     setGenerating(true);
+    setActionError('');
 
     try {
       const weekStart = toDateString(start);
@@ -61,6 +65,10 @@ export function ReviewPage() {
         supabase.from('journal_entries').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
         supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle(),
       ]);
+      if (sessionsRes.error) throw sessionsRes.error;
+      if (goalsRes.error) throw goalsRes.error;
+      if (journalRes.error) throw journalRes.error;
+      if (settingsRes.error) throw settingsRes.error;
 
       const allSessions = (sessionsRes.data || []) as Session[];
       const goals = (goalsRes.data || []) as Goal[];
@@ -135,6 +143,7 @@ export function ReviewPage() {
       }
     } catch (err) {
       console.error('Review generation failed:', err);
+      setActionError(err instanceof Error ? err.message : 'Could not generate your weekly review.');
     } finally {
       setGenerating(false);
     }
@@ -143,6 +152,7 @@ export function ReviewPage() {
   async function confirmReview() {
     if (!review || !session) return;
     setConfirming(true);
+    setActionError('');
 
     try {
       const { error: reviewError } = await supabase.from('reviews').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', review.id).eq('user_id', session.user.id);
@@ -200,6 +210,7 @@ export function ReviewPage() {
       await load();
     } catch (err) {
       console.error('Confirm failed:', err);
+      setActionError(err instanceof Error ? err.message : 'Could not lock in next week.');
     } finally {
       setConfirming(false);
     }
@@ -215,6 +226,7 @@ export function ReviewPage() {
         <div className="border-t border-vow-border pt-12 text-center">
           <p className="vow-heading text-2xl text-vow-ink mb-3">No review generated yet</p>
           <p className="text-vow-muted text-sm mb-8 max-w-md mx-auto leading-relaxed break-words">Generate your weekly accountability review. It reads your sessions, journal, and commitment history to give you honest, evidence-based feedback and propose next week's commitments.</p>
+          {actionError && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 max-w-md mx-auto mb-6 text-left break-words">{actionError}</p>}
           <button onClick={generateReview} disabled={generating} className="vow-btn-primary">{generating ? 'Analyzing your week...' : 'Generate weekly review'}</button>
         </div>
         {pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}
@@ -238,6 +250,7 @@ export function ReviewPage() {
           ))}
         </div>
         <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg break-words">Confirming locks these commitments into your immutable commitment log and schedules next week's sessions. You can adjust before confirming.</p>
+        {actionError && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 mb-6 break-words">{actionError}</p>}
         <div className="flex gap-3">
           <button onClick={generateReview} disabled={generating} className="vow-btn-ghost"><RotateCcw className="w-4 h-4" />Regenerate</button>
           <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1"><Check className="w-4 h-4" />{confirming ? 'Locking in...' : 'Lock in next week'}</button>
