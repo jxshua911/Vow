@@ -20,13 +20,13 @@ jobs:
           fetch-depth: 0
 
       - name: Apply remaining VOW patches
-        shell: python
+        shell: bash
         run: |
+          set -euo pipefail
+          python3 <<'PY'
           from pathlib import Path
-
           root = Path('.')
 
-          # Remove the remaining Lucide dependency/import from the active Goals UI
           goals = root / 'src/components/Goals.tsx'
           text = goals.read_text()
           old_import = "import { Plus, Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from 'lucide-react';"
@@ -45,56 +45,43 @@ jobs:
           const Clock = makeGlyph('◷');"""
           if old_import not in text:
               raise SystemExit('Goals.tsx Lucide import not found')
-          text = text.replace(old_import, glyphs, 1)
-          goals.write_text(text)
+          goals.write_text(text.replace(old_import, glyphs, 1))
 
-          # Gate goal planning before any draft/question persistence.
           planner = root / 'src/components/GoalPlanner.tsx'
           p = planner.read_text()
-          p = p.replace("import { supabase } from '@/lib/supabase';", "import { supabase } from '@/lib/supabase';\nimport { checkContentSafety } from '@/lib/contentSafety';", 1)
-          marker = "export function GoalPlanner"
-          helper = """async function requireSafeText(text: string) {
+          if "import { checkContentSafety } from '@/lib/contentSafety';" not in p:
+              p = p.replace("import { supabase } from '@/lib/supabase';", "import { supabase } from '@/lib/supabase';\nimport { checkContentSafety } from '@/lib/contentSafety';", 1)
+          if 'async function requireSafeText(text: string)' not in p:
+              helper = """async function requireSafeText(text: string) {
             if (!text.trim()) return;
             const result = await checkContentSafety(text);
             if (result.status !== 'safe') throw new Error(result.message || 'Please reword the text and try again.');
           }
 
           """
-          if 'async function requireSafeText(text: string)' not in p:
-              p = p.replace(marker, helper + marker, 1)
+              p = p.replace('export function GoalPlanner', helper + 'export function GoalPlanner', 1)
           old = "setBusy(true);setError('');try{const goalId=await ensureDraft();"
-          new = "setBusy(true);setError('');try{await requireSafeText([rawInput.trim(),why.trim()].filter(Boolean).join('\\n'));const goalId=await ensureDraft();"
           if old not in p:
               raise SystemExit('GoalPlanner startPlanning anchor not found')
-          p = p.replace(old, new, 1)
+          p = p.replace(old, "setBusy(true);setError('');try{await requireSafeText([rawInput.trim(),why.trim()].filter(Boolean).join('\\n'));const goalId=await ensureDraft();", 1)
           old2 = "const clean=answers.map(a=>a.trim());"
-          new2 = "const clean=answers.map(a=>a.trim());await requireSafeText(clean.filter(Boolean).join('\\n'));"
           if old2 not in p:
               raise SystemExit('GoalPlanner buildPlan anchor not found')
-          p = p.replace(old2, new2, 1)
+          p = p.replace(old2, "const clean=answers.map(a=>a.trim());await requireSafeText(clean.filter(Boolean).join('\\n'));", 1)
           planner.write_text(p)
 
-          # Gate journal body + tag before insert.
           journal = root / 'src/components/Journal.tsx'
           j = journal.read_text()
-          j = j.replace("import { supabase } from '@/lib/supabase';", "import { supabase } from '@/lib/supabase';\nimport { checkContentSafety } from '@/lib/contentSafety';", 1)
+          if "import { checkContentSafety } from '@/lib/contentSafety';" not in j:
+              j = j.replace("import { supabase } from '@/lib/supabase';", "import { supabase } from '@/lib/supabase';\nimport { checkContentSafety } from '@/lib/contentSafety';", 1)
           old3 = "setActionError('');const { data, error } = await supabase.from('journal_entries').insert({"
-          new3 = "setActionError('');const safety = await checkContentSafety([body.trim(), tag?.trim()].filter(Boolean).join('\\n'));if(safety.status !== 'safe') throw new Error(safety.message || 'Please reword this entry and try again.');const { data, error } = await supabase.from('journal_entries').insert({"
           if old3 not in j:
               raise SystemExit('Journal create anchor not found')
-          j = j.replace(old3, new3, 1)
+          j = j.replace(old3, "setActionError('');const safety = await checkContentSafety([body.trim(), tag?.trim()].filter(Boolean).join('\\n'));if(safety.status !== 'safe') throw new Error(safety.message || 'Please reword this entry and try again.');const { data, error } = await supabase.from('journal_entries').insert({", 1)
           journal.write_text(j)
 
-          # Keep the live access-gate deployment in the normal function pipeline.
-          workflow = root / '.github/workflows/deploy-supabase-functions.yml'
-          w = workflow.read_text()
-          if 'Deploy VOW IP access gate function' not in w:
-              anchor = "      - name: Deploy goal calendar sync function"
-              step = "      - name: Deploy VOW IP access gate function\n        run: supabase functions deploy vow-access-gate --no-verify-jwt --project-ref vqsrdausvmfjayffxiuh\n        env:\n          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}\n\n"
-              if anchor not in w:
-                  raise SystemExit('deploy workflow anchor not found')
-              w = w.replace(anchor, step + anchor, 1)
-              workflow.write_text(w)
+          print('VOW patch files updated')
+          PY
 
       - name: Commit patched files and remove patch workflow
         shell: bash
@@ -103,7 +90,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f .github/workflows/patch-rest.yml
-          git add src/components/Goals.tsx src/components/GoalPlanner.tsx src/components/Journal.tsx .github/workflows/deploy-supabase-functions.yml .github/workflows/patch-rest.yml
+          git add src/components/Goals.tsx src/components/GoalPlanner.tsx src/components/Journal.tsx .github/workflows/patch-rest.yml
           if git diff --cached --quiet; then
             echo "No patch changes required."
             exit 0
