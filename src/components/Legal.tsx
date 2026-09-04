@@ -1,5 +1,6 @@
-import { ArrowLeft } from 'lucide-react';
 import { PageHeader } from './AppShell';
+
+function Glyph({ children, className = '' }: { children: string; className?: string }) { return <span aria-hidden="true" className={`inline-flex items-center justify-center font-medium leading-none ${className}`}>{children}</span>; }
 
 const sections = [
   ['1. Service', 'VOW is a personal planning, accountability and evidence-organising tool. It is provided for general informational and productivity purposes and is not a substitute for professional medical, mental-health, financial, legal, educational or other professional advice.'],
@@ -19,7 +20,7 @@ export function LegalPage({ onBack }: { onBack?: () => void }) {
       <header className="sticky top-0 z-30 border-b border-vow-border bg-vow-bg/95 backdrop-blur" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-3xl mx-auto px-5 sm:px-8 h-16 flex items-center gap-4">
           <button onClick={onBack} className="shrink-0 w-10 h-10 border border-vow-border flex items-center justify-center text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors" aria-label="Back to profile">
-            <ArrowLeft className="w-4 h-4" />
+            <Glyph>←</Glyph>
           </button>
           <div className="min-w-0">
             <p className="text-sm font-medium text-vow-ink truncate">Terms & Policies</p>
