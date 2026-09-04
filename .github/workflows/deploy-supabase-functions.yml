@@ -36,6 +36,11 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
+      - name: Deploy VOW content safety function
+        run: supabase functions deploy vow-content-safety --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
       - name: Deploy goal calendar sync function
         run: supabase functions deploy google-calendar-sync-goal --project-ref vqsrdausvmfjayffxiuh
         env:
