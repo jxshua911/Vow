@@ -46,7 +46,7 @@ export function ReviewPage() {
 
     if (existing) setReview(existing as Review);
     setLoading(false);
-  }, [session, start, end]);
+  }, [session, start]);
 
   useEffect(() => { load().catch((err) => { console.error('Review load failed:', err); setActionError(err instanceof Error ? err.message : 'Could not load your weekly review.'); setLoading(false); }); }, [load]);
 
@@ -278,8 +278,4 @@ function PastReviewsList({ reviews }: { reviews: Review[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   if (reviews.length === 0) return null;
   return <div className="border-t border-vow-border pt-8 mt-10 min-w-0"><h3 className="vow-label mb-4">Past reviews</h3><div className="border-t border-vow-border">{reviews.map((r) => <div key={r.id} className="border-b border-vow-border"><button onClick={() => setExpanded(expanded === r.id ? null : r.id)} className="w-full flex items-center justify-between py-4 text-left hover:opacity-70 transition-opacity"><div className="min-w-0"><div className="text-sm text-vow-ink break-words">{formatDate(r.week_start)} — {formatDate(r.week_end)}</div><div className="text-xs text-vow-muted mt-0.5 break-words">{r.completed_count}/{r.committed_count} sessions — {Math.round(r.completion_pct)}% — {r.status}</div></div><ArrowRight className={`w-4 h-4 text-vow-muted transition-transform shrink-0 ml-3 ${expanded === r.id ? 'rotate-90' : ''}`} /></button>{expanded === r.id && <div className="pb-8"><ReviewContent review={r} /></div>}</div>)}</div></div>;
-}
-
-function MetricCell({ label, value }: { label: string; value: number }) {
-  return <div className="bg-vow-bg px-4 py-5 text-center min-w-0"><div className="text-2xl vow-heading text-vow-ink truncate">{value}</div><div className="vow-label mt-1.5 truncate">{label}</div></div>;
 }

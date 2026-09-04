@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -37,21 +37,21 @@ export function GoalResources({ goalId }: { goalId: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  async function signedDisplayUrl(urlValue: string) {
+  const signedDisplayUrl = useCallback(async (urlValue: string) => {
     if (!urlValue.startsWith('storage://')) return urlValue;
     const { data } = await supabase.storage.from('goal-resources').createSignedUrl(urlValue.slice('storage://'.length), 60 * 60);
     return data?.signedUrl || '';
-  }
+  }, []);
 
-  async function loadResources() {
+  const loadResources = useCallback(async () => {
     if (!goalId) return;
     const { data, error: resourceError } = await supabase.from('goal_resources').select('*').eq('goal_id', goalId).eq('user_id', (await supabase.auth.getUser()).data.user?.id || '').order('created_at', { ascending: false });
     if (resourceError) { setError('Could not load goal references.'); return; }
     const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await signedDisplayUrl(resource.url) })));
     setResources(next);
-  }
+  }, [goalId, signedDisplayUrl]);
 
-  useEffect(() => { loadResources().finally(() => setLoading(false)); }, [goalId]);
+  useEffect(() => { loadResources().finally(() => setLoading(false)); }, [loadResources]);
 
   async function addResource() {
     if (saving || !goalId || (!url.trim() && !file)) return;

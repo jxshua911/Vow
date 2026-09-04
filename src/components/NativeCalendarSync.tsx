@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -26,14 +26,14 @@ export function NativeCalendarSync() {
     setHiding(false);
   }, [userId, enableKey, dismissedKey]);
 
-  function dismissAfterSuccess(text: string) {
+  const dismissAfterSuccess = useCallback((text: string) => {
     setMessage(text);
     window.setTimeout(() => setHiding(true), 850);
     window.setTimeout(() => {
       setDismissed(true);
       if (dismissedKey) localStorage.setItem(dismissedKey, 'true');
     }, 1320);
-  }
+  }, [dismissedKey]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !userId || !enabled || dismissed) return;
@@ -48,7 +48,7 @@ export function NativeCalendarSync() {
     }
     sync();
     return () => { cancelled = true; };
-  }, [enabled, userId, accountEmail, dismissed]);
+  }, [enabled, userId, accountEmail, dismissed, dismissAfterSuccess]);
 
   if (!Capacitor.isNativePlatform() || !session || dismissed) return null;
 
