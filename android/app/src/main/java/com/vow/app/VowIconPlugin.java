@@ -12,31 +12,34 @@ import com.getcapacitor.PluginMethod;
 
 @CapacitorPlugin(name = "VowIcon")
 public class VowIconPlugin extends Plugin {
-    private static final String[] COLOURS = {"white", "black", "gold", "blue", "red", "green", "purple", "orange", "pink", "teal"};
+    private static final String[] VARIANTS = {
+        "purple-green", "orange-blue", "black-pink", "teal-white", "red-blue",
+        "gold-blue", "white-green", "pink-orange", "blue-white", "green-purple",
+        "black-red", "purple-gold", "orange-white", "pink-teal", "black-blue",
+        "teal-orange", "blue-red", "white-black", "gold-purple", "green-teal"
+    };
 
     @PluginMethod
-    public void setColour(PluginCall call) {
-        String colour = call.getString("colour", "white").toLowerCase();
+    public void setVariant(PluginCall call) {
+        String variant = call.getString("variant", "purple-green").toLowerCase();
         boolean valid = false;
-        for (String value : COLOURS) if (value.equals(colour)) valid = true;
+        for (String value : VARIANTS) if (value.equals(variant)) valid = true;
         if (!valid) {
-            call.reject("Unsupported VOW icon colour");
+            call.reject("Unsupported VOW icon variant");
             return;
         }
-
         Context context = getContext();
         PackageManager pm = context.getPackageManager();
         String packageName = context.getPackageName();
-
-        for (String value : COLOURS) {
-            ComponentName component = new ComponentName(packageName, packageName + "." + value + "IconAlias");
+        for (String value : VARIANTS) {
+            String aliasName = value.replace("-", "") + "IconAlias";
+            ComponentName component = new ComponentName(packageName, packageName + "." + aliasName);
             pm.setComponentEnabledSetting(component,
-                    value.equals(colour) ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP);
+                value.equals(variant) ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP);
         }
-
         JSObject result = new JSObject();
-        result.put("colour", colour);
+        result.put("variant", variant);
         call.resolve(result);
     }
 }
