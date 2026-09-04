@@ -26,9 +26,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          package-manager-cache: false
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Audit production dependencies
         uses: google/osv-scanner-action/osv-scanner-action@06b2ab4348248b456ee06c9e953637f55e03504f
         with:
