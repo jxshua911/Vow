@@ -14,18 +14,10 @@ export async function checkContentSafety(text: string): Promise<ContentSafetyRes
   const value = text.trim();
   if (!value) return { status: 'safe' };
 
-  const { data, error } = await supabase.functions.invoke('vow-content-safety', {
-    body: { text: value },
-  });
-
-  if (error) {
+  const { data, error } = await supabase.functions.invoke('vow-content-safety', { body: { text: value } });
+  if (error || !data || typeof data !== 'object') {
     throw new Error('VOW could not verify that wording right now. Please try again.');
   }
-
-  if (!data || typeof data !== 'object') {
-    throw new Error('VOW could not verify that wording right now. Please try again.');
-  }
-
   const result = data as Record<string, unknown>;
   return {
     status: result.status === 'ambiguous' || result.status === 'blocked' || result.status === 'suspended' ? result.status : 'safe',
