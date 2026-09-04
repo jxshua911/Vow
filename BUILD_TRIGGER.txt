@@ -1,2 +1,2 @@
 VOW mobile build trigger
-Raven restoration verified; planner compatibility fix included.
+Review cleanup and calendar scheduling audit in progress.
