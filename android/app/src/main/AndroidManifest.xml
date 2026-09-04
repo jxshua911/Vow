@@ -34,6 +34,24 @@
         <activity-alias android:name=".blueIconAlias" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_vow_blue" android:roundIcon="@mipmap/ic_vow_blue" android:targetActivity=".MainActivity" android:label="@string/app_name">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
+        <activity-alias android:name=".redIconAlias" android:enabled="false" android:exported="true" android:icon="@drawable/vow_icon_red" android:roundIcon="@drawable/vow_icon_red" android:targetActivity=".MainActivity" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".greenIconAlias" android:enabled="false" android:exported="true" android:icon="@drawable/vow_icon_green" android:roundIcon="@drawable/vow_icon_green" android:targetActivity=".MainActivity" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".purpleIconAlias" android:enabled="false" android:exported="true" android:icon="@drawable/vow_icon_purple" android:roundIcon="@drawable/vow_icon_purple" android:targetActivity=".MainActivity" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".orangeIconAlias" android:enabled="false" android:exported="true" android:icon="@drawable/vow_icon_orange" android:roundIcon="@drawable/vow_icon_orange" android:targetActivity=".MainActivity" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".pinkIconAlias" android:enabled="false" android:exported="true" android:icon="@drawable/vow_icon_pink" android:roundIcon="@drawable/vow_icon_pink" android:targetActivity=".MainActivity" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".tealIconAlias" android:enabled="false" android:exported="true" android:icon="@drawable/vow_icon_teal" android:roundIcon="@drawable/vow_icon_teal" android:targetActivity=".MainActivity" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
 
         <provider
             android:name="androidx.core.content.FileProvider"
