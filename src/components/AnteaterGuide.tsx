@@ -1,0 +1,95 @@
+type Demonstration = { kind?: 'video' | 'image' | 'none'; title?: string; query?: string; image_prompt?: string; source_url?: string; source_title?: string };
+type AnteaterSession = { activity_type?: string; equipment?: string[]; instructions?: string[]; form_cues?: string[]; alternatives?: string[]; demonstration?: Demonstration | null };
+
+function embedUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (!['https:', 'http:'].includes(parsed.protocol)) return null;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'youtu.be') {
+      const id = parsed.pathname.replace(/^\//, '').split('/')[0];
+      return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+    }
+    if (host.endsWith('youtube.com')) {
+      const id = parsed.searchParams.get('v') || parsed.pathname.match(/\/(?:shorts|live|embed)\/([^/?]+)/)?.[1];
+      return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+    }
+    if (host.endsWith('vimeo.com')) {
+      const id = parsed.pathname.match(/\/(\d+)(?:$|\/)/)?.[1];
+      return id ? `https://player.vimeo.com/video/${id}` : null;
+    }
+  } catch {}
+  return null;
+}
+
+export function AnteaterGuide({ session }: { session: AnteaterSession }) {
+  const demo = session.demonstration || null;
+  const video = demo?.source_url ? embedUrl(demo.source_url) : null;
+  const instructions = Array.isArray(session.instructions) ? session.instructions : [];
+  const equipment = Array.isArray(session.equipment) ? session.equipment : [];
+  const cues = Array.isArray(session.form_cues) ? session.form_cues : [];
+  const alternatives = Array.isArray(session.alternatives) ? session.alternatives : [];
+  const hasGuide = instructions.length || equipment.length || cues.length || alternatives.length || demo;
+  if (!hasGuide) return null;
+
+  return (
+    <div className="mt-4 border border-vow-border bg-vow-paper/40 p-4 space-y-4">
+      <div>
+        <p className="vow-label">Anteater guide</p>
+        {session.activity_type && <p className="text-sm text-vow-ink mt-1">{session.activity_type}</p>}
+      </div>
+
+      {equipment.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-vow-ink mb-2">Setup</p>
+          <ul className="space-y-1">{equipment.map((item, index) => <li key={`${item}-${index}`} className="text-xs text-vow-muted">• {item}</li>)}</ul>
+        </div>
+      )}
+
+      {instructions.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-vow-ink mb-2">How to do it</p>
+          <ol className="space-y-2">{instructions.map((step, index) => <li key={`${step}-${index}`} className="flex gap-3 text-xs text-vow-muted"><span className="text-vow-ink font-medium">{index + 1}.</span><span>{step}</span></li>)}</ol>
+        </div>
+      )}
+
+      {cues.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-vow-ink mb-2">Quality cues</p>
+          <ul className="space-y-1">{cues.map((cue, index) => <li key={`${cue}-${index}`} className="text-xs text-vow-muted">• {cue}</li>)}</ul>
+        </div>
+      )}
+
+      {alternatives.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-vow-ink mb-2">If your setup is different</p>
+          <ul className="space-y-1">{alternatives.map((alternative, index) => <li key={`${alternative}-${index}`} className="text-xs text-vow-muted">• {alternative}</li>)}</ul>
+        </div>
+      )}
+
+      {video && (
+        <div>
+          <p className="text-xs font-medium text-vow-ink mb-2">Demonstration</p>
+          <div className="aspect-video overflow-hidden border border-vow-border bg-black">
+            <iframe src={video} title={demo?.source_title || demo?.title || 'Anteater demonstration'} className="h-full w-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
+          </div>
+          <p className="text-xs text-vow-muted mt-2">{demo?.source_title || demo?.title}</p>
+        </div>
+      )}
+
+      {!video && demo?.kind === 'video' && demo.query && (
+        <div className="border-l-2 border-vow-border pl-3">
+          <p className="text-xs font-medium text-vow-ink">Anteater video brief</p>
+          <p className="text-xs text-vow-muted mt-1">VOW is looking for a demonstration matching: {demo.query}</p>
+        </div>
+      )}
+
+      {demo?.kind === 'image' && (
+        <div className="border-l-2 border-vow-border pl-3">
+          <p className="text-xs font-medium text-vow-ink">Premium visual</p>
+          <p className="text-xs text-vow-muted mt-1">Anteater identified a visual demonstration as the best fit for this session. Image generation is a premium capability.</p>
+        </div>
+      )}
+    </div>
+  );
+}
