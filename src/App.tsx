@@ -18,8 +18,8 @@ import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 
-const SPLASH_MIN_MS = 1400;
-const SPLASH_FADE_OUT_MS = 420;
+const SPLASH_MIN_MS = 900;
+const SPLASH_FADE_OUT_MS = 280;
 const CALENDAR_CACHE_KEY = 'vow:calendar-events';
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) { const { theme } = useTheme(); return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} data-theme={theme} aria-hidden={fadingOut}><BrandLogo className="vow-splash-logo" /></div>; }

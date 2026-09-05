@@ -74,9 +74,8 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 export async function scheduleReminder(id: number, title: string, body: string, at: Date): Promise<void> {
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
   if (await getNotificationPermission() !== 'granted') return;
-  const preferences = getNotificationPreferences();
-  await setupNotifications(preferences);
-  await LocalNotifications.schedule({ notifications: [{ id, title, body, channelId: CHANNELS[channelFor(preferences)], smallIcon: VOW_NOTIFICATION_ICON, schedule: { at, allowWhileIdle: true } }] });
+  await setupNotifications();
+  await LocalNotifications.schedule({ notifications: [{ id, title, body, channelId: CHANNELS['sound-vibration'], smallIcon: VOW_NOTIFICATION_ICON, schedule: { at, allowWhileIdle: true } }] });
 }
 
 export async function cancelReminder(id: number): Promise<void> {

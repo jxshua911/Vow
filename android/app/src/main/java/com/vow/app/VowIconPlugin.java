@@ -8,7 +8,7 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.PluginMethod;
 
 @CapacitorPlugin(name = "VowIcon")
 public class VowIconPlugin extends Plugin {
@@ -21,7 +21,7 @@ public class VowIconPlugin extends Plugin {
 
     @PluginMethod
     public void setVariant(PluginCall call) {
-        String variant = call.getString("variant", "purple-green").toLowerCase();
+        String variant = call.getString("variant", "white-black").toLowerCase();
         boolean valid = false;
         for (String value : VARIANTS) if (value.equals(variant)) valid = true;
         if (!valid) { call.reject("Unsupported VOW icon variant"); return; }
