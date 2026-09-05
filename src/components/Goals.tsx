@@ -9,7 +9,6 @@ import { GoalReferenceList } from './GoalReferenceList';
 import { GoalResources } from '../../components/GoalResources';
 type GlyphProps = { className?: string };
 const makeGlyph = (symbol: string) => ({ className }: GlyphProps) => <span aria-hidden="true" className={`inline-flex items-center justify-center leading-none ${className || ''}`}>{symbol}</span>;
-const Plus = makeGlyph('+');
 const Check = makeGlyph('✓');
 const Circle = makeGlyph('○');
 const CheckCircle2 = makeGlyph('✓');
@@ -55,10 +54,13 @@ export function GoalsPage() {
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const loadGoals = useCallback(async () => {
     if (!session) return;
-    const { data } = await supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    setLoading(true); setLoadError('');
+    const { data, error } = await supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    if (error) { setLoadError(error.message); setGoals([]); setLoading(false); return; }
     const nextGoals = data || [];
     setGoals(nextGoals);
     const requestedId = localStorage.getItem(`${OPEN_GOAL_PREFIX}${session.user.id}`);
@@ -80,7 +82,8 @@ export function GoalsPage() {
   const goalCtaLabel = goals.length > 0 ? 'New Goal' : 'Create Goal';
   return <div>
     <PageHeader title="Goals" subtitle="Lock in commitments. Track honestly. Adjust when the plan is wrong." action={<NewButton onClick={() => setShowCreate(true)} label={goalCtaLabel} />} />
-    {loading ? <div className="text-vow-muted text-sm">Loading...</div> : goals.length === 0 ? <div className="border border-vow-border p-16 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">No goals yet</p><p className="text-vow-muted text-sm">Create your first commitment and let VOW map the work into your calendar.</p></div> : <div className="space-y-12">{activeGoals.length > 0 && <GoalSection title="Active" goals={activeGoals} onSelect={setSelectedGoalId} />}{draftGoals.length > 0 && <GoalSection title="Drafts" goals={draftGoals} onSelect={setSelectedGoalId} />}{completedGoals.length > 0 && <GoalSection title="Completed & Abandoned" goals={completedGoals} onSelect={setSelectedGoalId} />}</div>}
+    {loadError && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 mb-8 break-words">Could not load your goals: {loadError}</p>}
+    {loading ? <div className="text-vow-muted text-sm">Loading your goals…</div> : goals.length === 0 ? <div className="border border-vow-border p-16 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">No goals yet</p><p className="text-vow-muted text-sm">Create your first commitment and let VOW map the work into your calendar.</p></div> : <div className="space-y-12">{activeGoals.length > 0 && <GoalSection title="Active" goals={activeGoals} onSelect={setSelectedGoalId} />}{draftGoals.length > 0 && <GoalSection title="Drafts" goals={draftGoals} onSelect={setSelectedGoalId} />}{completedGoals.length > 0 && <GoalSection title="Completed & Abandoned" goals={completedGoals} onSelect={setSelectedGoalId} />}</div>}
   </div>;
 }
 
@@ -95,7 +98,6 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddSession, setShowAddSession] = useState(false);
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [expandedMilestone, setExpandedMilestone] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -105,17 +107,18 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
       supabase.from('milestones').select('*').eq('goal_id', goalId).eq('user_id', session.user.id).order('sort_order'),
       supabase.from('sessions').select('*').eq('goal_id', goalId).eq('user_id', session.user.id).order('scheduled_at', { ascending: true }),
     ]);
+    if (goalRes.error || msRes.error || sessRes.error) { setLoading(false); return; }
     setGoal(goalRes.data as Goal | null); setMilestones(msRes.data || []); setSessions(sessRes.data || []); setLoading(false);
   }, [goalId, session]);
   useEffect(() => { load(); }, [load]);
-  async function updateSessionStatus(sessId: string, status: Session['status']) { if (!session) return; const updates: Partial<Session> = { status, updated_at: new Date().toISOString() }; if (status === 'completed') updates.completed_at = new Date().toISOString(); await supabase.from('sessions').update(updates).eq('id', sessId).eq('user_id', session.user.id); load(); }
-  async function moveSession(sess: Session) { if (!session) return; const newDate = addDays(new Date(sess.scheduled_at), 1); await supabase.from('sessions').update({ scheduled_at: newDate.toISOString(), moved_count: sess.moved_count + 1, status: 'moved', updated_at: new Date().toISOString() }).eq('id', sess.id).eq('user_id', session.user.id); load(); }
-  async function toggleMilestoneStatus(ms: Milestone) { if (!session) return; const newStatus = ms.status === 'completed' ? 'pending' : 'completed'; await supabase.from('milestones').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', ms.id).eq('user_id', session.user.id); load(); }
-  async function abandonGoal() { if (!session || !confirm('Mark this goal as abandoned? This records the outcome so VOW can learn from the pattern.')) return; await supabase.from('goals').update({ status: 'abandoned', updated_at: new Date().toISOString() }).eq('id', goalId).eq('user_id', session.user.id); onBack(); }
-  async function completeGoal() { if (!session) return; await supabase.from('goals').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', goalId).eq('user_id', session.user.id); onBack(); }
-  async function handlePause(context: string) { if (!session) return; await supabase.from('user_settings').upsert({ user_id: session.user.id, pause_context: context || null, updated_at: new Date().toISOString() }, { onConflict: 'user_id' }); setShowPauseModal(false); }
-  if (loading) return <div className="text-vow-muted text-sm">Loading...</div>;
-  if (!goal) return <div className="text-vow-muted text-sm">Goal not found.</div>;
+  async function updateSessionStatus(sessId: string, status: Session['status']) { if (!session) return; const updates: Partial<Session> = { status, updated_at: new Date().toISOString() }; if (status === 'completed') updates.completed_at = new Date().toISOString(); const { error } = await supabase.from('sessions').update(updates).eq('id', sessId).eq('user_id', session.user.id); if (!error) await load(); }
+  async function moveSession(sess: Session) { if (!session) return; const newDate = addDays(new Date(sess.scheduled_at), 1); const { error } = await supabase.from('sessions').update({ scheduled_at: newDate.toISOString(), moved_count: sess.moved_count + 1, status: 'moved', updated_at: new Date().toISOString() }).eq('id', sess.id).eq('user_id', session.user.id); if (!error) await load(); }
+  async function toggleMilestoneStatus(ms: Milestone) { if (!session) return; const newStatus = ms.status === 'completed' ? 'pending' : 'completed'; const { error } = await supabase.from('milestones').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', ms.id).eq('user_id', session.user.id); if (!error) await load(); }
+  async function abandonGoal() { if (!session || !confirm('Mark this goal as abandoned? This records the outcome so VOW can learn from the pattern.')) return; const { error } = await supabase.from('goals').update({ status: 'abandoned', updated_at: new Date().toISOString() }).eq('id', goalId).eq('user_id', session.user.id); if (!error) onBack(); }
+  async function completeGoal() { if (!session) return; const { error } = await supabase.from('goals').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', goalId).eq('user_id', session.user.id); if (!error) onBack(); }
+  async function handlePause(context: string) { if (!session) return; const { error } = await supabase.from('user_settings').upsert({ user_id: session.user.id, pause_context: context || null, updated_at: new Date().toISOString() }, { onConflict: 'user_id' }); if (!error) setShowPauseModal(false); }
+  if (loading) return <div className="text-vow-muted text-sm">Loading goal…</div>;
+  if (!goal) return <div className="text-vow-muted text-sm">We couldn't find this goal.</div>;
   const completedSessions = sessions.filter((s) => s.status === 'completed').length;
   const totalSessions = sessions.length;
   const pct = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
@@ -158,8 +161,7 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
     <GoalResources goalId={goalId} />
     <GoalReferenceList goalId={goalId} />
     <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Milestones</h2><button onClick={() => setExpandedMilestone(expandedMilestone ? null : milestones[0]?.id || null)} className="vow-btn-soft text-xs">{expandedMilestone ? 'Collapse' : 'Expand'}</button></div><div className="border-t border-vow-border">{milestones.map((ms) => { const Icon = ms.status === 'completed' ? CheckCircle2 : Circle; return <div key={ms.id} className="border-b border-vow-border py-4"><button className="w-full text-left flex items-start gap-3 min-w-0" onClick={() => setExpandedMilestone(expandedMilestone === ms.id ? null : ms.id)}><Icon className="w-4 h-4 mt-0.5 shrink-0" /><div className="flex-1 min-w-0"><p className="text-sm text-vow-ink break-words">{ms.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(ms.deadline)}</p>{expandedMilestone === ms.id && <p className="text-xs text-vow-muted mt-2 break-words">{ms.description}</p>}</div><ChevronDown className={`w-4 h-4 transition-transform shrink-0 ${expandedMilestone === ms.id ? 'rotate-180' : ''}`} /></button><button onClick={() => toggleMilestoneStatus(ms)} className="vow-btn-soft text-xs ml-7 mt-2">{ms.status === 'completed' ? 'Mark pending' : 'Mark completed'}</button></div>; })}</div></div>
-    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions & routine</h2><button onClick={() => setShowAddSession(!showAddSession)} className="vow-btn-ghost"><Plus className="w-4 h-4" />Add session</button></div><div className="border-t border-vow-border">{sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; return <div key={sess.id} className="border-b border-vow-border py-4 flex items-center gap-4 min-w-0"><Icon className="w-4 h-4 text-vow-muted shrink-0" /><div className="flex-1 min-w-0 overflow-hidden"><p className="text-sm text-vow-ink break-words">{sess.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(sess.scheduled_at)} · {formatTime(sess.scheduled_at)} · {sess.duration_minutes} min</p></div>{sess.status === 'scheduled' && <div className="flex gap-2 shrink-0"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-soft text-xs">Complete</button><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => moveSession(sess)} className="vow-btn-soft text-xs">Move</button></div>}</div>; })}</div></div>
-    {showAddSession && <div className="border border-vow-border p-5 mb-8"><p className="text-sm text-vow-ink mb-2">Add session</p><p className="text-xs text-vow-muted">New commitments are generated through the goal routine so the calendar stays coherent. Manual session creation can be added from the planner.</p><button onClick={() => setShowAddSession(false)} className="vow-btn-ghost mt-4">Close</button></div>}
+    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions & routine</h2></div><div className="border-t border-vow-border">{sessions.length === 0 ? <div className="py-6 text-sm text-vow-muted">No sessions scheduled for this goal yet.</div> : sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; return <div key={sess.id} className="border-b border-vow-border py-4 flex items-center gap-4 min-w-0"><Icon className="w-4 h-4 text-vow-muted shrink-0" /><div className="flex-1 min-w-0 overflow-hidden"><p className="text-sm text-vow-ink break-words">{sess.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(sess.scheduled_at)} · {formatTime(sess.scheduled_at)} · {sess.duration_minutes} min</p></div>{sess.status === 'scheduled' && <div className="flex gap-2 shrink-0"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-soft text-xs">Complete</button><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => moveSession(sess)} className="vow-btn-soft text-xs">Move</button></div>}</div>})}</div></div>
     <div className="border-t border-vow-border pt-6 mt-10 flex flex-wrap gap-3"><button onClick={completeGoal} className="vow-btn-primary"><Check className="w-4 h-4" />Complete goal</button><button onClick={() => setShowPauseModal(true)} className="vow-btn-ghost"><Pause className="w-4 h-4" />Pause</button><button onClick={abandonGoal} className="vow-btn-ghost">Abandon</button></div>
     {showPauseModal && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Pause goal</h2><p className="text-sm text-vow-muted mb-4">Why are you pausing?</p><div className="space-y-2">{['Schedule changed','Need to adjust the plan','Taking a short break'].map((reason) => <button key={reason} onClick={() => handlePause(reason)} className="w-full text-left border border-vow-border px-4 py-3 text-sm hover:bg-vow-surface">{reason}</button>)}</div><button onClick={() => setShowPauseModal(false)} className="vow-btn-ghost mt-4">Cancel</button></div></div>}
   </div>;
