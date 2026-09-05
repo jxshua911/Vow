@@ -53,12 +53,8 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   useEffect(() => {
     const userId = session?.user.id;
     if (!userId) return;
-    const key = `vow:icon-style:${userId}`;
-    const stored = localStorage.getItem(key);
-    if (stored && ICON_STYLES.some((style) => style.id === stored)) { setSelectedStyle(stored); return; }
-    const random = ICON_STYLES[Math.floor(Math.random() * ICON_STYLES.length)];
-    setSelectedStyle(random.id); localStorage.setItem(key, random.id);
-    void VowIcon.setVariant({ variant: random.id }).catch(() => undefined);
+    const stored = localStorage.getItem(`vow:icon-style:${userId}`);
+    if (stored && ICON_STYLES.some((style) => style.id === stored)) setSelectedStyle(stored);
   }, [session?.user.id]);
   async function handleEnableNotifications() {
     setRequesting(true);
@@ -108,7 +104,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 }
 
 function CustomisePage({ selectedStyle, message, onIconChange, onShuffle, onBack }: { selectedStyle: string; message: string; onIconChange: (style: IconStyle) => void; onShuffle: () => void; onBack: () => void }) {
-  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><PageHeader title="Customise" subtitle="Build a VOW icon that feels like yours." /><section className="border border-vow-border p-5"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="vow-label mb-1">VOW Icon</p><p className="text-xs text-vow-muted">A mixed, randomised palette. Pick one or shuffle for another combination.</p></div><button type="button" onClick={onShuffle} className="vow-btn-soft shrink-0">Shuffle icon</button></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{ICON_STYLES.map((style) => <button key={style.id} onClick={() => onIconChange(style)} aria-pressed={selectedStyle === style.id} className={`border p-3 transition-colors ${selectedStyle === style.id ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><span className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center" style={{ background: style.background }}><span style={{ color: style.foreground, fontSize: 54, lineHeight: 0.8, fontWeight: 800, fontFamily: 'Arial, sans-serif' }}>&gt;</span></span><span className="block text-xs text-vow-ink mt-3">{style.label}</span></button>)}</div>{message && <p className="text-xs text-vow-muted mt-4">{message}</p>}</section></div>;
+  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><PageHeader title="Customise" subtitle="Build a VOW icon that feels like yours." /><section className="border border-vow-border p-5"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="vow-label mb-1">VOW Icon</p><p className="text-xs text-vow-muted">Pick a colour combination, or shuffle for another one. VOW will not change it unless you choose to.</p></div><button type="button" onClick={onShuffle} className="vow-btn-soft shrink-0">Shuffle icon</button></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{ICON_STYLES.map((style) => <button key={style.id} onClick={() => onIconChange(style)} aria-pressed={selectedStyle === style.id} className={`border p-3 transition-colors ${selectedStyle === style.id ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><span className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center" style={{ background: style.background }}><span style={{ color: style.foreground, fontSize: 54, lineHeight: 0.8, fontWeight: 800, fontFamily: 'Arial, sans-serif' }}>&gt;</span></span><span className="block text-xs text-vow-ink mt-3">{style.label}</span></button>)}</div>{message && <p className="text-xs text-vow-muted mt-4">{message}</p>}</section></div>;
 }
 
 function SharedInformationPage({ session, displayName, onBack }: { session: ReturnType<typeof useAuth>['session']; displayName: string; onBack: () => void }) {
