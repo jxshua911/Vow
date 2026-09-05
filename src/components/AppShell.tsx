@@ -1,5 +1,5 @@
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth';
 import type { ReactNode } from 'react';
 import { BrandLogo } from './BrandLogo';
 
@@ -16,16 +16,18 @@ const navItems: { view: Exclude<View, 'legal'>; label: string; icon: ReactNode }
 
 export function AppShell({ currentView, onNavigate, children }: AppShellProps) {
   const { session } = useAuth();
-  async function handleSignOut() { await supabase.auth.signOut(); }
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  async function handleSignOut() { setConfirmSignOut(false); await supabase.auth.signOut(); }
   return <div className="min-h-screen bg-vow-bg">
     <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-56 border-r border-vow-border bg-vow-bg">
       <div className="px-6 py-7 border-b border-vow-border"><BrandLogo className="w-28 h-auto" /></div>
       <nav className="flex-1 px-3 py-6 space-y-px overflow-y-auto">{navItems.map((item) => <button key={item.view} onClick={() => onNavigate(item.view)} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${currentView === item.view ? 'text-vow-ink font-medium bg-vow-border/40' : 'text-vow-muted hover:text-vow-ink'}`}><span className={`flex items-center justify-center transition-transform ${currentView === item.view ? 'scale-105' : 'opacity-70'}`}>{item.icon}</span>{item.label}</button>)}</nav>
-      <div className="border-t border-vow-border px-3 py-4"><div className="px-3 py-1.5 text-xs text-vow-muted truncate">{session?.user?.email}</div><button onClick={handleSignOut} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-vow-muted hover:text-vow-ink transition-colors"><span aria-hidden="true">↪</span>Sign out</button></div>
+      <div className="border-t border-vow-border px-3 py-4"><div className="px-3 py-1.5 text-xs text-vow-muted truncate">{session?.user?.email}</div><button onClick={() => setConfirmSignOut(true)} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-vow-muted hover:text-vow-ink transition-colors"><span aria-hidden="true">↪</span>Sign out</button></div>
     </aside>
     <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-vow-bg border-b border-vow-border px-6 flex items-center" style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}><BrandLogo className="w-20 h-auto" /></header>
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-vow-bg border-t border-vow-border"><div className="grid grid-cols-5 min-h-16" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>{navItems.map((item) => { const active = currentView === item.view; return <button key={item.view} onClick={() => onNavigate(item.view)} className={`relative flex flex-col items-center justify-center gap-1 px-1 transition-colors ${active ? 'text-vow-ink' : 'text-vow-muted hover:text-vow-ink'}`} aria-label={item.label}><span className={`flex items-center justify-center transition-transform ${active ? 'scale-110' : ''}`}>{item.icon}</span><span className={`text-[10px] tracking-wide ${active ? 'font-medium' : ''}`}>{item.label}</span>{active && <span className="absolute bottom-1 h-0.5 w-5 bg-vow-ink" aria-hidden="true" />}</button>; })}</div></nav>
     <main className="md:ml-56 min-h-screen" style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))', paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}><div className="px-6 md:px-12 py-8 md:py-12 max-w-5xl">{children}</div></main>
+    {confirmSignOut && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true"><div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Sign out of VOW?</h2><p className="text-sm text-vow-muted leading-relaxed mb-6">You can sign back in whenever you're ready.</p><div className="flex gap-3"><button onClick={() => setConfirmSignOut(false)} className="vow-btn-ghost flex-1">Cancel</button><button onClick={handleSignOut} className="vow-btn-primary flex-1">Sign out</button></div></div></div>}
   </div>;
 }
 
