@@ -9,22 +9,24 @@
 @tailwind utilities;
 
 @layer base {
-  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: rgb(var(--vow-bg)); color-scheme: inherit; }
-  body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'Inter', system-ui, sans-serif; font-weight: 400; margin: 0; transition: background-color 180ms ease, color 180ms ease; }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: rgb(var(--vow-bg)); color-scheme: inherit; overflow-x: hidden; }
+  body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'Inter', system-ui, sans-serif; font-weight: 400; margin: 0; transition: background-color 180ms ease, color 180ms ease; overflow-x: hidden; }
   ::selection { background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); }
   input, textarea, select, button { font-family: inherit; }
   input, textarea, select { color-scheme: inherit; }
+  button, a, input[type='checkbox'], input[type='radio'], input[type='time'], input[type='date'] { touch-action: manipulation; }
 }
 
 @layer components {
   .vow-label { font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(var(--vow-muted)); }
-  .vow-input { width: 100%; background: transparent; border: 1px solid rgb(var(--vow-border)); padding: 0.625rem 0.875rem; font-size: 0.875rem; color: rgb(var(--vow-ink)); transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease; }
+  .vow-input { width: 100%; min-height: 44px; background: transparent; border: 1px solid rgb(var(--vow-border)); padding: 0.75rem 0.875rem; font-size: 0.9375rem; color: rgb(var(--vow-ink)); transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease; }
   .vow-input:focus { outline: none; border-color: rgb(var(--vow-ink)); box-shadow: 0 0 0 1px rgb(var(--vow-ink)); }
   .vow-input::placeholder { color: rgb(var(--vow-muted)); }
 }
 
 @layer utilities {
   .vow-heading { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; letter-spacing: -0.02em; }
+  .vow-btn-primary, .vow-btn-ghost, .vow-btn-soft { min-height: 44px; }
   .vow-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease; }
   .vow-btn-primary:hover { opacity: 0.88; }
   .vow-btn-primary:active { transform: translateY(1px); }
