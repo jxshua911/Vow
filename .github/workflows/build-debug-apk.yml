@@ -70,11 +70,11 @@ jobs:
           test -s "$APK"
           echo "APK size: $(stat -c%s "$APK") bytes"
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.1.apk"
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.2.apk"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.1-debug
-          path: "VOW APK 1.1.apk"
+          name: VOW APK 1.2-debug
+          path: "VOW APK 1.2.apk"
           if-no-files-found: error
           retention-days: 14
