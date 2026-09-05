@@ -1,5 +1,5 @@
 type Demonstration = { kind?: 'video' | 'image' | 'none'; title?: string; query?: string; image_prompt?: string; source_url?: string; source_title?: string };
-type AnteaterSession = { activity_type?: string; equipment?: string[]; instructions?: string[]; form_cues?: string[]; alternatives?: string[]; demonstration?: Demonstration | null };
+type ExecutionSession = { activity_type?: string; equipment?: string[]; instructions?: string[]; form_cues?: string[]; alternatives?: string[]; demonstration?: Demonstration | null };
 
 function embedUrl(url: string) {
   try {
@@ -22,7 +22,7 @@ function embedUrl(url: string) {
   return null;
 }
 
-export function AnteaterGuide({ session }: { session: AnteaterSession }) {
+export function AnteaterGuide({ session }: { session: ExecutionSession }) {
   const demo = session.demonstration || null;
   const video = demo?.source_url ? embedUrl(demo.source_url) : null;
   const instructions = Array.isArray(session.instructions) ? session.instructions : [];
@@ -35,7 +35,7 @@ export function AnteaterGuide({ session }: { session: AnteaterSession }) {
   return (
     <div className="mt-4 border border-vow-border bg-vow-paper/40 p-4 space-y-4">
       <div>
-        <p className="vow-label">Anteater guide</p>
+        <p className="vow-label">Session guide</p>
         {session.activity_type && <p className="text-sm text-vow-ink mt-1">{session.activity_type}</p>}
       </div>
 
@@ -71,7 +71,7 @@ export function AnteaterGuide({ session }: { session: AnteaterSession }) {
         <div>
           <p className="text-xs font-medium text-vow-ink mb-2">Demonstration</p>
           <div className="aspect-video overflow-hidden border border-vow-border bg-black">
-            <iframe src={video} title={demo?.source_title || demo?.title || 'Anteater demonstration'} className="h-full w-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
+            <iframe src={video} title={demo?.source_title || demo?.title || 'Session demonstration'} className="h-full w-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
           </div>
           <p className="text-xs text-vow-muted mt-2">{demo?.source_title || demo?.title}</p>
         </div>
@@ -79,7 +79,7 @@ export function AnteaterGuide({ session }: { session: AnteaterSession }) {
 
       {!video && demo?.kind === 'video' && demo.query && (
         <div className="border-l-2 border-vow-border pl-3">
-          <p className="text-xs font-medium text-vow-ink">Anteater video brief</p>
+          <p className="text-xs font-medium text-vow-ink">Demonstration search</p>
           <p className="text-xs text-vow-muted mt-1">VOW is looking for a demonstration matching: {demo.query}</p>
         </div>
       )}
@@ -87,7 +87,7 @@ export function AnteaterGuide({ session }: { session: AnteaterSession }) {
       {demo?.kind === 'image' && (
         <div className="border-l-2 border-vow-border pl-3">
           <p className="text-xs font-medium text-vow-ink">Premium visual</p>
-          <p className="text-xs text-vow-muted mt-1">Anteater identified a visual demonstration as the best fit for this session. Image generation is a premium capability.</p>
+          <p className="text-xs text-vow-muted mt-1">A visual demonstration was identified as the best fit for this session. Image generation is a premium capability.</p>
         </div>
       )}
     </div>
