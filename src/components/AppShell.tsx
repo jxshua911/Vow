@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import type { ReactNode } from 'react';
 import { BrandLogo } from './BrandLogo';
 export type View = 'dashboard' | 'calendar' | 'goals' | 'review' | 'profile' | 'legal';
