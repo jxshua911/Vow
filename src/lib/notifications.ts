@@ -32,13 +32,6 @@ export async function setNotificationPreferences(preferences: NotificationPrefer
   if (Capacitor.isNativePlatform()) await setupNotifications(preferences);
 }
 
-function channelFor(preferences: NotificationPreferences): NotificationChannel {
-  if (preferences.sound && preferences.vibration) return 'sound-vibration';
-  if (preferences.sound) return 'sound-only';
-  if (preferences.vibration) return 'vibration-only';
-  return 'silent';
-}
-
 export async function setupNotifications(preferences = getNotificationPreferences()): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await LocalNotifications.createChannel({
