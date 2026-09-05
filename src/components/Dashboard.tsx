@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
@@ -7,59 +7,26 @@ import { PageHeader } from './AppShell';
 import type { View } from './AppShell';
 
 interface DashboardProps { onNavigate: (view: View) => void; }
-
-function openGoal(onNavigate: (view: View) => void, userId: string, goalId: string) {
-  localStorage.setItem(`vow:open-goal:${userId}`, goalId);
-  onNavigate('goals');
-}
-
-function shortText(value: string, max = 54) {
-  const clean = value.trim();
-  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
-}
+function openGoal(onNavigate: (view: View) => void, userId: string, goalId: string) { localStorage.setItem(`vow:open-goal:${userId}`, goalId); onNavigate('goals'); }
+function shortText(value: string, max = 54) { const clean = value.trim(); return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean; }
+function isSameDay(value: string, date: Date) { const d = new Date(value); return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth() && d.getDate() === date.getDate(); }
+function startOfCurrentWeek(date: Date) { const d = new Date(date); const day = d.getDay(); d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); d.setHours(0,0,0,0); return d; }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { session, displayName } = useAuth();
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const load = useCallback(async () => {
-    if (!session) return;
-    setLoading(true); setError('');
-    const [goalsRes, sessionsRes] = await Promise.all([
-      supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
-      supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true }),
-    ]);
-    if (goalsRes.error || sessionsRes.error) setError(goalsRes.error?.message || sessionsRes.error?.message || 'Could not load your dashboard.');
-    setGoals((goalsRes.data || []) as Goal[]);
-    setSessions((sessionsRes.data || []) as Session[]);
-    setLoading(false);
-  }, [session]);
-
+  const { session, displayName } = useAuth(); const [goals, setGoals] = useState<Goal[]>([]); const [sessions, setSessions] = useState<Session[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const load = useCallback(async () => { if (!session) return; setLoading(true); setError(''); const [goalsRes, sessionsRes] = await Promise.all([supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }), supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true })]); if (goalsRes.error || sessionsRes.error) setError(goalsRes.error?.message || sessionsRes.error?.message || 'Could not load your dashboard.'); setGoals((goalsRes.data || []) as Goal[]); setSessions((sessionsRes.data || []) as Session[]); setLoading(false); }, [session]);
   useEffect(() => { load().catch((err) => { setError(err instanceof Error ? err.message : 'Could not load your dashboard.'); setLoading(false); }); }, [load]);
-
-  if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
-
-  const now = new Date();
-  const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
-  const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 6);
-
-  return (
-    <div className="min-w-0 overflow-hidden">
-      <PageHeader title={`Welcome back, ${displayName}`} subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`} />
-      {error && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 mb-8 break-words">{error}</p>}
-      <div className="grid lg:grid-cols-[1.35fr_1fr] gap-8 lg:gap-12 min-w-0">
-        <section className="min-w-0">
-          <div className="flex items-end justify-between mb-4"><h2 className="vow-label">Your plan</h2><button onClick={() => onNavigate('calendar')} className="text-xs text-vow-muted hover:text-vow-ink">Open calendar →</button></div>
-          {upcoming.length === 0 ? <div className="border border-vow-border p-8 text-center"><p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70">Plan a session</button></div> : <div className="space-y-px border border-vow-border overflow-hidden">{upcoming.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); return <button key={s.id} onClick={() => openGoal(onNavigate, session!.user.id, s.goal_id)} className="w-full bg-vow-bg px-4 py-3 flex items-center gap-3 text-left hover:bg-vow-surface/40 transition-colors min-w-0"><div className="flex-1 min-w-0 overflow-hidden"><div className="text-sm text-vow-ink truncate">{shortText(s.title)}</div><div className="text-xs text-vow-muted truncate">{goal ? shortText(goal.outcome || goal.title, 34) : ''}</div></div><div className="text-right flex-shrink-0"><div className="text-xs text-vow-ink font-medium">{formatRelative(s.scheduled_at)}</div><div className="text-xs text-vow-muted">{formatTime(s.scheduled_at)}</div></div></button>; })}</div>}
-        </section>
-        <section className="min-w-0">
-          <div className="flex items-end justify-between mb-4"><h2 className="vow-label">Progress</h2><button onClick={() => onNavigate('review')} className="text-xs text-vow-muted hover:text-vow-ink">Weekly review →</button></div>
-          {activeGoals.length === 0 ? <div className="border border-vow-border p-8 text-center"><p className="text-vow-muted text-sm">No active goals yet.</p></div> : <div className="space-y-6">{activeGoals.slice(0, 5).map((g) => { const goalSessions = sessions.filter((s) => s.goal_id === g.id && new Date(s.scheduled_at) <= now); const completed = goalSessions.filter((s) => s.status === 'completed').length; const total = goalSessions.length; const pct = total ? Math.round((completed / total) * 100) : 0; return <button key={g.id} onClick={() => openGoal(onNavigate, session!.user.id, g.id)} className="w-full text-left group"><div className="flex items-center justify-between mb-2 gap-3"><div className="text-sm text-vow-ink truncate min-w-0 group-hover:opacity-70">{shortText(g.outcome || g.title)}</div><div className="text-xs text-vow-muted shrink-0">{total ? `${pct}%` : 'No history'}</div></div><div className="h-px bg-vow-border relative"><div className="absolute inset-y-0 left-0 bg-vow-ink" style={{ width: `${pct}%` }} /></div><div className="text-xs text-vow-muted mt-1.5 truncate">{g.weekly_commitment_target} sessions/week · {completed} completed</div></button>; })}</div>}
-        </section>
-      </div>
+  const now = new Date(); const weekStart = startOfCurrentWeek(now); const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked'); const todaySessions = useMemo(() => sessions.filter((s) => isSameDay(s.scheduled_at, now)).sort((a,b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()), [sessions]); const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 6); const weekSessions = sessions.filter((s) => new Date(s.scheduled_at) >= weekStart && new Date(s.scheduled_at) <= now); const weekCompleted = weekSessions.filter((s) => s.status === 'completed').length; const weekMoved = weekSessions.filter((s) => s.status === 'moved').length; const weekScheduled = weekSessions.filter((s) => s.status === 'scheduled').length;
+  if (loading) return <div><PageHeader title={`Welcome back, ${displayName || 'there'}`} /><div className="text-vow-muted text-sm">Loading your dashboard…</div></div>;
+  return <div className="min-w-0 overflow-hidden">
+    <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle={`${dayName(now.toISOString())} — ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`} />
+    {error && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 mb-8 break-words">{error}</p>}
+    <section className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border border border-vow-border mb-10"><Stat label="Completed this week" value={String(weekCompleted)} /><Stat label="Still scheduled" value={String(weekScheduled)} /><Stat label="Moved" value={String(weekMoved)} /><Stat label="Active goals" value={String(activeGoals.length)} /></section>
+    <div className="grid lg:grid-cols-[1.35fr_1fr] gap-10 lg:gap-14 min-w-0">
+      <section className="min-w-0"><div className="flex items-end justify-between mb-4"><div><h2 className="vow-label">Today</h2><p className="text-xs text-vow-muted mt-1">What VOW has you committed to today.</p></div><button onClick={() => onNavigate('calendar')} className="text-xs text-vow-muted hover:text-vow-ink">Calendar →</button></div>{todaySessions.length === 0 ? <div className="border border-vow-border p-8"><p className="text-sm text-vow-ink mb-1">Nothing scheduled today.</p><p className="text-xs text-vow-muted">No commitment is a problem to solve. Use the time however you need.</p></div> : <div className="border border-vow-border divide-y divide-vow-border">{todaySessions.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); const complete = s.status === 'completed'; return <button key={s.id} onClick={() => openGoal(onNavigate, session!.user.id, s.goal_id)} className="w-full text-left p-4 flex items-center gap-4 hover:bg-vow-surface/40 transition-colors"><span className={`w-6 h-6 border flex items-center justify-center shrink-0 text-xs ${complete ? 'border-vow-ink' : 'border-vow-border'}`} aria-hidden="true">{complete ? '✓' : '·'}</span><div className="min-w-0 flex-1"><p className={`text-sm text-vow-ink break-words ${complete ? 'line-through opacity-60' : ''}`}>{shortText(s.title)}</p><p className="text-xs text-vow-muted mt-1 truncate">{goal ? shortText(goal.outcome, 42) : 'Goal'}</p></div><div className="text-right shrink-0"><p className="text-xs text-vow-ink">{formatTime(s.scheduled_at)}</p><p className="text-[10px] text-vow-muted mt-1">{s.duration_minutes} min</p></div></button>; })}</div>}</section>
+      <section className="min-w-0"><div className="flex items-end justify-between mb-4"><div><h2 className="vow-label">Your goals</h2><p className="text-xs text-vow-muted mt-1">Progress from sessions already due.</p></div><button onClick={() => onNavigate('goals')} className="text-xs text-vow-muted hover:text-vow-ink">All goals →</button></div>{activeGoals.length === 0 ? <div className="border border-vow-border p-8"><p className="text-sm text-vow-ink mb-1">No active goals yet.</p><button onClick={() => onNavigate('goals')} className="text-xs text-vow-ink underline underline-offset-2">Create your first goal</button></div> : <div className="space-y-6">{activeGoals.slice(0, 5).map((g) => { const goalSessions = sessions.filter((s) => s.goal_id === g.id && new Date(s.scheduled_at) <= now); const completed = goalSessions.filter((s) => s.status === 'completed').length; const total = goalSessions.length; const pct = total ? Math.round((completed / total) * 100) : 0; return <button key={g.id} onClick={() => openGoal(onNavigate, session!.user.id, g.id)} className="w-full text-left group"><div className="flex items-center justify-between mb-2 gap-3"><div className="text-sm text-vow-ink truncate min-w-0 group-hover:opacity-70">{shortText(g.outcome || g.title)}</div><div className="text-xs text-vow-muted shrink-0">{total ? `${pct}%` : 'Not started'}</div></div><div className="h-px bg-vow-border relative"><div className="absolute inset-y-0 left-0 bg-vow-ink" style={{ width: `${pct}%` }} /></div><div className="text-xs text-vow-muted mt-1.5 truncate">{g.weekly_commitment_target} sessions/week · {completed} completed</div></button>; })}</div>}</section>
     </div>
-  );
+    <section className="mt-10 pt-8 border-t border-vow-border"><div className="flex items-end justify-between mb-4"><div><h2 className="vow-label">Coming up</h2><p className="text-xs text-vow-muted mt-1">Your next scheduled commitments.</p></div><button onClick={() => onNavigate('review')} className="text-xs text-vow-muted hover:text-vow-ink">Weekly review →</button></div>{upcoming.length === 0 ? <div className="border border-vow-border p-6"><p className="text-sm text-vow-muted">Nothing else is scheduled yet.</p></div> : <div className="border-t border-vow-border">{upcoming.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); return <button key={s.id} onClick={() => openGoal(onNavigate, session!.user.id, s.goal_id)} className="w-full text-left border-b border-vow-border py-4 flex items-center gap-4 hover:bg-vow-surface/30 transition-colors"><div className="w-24 shrink-0"><p className="text-xs text-vow-ink">{formatRelative(s.scheduled_at)}</p><p className="text-[10px] text-vow-muted mt-1">{formatTime(s.scheduled_at)}</p></div><div className="min-w-0 flex-1"><p className="text-sm text-vow-ink truncate">{shortText(s.title)}</p><p className="text-xs text-vow-muted truncate mt-1">{goal ? shortText(goal.outcome, 42) : 'Goal'}</p></div><span className="text-xs text-vow-muted" aria-hidden="true">→</span></button>; })}</div>}</section>
+  </div>;
 }
+function Stat({ label, value }: { label: string; value: string }) { return <div className="bg-vow-bg p-4 min-w-0"><p className="text-[10px] uppercase tracking-wide text-vow-muted leading-relaxed">{label}</p><p className="text-xl text-vow-ink mt-2">{value}</p></div>; }
