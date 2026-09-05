@@ -8,6 +8,8 @@ import { detectPatterns } from '@/lib/patterns';
 import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
 
+type GoalSchedule = { available_days?: string[]; preferred_times_by_day?: Record<string, string> };
+
 export function ReviewPage() {
   const { session } = useAuth();
   const [review, setReview] = useState<Review | null>(null);
@@ -74,10 +76,40 @@ export function ReviewPage() {
     try {
       const { error: reviewError } = await supabase.from('reviews').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', review.id).eq('user_id', session.user.id); if (reviewError) throw reviewError;
       const nextWeekStart = toDateString(addDays(startOfWeek(), 7)); const nextWeekEnd = toDateString(addDays(endOfWeek(), 7)); const proposed = review.proposed_commitments as unknown as ProposedCommitment[];
+      const goalIds = proposed.map((commitment) => commitment.goal_id);
+      const [{ data: goalRows, error: goalError }, { data: planRows, error: planError }] = await Promise.all([
+        supabase.from('goals').select('id,plan_json').eq('user_id', session.user.id).in('id', goalIds),
+        supabase.from('goal_plan_items').select('goal_id,week_number,day_of_week,scheduled_at,duration_minutes,task').eq('user_id', session.user.id).in('goal_id', goalIds).eq('week_number', 2),
+      ]);
+      if (goalError) throw goalError; if (planError) throw planError;
+      const goalMap = new Map((goalRows || []).map((goal) => [goal.id, goal]));
+      const planItemMap = new Map((planRows || []).map((item) => [`${item.goal_id}:${item.day_of_week}`, item]));
       for (const commitment of proposed) { const { error } = await supabase.from('commitment_log').insert({ user_id: session.user.id, week_start: nextWeekStart, week_end: nextWeekEnd, goal_id: commitment.goal_id, committed_sessions: commitment.sessions_per_week, completed_sessions: 0, skipped_sessions: 0, moved_sessions: 0, snapshot: { notes: commitment.notes, goal_title: commitment.goal_title } }); if (error) throw error; }
       const { data: existingSessions, error: existingError } = await supabase.from('sessions').select('scheduled_at,duration_minutes').eq('user_id', session.user.id).eq('status', 'scheduled'); if (existingError) throw existingError;
       const occupied = toOccupiedSlots((existingSessions || []).map((row) => ({ scheduledAt: row.scheduled_at, durationMinutes: row.duration_minutes })));
-      for (const commitment of proposed) for (let i = 0; i < commitment.sessions_per_week; i++) { const sessionDate = addDays(new Date(nextWeekStart), i + 1); sessionDate.setHours(9, 0, 0, 0); const slot = allocateSameDaySlot(sessionDate, 45, occupied); if (!slot) throw new Error(`No available time remains for ${commitment.goal_title}. Choose another day before confirming.`); const { error } = await supabase.from('sessions').insert({ goal_id: commitment.goal_id, user_id: session.user.id, title: commitment.goal_title, scheduled_at: slot.date.toISOString(), duration_minutes: slot.durationMinutes, status: 'scheduled' }); if (error) throw error; reserveSlot(slot, occupied); }
+      const dayIndex: Record<string, number> = { Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: 5, Sunday: 6 };
+      for (const commitment of proposed) {
+        const goal = goalMap.get(commitment.goal_id);
+        const schedule = (goal?.plan_json || {}) as GoalSchedule;
+        const selectedDays = Array.isArray(schedule.available_days) ? schedule.available_days.filter((day) => day in dayIndex) : [];
+        if (!selectedDays.length) throw new Error(`We couldn't find the schedule you chose for ${commitment.goal_title}. Open the goal and set its days and times before confirming next week.`);
+        const daysToSchedule = selectedDays.slice(0, Math.max(1, commitment.sessions_per_week));
+        for (const day of daysToSchedule) {
+          const preferredTime = schedule.preferred_times_by_day?.[day];
+          const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(preferredTime || '');
+          if (!timeMatch) throw new Error(`We couldn't find a time for ${day} on ${commitment.goal_title}. Open the goal and set a time before confirming next week.`);
+          const sessionDate = new Date(`${nextWeekStart}T00:00:00`);
+          sessionDate.setDate(sessionDate.getDate() + dayIndex[day]);
+          sessionDate.setHours(Math.min(23, Number(timeMatch[1])), Math.min(59, Number(timeMatch[2])), 0, 0);
+          const planItem = planItemMap.get(`${commitment.goal_id}:${day}`);
+          const durationMinutes = Math.max(5, Number(planItem?.duration_minutes) || 45);
+          const slot = allocateSameDaySlot(sessionDate, durationMinutes, occupied);
+          if (!slot) throw new Error(`No available time remains on ${day} for ${commitment.goal_title}. Choose another day before confirming.`);
+          const { error } = await supabase.from('sessions').insert({ goal_id: commitment.goal_id, user_id: session.user.id, title: planItem?.task || commitment.goal_title, scheduled_at: slot.date.toISOString(), duration_minutes: slot.durationMinutes, status: 'scheduled' });
+          if (error) throw error;
+          reserveSlot(slot, occupied);
+        }
+      }
       await load();
     } catch (err) { console.error('Confirm failed:', err); setActionError(err instanceof Error ? err.message : 'Could not lock in next week.'); } finally { setConfirming(false); }
   }
