@@ -18,7 +18,9 @@ function embedUrl(url: string) {
       const id = parsed.pathname.match(/\/(\d+)(?:$|\/)/)?.[1];
       return id ? `https://player.vimeo.com/video/${id}` : null;
     }
-  } catch {}
+  } catch (error) {
+    console.warn('[VOW] Invalid demonstration URL.', error);
+  }
   return null;
 }
 
