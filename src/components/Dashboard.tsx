@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
 import { formatTime, dayName } from '@/lib/dates';
+import { calculateRavenSnapshot } from '@/lib/raven';
 import { PageHeader } from './AppShell';
 import type { View } from './AppShell';
 
@@ -36,6 +37,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const weekSessions = sessions.filter((s) => { const date = new Date(s.scheduled_at); return date >= weekStart && date <= now; });
   const weekCompleted = weekSessions.filter((s) => s.status === 'completed').length;
   const weekScheduled = sessions.filter((s) => { const date = new Date(s.scheduled_at); return date >= now && date >= weekStart && date <= new Date(weekStart.getTime() + 7 * 86400000) && s.status === 'scheduled'; }).length;
+  const raven = useMemo(() => calculateRavenSnapshot(sessions, null, now), [sessions, now]);
 
   if (loading) return <div><PageHeader title={`Welcome back, ${displayName || 'there'}`} /><div className="text-vow-muted text-sm py-8">Loading your dashboard…</div></div>;
 
@@ -43,10 +45,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle={`${dayName(now.toISOString())} — ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`} action={<button onClick={() => onNavigate('review')} className="vow-btn-soft shrink-0">Weekly review</button>} />
     {error && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 mb-8 break-words" role="alert">{error}</p>}
 
-    <section className="grid grid-cols-2 gap-px bg-vow-border border border-vow-border mb-10">
+    <section className="grid grid-cols-3 gap-px bg-vow-border border border-vow-border mb-10">
+      <div className="bg-vow-bg p-5"><p className="text-[10px] uppercase tracking-wide text-vow-muted">Raven score</p><p className="text-2xl text-vow-ink mt-2">{raven.score}</p><p className="text-[10px] text-vow-muted mt-1">{raven.trend === 'new' ? 'New baseline' : raven.trend === 'up' ? 'Improving' : raven.trend === 'down' ? 'Needs attention' : 'Steady'}</p></div>
       <div className="bg-vow-bg p-5"><p className="text-[10px] uppercase tracking-wide text-vow-muted">Completed this week</p><p className="text-2xl text-vow-ink mt-2">{weekCompleted}</p></div>
       <div className="bg-vow-bg p-5"><p className="text-[10px] uppercase tracking-wide text-vow-muted">Scheduled this week</p><p className="text-2xl text-vow-ink mt-2">{weekScheduled}</p></div>
     </section>
+
+    {raven.signals.length > 0 && <section className="border border-vow-border p-5 mb-10"><p className="vow-label mb-3">Progress signal</p><p className="text-sm text-vow-ink leading-relaxed">{raven.signals[0]}</p></section>}
 
     <section className="min-w-0">
       <div className="flex items-end justify-between mb-4 gap-3"><div><h2 className="vow-label">Today</h2><p className="text-xs text-vow-muted mt-1">What you have committed to today.</p></div><button onClick={() => onNavigate('calendar')} className="min-h-11 px-2 text-xs text-vow-muted hover:text-vow-ink shrink-0">Calendar →</button></div>
