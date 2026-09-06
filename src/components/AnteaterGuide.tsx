@@ -2,6 +2,8 @@ type Demonstration = { kind?: 'video' | 'image' | 'none'; title?: string; query?
 type ExecutionSession = { activity_type?: string; equipment?: string[]; instructions?: string[]; form_cues?: string[]; alternatives?: string[]; demonstration?: Demonstration | null };
 type GoalLike = { outcome?: string; title?: string; armadillo?: { category?: string; goal_type?: string } | null; plan_json?: { session_templates?: ExecutionSession[]; schedule?: ExecutionSession[] } | null };
 
+type AnteaterGuideProps = { goal?: GoalLike; session?: ExecutionSession };
+
 function embedUrl(url: string) {
   try {
     const parsed = new URL(url);
@@ -41,13 +43,14 @@ function executionFromGoal(goal: GoalLike): ExecutionSession {
   const candidate = Array.isArray(plan.session_templates) ? plan.session_templates[0] : Array.isArray(plan.schedule) ? plan.schedule[0] : undefined;
   const goalText = `${goal.outcome || goal.title || ''} ${goal.armadillo?.category || ''} ${goal.armadillo?.goal_type || ''}`.trim();
   if (candidate) return { ...candidate, activity_type: candidate.activity_type || goal.armadillo?.goal_type || 'Goal-specific practice' };
-  const activityType = /read|reading|book|literature|novel/.test(goalText.toLowerCase()) ? 'Reading practice' : /run|running|cycle|cycling|bike|swim|football|fitness|workout/.test(goalText.toLowerCase()) ? 'Training' : 'Goal-specific practice';
+  const lower = goalText.toLowerCase();
+  const activityType = /read|reading|book|literature|novel/.test(lower) ? 'Reading practice' : /run|running|cycle|cycling|bike|swim|football|fitness|workout/.test(lower) ? 'Training' : 'Goal-specific practice';
   return { activity_type: activityType, demonstration: { kind: 'video', title: `${activityType} demonstration`, query: `${goalText} tutorial demonstration` } };
 }
 
-export function AnteaterGuide({ goal }: { goal: GoalLike }) {
-  const session = executionFromGoal(goal);
-  const goalText = `${goal.outcome || goal.title || ''} ${goal.armadillo?.category || ''} ${goal.armadillo?.goal_type || ''}`.trim();
+export function AnteaterGuide({ goal, session: suppliedSession }: AnteaterGuideProps) {
+  const session = suppliedSession || (goal ? executionFromGoal(goal) : {});
+  const goalText = `${goal?.outcome || goal?.title || ''} ${goal?.armadillo?.category || ''} ${goal?.armadillo?.goal_type || ''}`.trim();
   const demo = session.demonstration || null;
   const video = demo?.source_url ? embedUrl(demo.source_url) : null;
   const instructions = Array.isArray(session.instructions) ? session.instructions : [];
@@ -55,7 +58,7 @@ export function AnteaterGuide({ goal }: { goal: GoalLike }) {
   const cues = Array.isArray(session.form_cues) ? session.form_cues : [];
   const alternatives = Array.isArray(session.alternatives) ? session.alternatives : [];
   const service = serviceLink(session.activity_type, goalText);
-  const query = demo?.query || `${goalText} tutorial demonstration`;
+  const query = demo?.query || `${goalText || session.activity_type || 'goal'} tutorial demonstration`;
   const hasGuide = instructions.length || equipment.length || cues.length || alternatives.length || demo || service;
   if (!hasGuide) return null;
 
