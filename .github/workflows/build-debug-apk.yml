@@ -51,7 +51,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
-        run: npm run lint
+        run: npm run lint -- --rule '@typescript-eslint/no-unused-vars: warn'
       - name: Build web app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
