@@ -24,6 +24,17 @@ function embedUrl(url: string) {
   return null;
 }
 
+function youtubeSearchUrl(query: string) {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+}
+
+function serviceLink(activityType: string | undefined) {
+  const value = (activityType || '').toLowerCase();
+  if (/read|reading|book|literature|study/.test(value)) return { name: 'Kindle', prompt: 'Want to use Kindle for this?', url: 'https://www.amazon.com/kindle/' };
+  if (/run|running|cycle|cycling|bike|swim|football|training|fitness|workout|endurance/.test(value)) return { name: 'Strava', prompt: 'Want to track this on Strava?', url: 'https://www.strava.com/' };
+  return null;
+}
+
 export function AnteaterGuide({ session }: { session: ExecutionSession }) {
   const demo = session.demonstration || null;
   const video = demo?.source_url ? embedUrl(demo.source_url) : null;
@@ -31,7 +42,8 @@ export function AnteaterGuide({ session }: { session: ExecutionSession }) {
   const equipment = Array.isArray(session.equipment) ? session.equipment : [];
   const cues = Array.isArray(session.form_cues) ? session.form_cues : [];
   const alternatives = Array.isArray(session.alternatives) ? session.alternatives : [];
-  const hasGuide = instructions.length || equipment.length || cues.length || alternatives.length || demo;
+  const service = serviceLink(session.activity_type);
+  const hasGuide = instructions.length || equipment.length || cues.length || alternatives.length || demo || service;
   if (!hasGuide) return null;
 
   return (
@@ -81,15 +93,23 @@ export function AnteaterGuide({ session }: { session: ExecutionSession }) {
 
       {!video && demo?.kind === 'video' && demo.query && (
         <div className="border-l-2 border-vow-border pl-3">
-          <p className="text-xs font-medium text-vow-ink">Demonstration search</p>
-          <p className="text-xs text-vow-muted mt-1">VOW is looking for a demonstration matching: {demo.query}</p>
+          <p className="text-xs font-medium text-vow-ink">Demonstration</p>
+          <p className="text-xs text-vow-muted mt-1">VOW couldn't attach a specific video yet.</p>
+          <a href={youtubeSearchUrl(demo.query)} target="_blank" rel="noreferrer" className="vow-btn-soft inline-flex mt-3 min-h-10">Find a YouTube demonstration →</a>
         </div>
       )}
 
       {demo?.kind === 'image' && (
         <div className="border-l-2 border-vow-border pl-3">
-          <p className="text-xs font-medium text-vow-ink">Premium visual</p>
-          <p className="text-xs text-vow-muted mt-1">A visual demonstration was identified as the best fit for this session. Image generation is a premium capability.</p>
+          <p className="text-xs font-medium text-vow-ink">Visual demonstration</p>
+          <p className="text-xs text-vow-muted mt-1">A visual demonstration was identified as the best fit for this session.</p>
+        </div>
+      )}
+
+      {service && (
+        <div className="border-t border-vow-border pt-4 flex items-center justify-between gap-4">
+          <div className="min-w-0"><p className="text-xs font-medium text-vow-ink">{service.name}</p><p className="text-xs text-vow-muted mt-1">{service.prompt}</p></div>
+          <a href={service.url} target="_blank" rel="noreferrer" className="vow-btn-soft shrink-0 min-h-10">Open {service.name} →</a>
         </div>
       )}
     </div>
