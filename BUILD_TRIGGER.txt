@@ -1,2 +1,2 @@
 VOW mobile build trigger
-Review cleanup and calendar scheduling audit in progress.
+Final UI and logo pass — 2026-09-06.
