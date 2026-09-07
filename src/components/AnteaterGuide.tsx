@@ -1,7 +1,7 @@
-type Demonstration = { kind?: 'video' | 'image' | 'none'; title?: string; query?: string; source_url?: string; source_title?: string };
-type ExecutionSession = { activity_type?: string; equipment?: string[]; instructions?: string[]; form_cues?: string[]; alternatives?: string[]; demonstration?: Demonstration | null };
+type Demonstration = { kind?: 'video' | 'image' | 'none'; title?: string; query?: string; image_prompt?: string; source_url?: string; source_title?: string };
+type Alternative = { constraint?: string; task?: string; equipment?: string[]; instructions?: string };
+type ExecutionSession = { activity_type?: string; equipment?: string[]; instructions?: string[]; form_cues?: string[]; alternatives?: Alternative[]; demonstration?: Demonstration | null };
 type GoalLike = { outcome?: string; title?: string; armadillo?: { category?: string; goal_type?: string } | null; plan_json?: { session_templates?: ExecutionSession[]; schedule?: ExecutionSession[] } | null };
-
 type AnteaterGuideProps = { goal?: GoalLike; session?: ExecutionSession };
 
 function embedUrl(url: string) {
@@ -27,9 +27,7 @@ function embedUrl(url: string) {
   return null;
 }
 
-function youtubeSearchUrl(query: string) {
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-}
+function youtubeSearchUrl(query: string) { return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`; }
 
 function serviceLink(activityType: string | undefined, goalText: string) {
   const value = `${activityType || ''} ${goalText}`.toLowerCase();
@@ -64,70 +62,15 @@ export function AnteaterGuide({ goal, session: suppliedSession }: AnteaterGuideP
 
   return (
     <div className="mt-4 border border-vow-border bg-vow-paper/40 p-4 space-y-4">
-      <div>
-        <p className="vow-label">Session guide</p>
-        {session.activity_type && <p className="text-sm text-vow-ink mt-1">{session.activity_type}</p>}
-      </div>
-
-      {equipment.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-vow-ink mb-2">Setup</p>
-          <ul className="space-y-1">{equipment.map((item, index) => <li key={`${item}-${index}`} className="text-xs text-vow-muted">• {item}</li>)}</ul>
-        </div>
-      )}
-
-      {instructions.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-vow-ink mb-2">How to do it</p>
-          <ol className="space-y-2">{instructions.map((step, index) => <li key={`${step}-${index}`} className="flex gap-3 text-xs text-vow-muted"><span className="text-vow-ink font-medium">{index + 1}.</span><span>{step}</span></li>)}</ol>
-        </div>
-      )}
-
-      {cues.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-vow-ink mb-2">Quality cues</p>
-          <ul className="space-y-1">{cues.map((cue, index) => <li key={`${cue}-${index}`} className="text-xs text-vow-muted">• {cue}</li>)}</ul>
-        </div>
-      )}
-
-      {alternatives.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-vow-ink mb-2">If your setup is different</p>
-          <ul className="space-y-1">{alternatives.map((alternative, index) => <li key={`${alternative}-${index}`} className="text-xs text-vow-muted">• {alternative}</li>)}</ul>
-        </div>
-      )}
-
-      {video && (
-        <div>
-          <p className="text-xs font-medium text-vow-ink mb-2">Demonstration</p>
-          <div className="aspect-video overflow-hidden border border-vow-border bg-black">
-            <iframe src={video} title={demo?.source_title || demo?.title || 'Session demonstration'} className="h-full w-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
-          </div>
-          <p className="text-xs text-vow-muted mt-2">{demo?.source_title || demo?.title}</p>
-        </div>
-      )}
-
-      {!video && demo?.kind === 'video' && (
-        <div className="border-l-2 border-vow-border pl-3">
-          <p className="text-xs font-medium text-vow-ink">YouTube demonstration</p>
-          <p className="text-xs text-vow-muted mt-1">A goal-specific demonstration search is ready for this session.</p>
-          <a href={youtubeSearchUrl(query)} target="_blank" rel="noreferrer" className="vow-btn-soft inline-flex mt-3 min-h-10">Find the best YouTube match →</a>
-        </div>
-      )}
-
-      {demo?.kind === 'image' && (
-        <div className="border-l-2 border-vow-border pl-3">
-          <p className="text-xs font-medium text-vow-ink">Visual demonstration</p>
-          <p className="text-xs text-vow-muted mt-1">A visual demonstration was identified as the best fit for this session.</p>
-        </div>
-      )}
-
-      {service && (
-        <div className="border-t border-vow-border pt-4 flex items-center justify-between gap-4">
-          <div className="min-w-0"><p className="text-xs font-medium text-vow-ink">{service.name}</p><p className="text-xs text-vow-muted mt-1">{service.prompt}</p></div>
-          <a href={service.url} target="_blank" rel="noreferrer" className="vow-btn-soft shrink-0 min-h-10">Open {service.name} →</a>
-        </div>
-      )}
+      <div><p className="vow-label">Session guide</p>{session.activity_type && <p className="text-sm text-vow-ink mt-1">{session.activity_type}</p>}</div>
+      {equipment.length > 0 && <div><p className="text-xs font-medium text-vow-ink mb-2">Setup</p><ul className="space-y-1">{equipment.map((item, index) => <li key={`${item}-${index}`} className="text-xs text-vow-muted">• {item}</li>)}</ul></div>}
+      {instructions.length > 0 && <div><p className="text-xs font-medium text-vow-ink mb-2">How to do it</p><ol className="space-y-2">{instructions.map((step, index) => <li key={`${step}-${index}`} className="flex gap-3 text-xs text-vow-muted"><span className="text-vow-ink font-medium">{index + 1}.</span><span>{step}</span></li>)}</ol></div>}
+      {cues.length > 0 && <div><p className="text-xs font-medium text-vow-ink mb-2">Quality cues</p><ul className="space-y-1">{cues.map((cue, index) => <li key={`${cue}-${index}`} className="text-xs text-vow-muted">• {cue}</li>)}</ul></div>}
+      {alternatives.length > 0 && <div><p className="text-xs font-medium text-vow-ink mb-2">If your setup is different</p><ul className="space-y-2">{alternatives.map((alternative, index) => <li key={`${alternative.constraint || alternative.task || index}-${index}`} className="text-xs text-vow-muted">{alternative.constraint && <span className="font-medium text-vow-ink">{alternative.constraint}: </span>}{alternative.task || alternative.instructions || 'Alternative session'}{alternative.equipment?.length ? ` (${alternative.equipment.join(', ')})` : ''}</li>)}</ul></div>}
+      {video && <div><p className="text-xs font-medium text-vow-ink mb-2">Demonstration</p><div className="aspect-video overflow-hidden border border-vow-border bg-black"><iframe src={video} title={demo?.source_title || demo?.title || 'Session demonstration'} className="h-full w-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div><p className="text-xs text-vow-muted mt-2">{demo?.source_title || demo?.title}</p></div>}
+      {!video && demo?.kind === 'video' && <div className="border-l-2 border-vow-border pl-3"><p className="text-xs font-medium text-vow-ink">YouTube demonstration</p><p className="text-xs text-vow-muted mt-1">A goal-specific demonstration search is ready for this session.</p><a href={youtubeSearchUrl(query)} target="_blank" rel="noreferrer" className="vow-btn-soft inline-flex mt-3 min-h-10">Find the best YouTube match →</a></div>}
+      {demo?.kind === 'image' && <div className="border-l-2 border-vow-border pl-3"><p className="text-xs font-medium text-vow-ink">Visual demonstration</p><p className="text-xs text-vow-muted mt-1">A visual demonstration was identified as the best fit for this session.</p></div>}
+      {service && <div className="border-t border-vow-border pt-4 flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-xs font-medium text-vow-ink">{service.name}</p><p className="text-xs text-vow-muted mt-1">{service.prompt}</p></div><a href={service.url} target="_blank" rel="noreferrer" className="vow-btn-soft shrink-0 min-h-10">Open {service.name} →</a></div>}
     </div>
   );
 }
