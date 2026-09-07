@@ -13,7 +13,6 @@ function Glyph({ children, className = '' }: { children: string; className?: str
 
 export function AuthPage() {
   const [emailMode, setEmailMode] = useState(false);
-  const [googleConsent, setGoogleConsent] = useState(false);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,11 +37,9 @@ export function AuthPage() {
     finally { setLoading(false); }
   }
 
-  function handleOAuthSignIn() { if (!loading) setGoogleConsent(true); }
-
-  async function continueWithGoogle() {
+  async function handleOAuthSignIn() {
     if (loading) return;
-    setGoogleConsent(false); setError(null); setLoading(true);
+    setError(null); setLoading(true);
     let finished: { remove: () => Promise<void> } | null = null;
     try {
       await assertAccess();
@@ -81,7 +78,5 @@ export function AuthPage() {
       <form onSubmit={handleSubmit} className="space-y-5"><div><label className="vow-label block mb-2">Email</label><div className="relative"><Glyph className="absolute left-3 top-1/2 -translate-y-1/2 text-vow-muted">@</Glyph><input type="email" required autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} className="vow-input pl-10" placeholder="you@example.com" autoFocus disabled={loading} /></div></div><div><label className="vow-label block mb-2">Password</label><div className="relative"><Glyph className="absolute left-3 top-1/2 -translate-y-1/2 text-vow-muted">•</Glyph><input type="password" required minLength={6} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.target.value)} className="vow-input pl-10" placeholder="At least 6 characters" disabled={loading} /></div></div>{error && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3">{error}</p>}<button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 bg-vow-ink text-vow-bg text-sm font-medium py-3 disabled:opacity-40">{loading ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Sign in'}<Glyph>→</Glyph></button></form>
       <p className="text-xs text-vow-muted mt-8 text-center leading-relaxed">{mode === 'signup' ? 'Your journal and goals stay private to your VOW account. See Terms & Policies for how connected services and other processing work.' : 'Welcome back. Pick up where you left off.'}</p>
     </div>}
-  </div>
-  {googleConsent && <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-labelledby="google-consent-title"><div className="w-full max-w-sm bg-vow-bg border border-vow-border p-6 shadow-xl"><div className="flex items-center gap-3 mb-5"><img src="/vow-icon-square.svg" alt="VOW" className="w-12 h-12 rounded-xl" /><div><h2 id="google-consent-title" className="vow-heading text-lg text-vow-ink">Continue with Google</h2><p className="text-xs text-vow-muted mt-1">Secure sign-in to VOW</p></div></div><p className="text-sm text-vow-ink leading-relaxed">VOW will open Google so you can choose the Google Account you want to use for your VOW account.</p><p className="text-xs text-vow-muted mt-3 leading-relaxed">Google will show its own permission and account consent screen before sign-in is completed. You can cancel at any time.</p>{error && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 mt-4">{error}</p>}<div className="flex gap-3 mt-6"><button onClick={() => setGoogleConsent(false)} disabled={loading} className="vow-btn-ghost flex-1">Cancel</button><button onClick={continueWithGoogle} disabled={loading} className="vow-btn-primary flex-1">Continue to Google</button></div></div></div>}
-  </div>;
+  </div></div>;
 }
