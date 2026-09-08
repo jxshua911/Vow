@@ -1,0 +1,49 @@
+name: Repair VOW runtime wiring
+
+on:
+  push:
+    branches: [capacitor-mobile]
+    paths:
+      - '.github/workflows/repair-vow-runtime.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: capacitor-mobile
+          fetch-depth: 0
+
+      - name: Repair goal AI mode contract and review deletion
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          planner = Path('src/components/GoalPlanner.tsx')
+          text = planner.read_text()
+          text = text.replace("mode:'goal-plan'", "mode:'plan'")
+          text = text.replace("mode:'goal-clarify'", "mode:'clarify'")
+          planner.write_text(text)
+
+          review = Path('src/components/WeeklyReview.tsx')
+          text = review.read_text()
+          old = "const { data, error } = await supabase.from('reviews').delete().eq('id', id).eq('user_id', session.user.id).select('id').maybeSingle(); if (error) { setActionError(`Could not delete this review: ${error.message}`); return; } if (!data?.id) { setActionError('VOW could not find that review anymore. Refresh the page and try again.'); return; }"
+          new = "const { data, error } = await supabase.rpc('delete_own_review', { p_review_id: id }); if (error) { setActionError(`Could not delete this review: ${error.message}`); return; } if (data !== true) { setActionError('VOW could not delete that review. Refresh the page and try again.'); return; }"
+          if old not in text:
+              raise SystemExit('Expected review delete implementation was not found; refusing to modify the file.')
+          review.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Commit repair and remove one-shot workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/repair-vow-runtime.yml
+          git add src/components/GoalPlanner.tsx src/components/WeeklyReview.tsx .github/workflows/repair-vow-runtime.yml
+          git commit -m 'fix: repair goal planning mode and review deletion'
+          git push origin HEAD:capacitor-mobile
