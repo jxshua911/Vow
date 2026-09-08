@@ -13,19 +13,25 @@ type VowIconPlugin = { setVariant(options: { variant: string }): Promise<{ varia
 const VowIcon = registerPlugin<VowIconPlugin>('VowIcon');
 const ICON_STYLES: IconStyle[] = [
   { id: 'white-black', label: 'White · Black', background: '#F7F7F5', foreground: '#111111' },
-  { id: 'black-pink', label: 'Black · Pink', background: '#111111', foreground: '#EC4899' },
-  { id: 'black-red', label: 'Black · Red', background: '#111111', foreground: '#EF4444' },
-  { id: 'black-blue', label: 'Black · Blue', background: '#111111', foreground: '#3B82F6' },
-  { id: 'orange-blue', label: 'Orange · Blue', background: '#F97316', foreground: '#3B82F6' },
-  { id: 'red-blue', label: 'Red · Blue', background: '#EF4444', foreground: '#3B82F6' },
-  { id: 'blue-red', label: 'Blue · Red', background: '#3B82F6', foreground: '#EF4444' },
-  { id: 'gold-blue', label: 'Gold · Blue', background: '#D4AF37', foreground: '#3B82F6' },
-  { id: 'purple-gold', label: 'Purple · Gold', background: '#A855F7', foreground: '#D4AF37' },
-  { id: 'gold-purple', label: 'Gold · Purple', background: '#D4AF37', foreground: '#A855F7' },
-  { id: 'pink-orange', label: 'Pink · Orange', background: '#EC4899', foreground: '#F97316' },
-  { id: 'orange-white', label: 'Orange · White', background: '#F97316', foreground: '#FFFFFF' },
-  { id: 'blue-white', label: 'Blue · White', background: '#3B82F6', foreground: '#FFFFFF' },
-  { id: 'teal-white', label: 'Teal · White', background: '#14B8A6', foreground: '#FFFFFF' },
+  { id: 'purple-green', label: 'Purple · Green', background: '#7C3AED', foreground: '#22C55E' },
+  { id: 'orange-blue', label: 'Orange · Blue', background: '#F97316', foreground: '#2563EB' },
+  { id: 'red-blue', label: 'Red · Blue', background: '#EF4444', foreground: '#2563EB' },
+  { id: 'blue-red', label: 'Blue · Red', background: '#2563EB', foreground: '#EF4444' },
+  { id: 'teal-white', label: 'Teal · White', background: '#0F766E', foreground: '#FFFFFF' },
+  { id: 'white-green', label: 'White · Green', background: '#F7F7F5', foreground: '#16A34A' },
+  { id: 'pink-orange', label: 'Pink · Orange', background: '#DB2777', foreground: '#F97316' },
+  { id: 'blue-white', label: 'Blue · White', background: '#2563EB', foreground: '#FFFFFF' },
+  { id: 'green-purple', label: 'Green · Purple', background: '#16A34A', foreground: '#7C3AED' },
+  { id: 'black-red', label: 'Black · Red', background: '#111111', foreground: '#F43F5E' },
+  { id: 'purple-gold', label: 'Purple · Gold', background: '#7C3AED', foreground: '#F59E0B' },
+  { id: 'orange-white', label: 'Orange · White', background: '#EA580C', foreground: '#FFFFFF' },
+  { id: 'pink-teal', label: 'Pink · Teal', background: '#DB2777', foreground: '#14B8A6' },
+  { id: 'black-blue', label: 'Black · Blue', background: '#111111', foreground: '#60A5FA' },
+  { id: 'teal-orange', label: 'Teal · Orange', background: '#0F766E', foreground: '#FB923C' },
+  { id: 'gold-purple', label: 'Gold · Purple', background: '#D4A72C', foreground: '#7C3AED' },
+  { id: 'green-teal', label: 'Green · Teal', background: '#16A34A', foreground: '#0F766E' },
+  { id: 'gold-blue', label: 'Gold · Blue', background: '#D4A72C', foreground: '#2563EB' },
+  { id: 'black-pink', label: 'Black · Pink', background: '#111111', foreground: '#F472B6' },
 ];
 
 export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
@@ -84,7 +90,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle="Your account and preferences." />
     <div className="border border-vow-border divide-y divide-vow-border">
       <button onClick={() => setSubpage('connect')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Connect</p><p className="text-xs text-vow-muted mt-1">Manage calendars and other services connected to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
-      <button onClick={() => setSubpage('customise')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Customise</p><p className="text-xs text-vow-muted mt-1">Build a VOW icon with your own colour combination.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
+      <button onClick={() => setSubpage('customise')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Customise</p><p className="text-xs text-vow-muted mt-1">Build a VOW icon with the restored greater-than mark and a colour treatment you choose.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">Privacy, connected services, security and service terms.</p></button>
       <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0">{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
@@ -98,11 +104,11 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 }
 
 function VowIconPreview({ background, foreground }: { background: string; foreground: string }) {
-  return <span className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center overflow-hidden" style={{ background }} aria-hidden="true"><svg viewBox="0 0 512 512" className="w-full h-full" role="presentation"><g transform="translate(25.05 163) scale(.62)" fill="none" stroke={foreground} strokeWidth="18" strokeLinecap="butt" strokeLinejoin="miter"><path d="M55 75 L185 150 L55 225"/><circle cx="330" cy="150" r="72"/><path d="M450 75 L510 225 L570 105 L630 225 L690 75"/></g></svg></span>;
+  return <span className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center overflow-hidden" style={{ background }} aria-hidden="true"><svg viewBox="0 0 108 108" className="w-full h-full" role="presentation"><path d="M28 24 L70 54 L28 84" fill="none" stroke={foreground} strokeWidth="8" strokeLinecap="butt" strokeLinejoin="miter" /></svg></span>;
 }
 
 function CustomisePage({ selectedStyle, message, onIconChange, onShuffle, onBack }: { selectedStyle: string; message: string; onIconChange: (style: IconStyle) => void; onShuffle: () => void; onBack: () => void }) {
-  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><PageHeader title="Customise" subtitle="Use the exact VOW mark, then choose a colour treatment that stays clear at a glance." /><section className="border border-vow-border p-5"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="vow-label mb-1">VOW Icon</p><p className="text-xs text-vow-muted">The symbol stays the VOW mark. Only the background and mark colour change.</p></div><button type="button" onClick={onShuffle} className="vow-btn-soft shrink-0">Shuffle icon</button></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{ICON_STYLES.map((style) => <button key={style.id} onClick={() => onIconChange(style)} aria-pressed={selectedStyle === style.id} className={`border p-3 transition-colors ${selectedStyle === style.id ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><VowIconPreview background={style.background} foreground={style.foreground} /><span className="block text-xs text-vow-ink mt-3">{style.label}</span></button>)}</div>{message && <p className="text-xs text-vow-muted mt-4">{message}</p>}</section></div>;
+  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><PageHeader title="Customise" subtitle="Keep the VOW greater-than mark fixed, then choose or shuffle a colour treatment." /><section className="border border-vow-border p-5"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="vow-label mb-1">VOW Icon</p><p className="text-xs text-vow-muted">The app mark is always the greater-than sign. Colour is the custom part.</p></div><button type="button" onClick={onShuffle} className="vow-btn-soft shrink-0">Shuffle icon</button></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{ICON_STYLES.map((style) => <button key={style.id} onClick={() => onIconChange(style)} aria-pressed={selectedStyle === style.id} className={`border p-3 transition-colors ${selectedStyle === style.id ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><VowIconPreview background={style.background} foreground={style.foreground} /><span className="block text-xs text-vow-ink mt-3">{style.label}</span></button>)}</div>{message && <p className="text-xs text-vow-muted mt-4">{message}</p>}</section></div>;
 }
 
 function SharedInformationPage({ session, displayName, onBack }: { session: ReturnType<typeof useAuth>['session']; displayName: string; onBack: () => void }) {
