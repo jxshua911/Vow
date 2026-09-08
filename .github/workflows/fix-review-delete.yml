@@ -1,0 +1,39 @@
+name: Repair Weekly Review Deletion
+
+on:
+  push:
+    branches:
+      - capacitor-mobile
+
+jobs:
+  repair:
+    if: "${{ github.actor != 'github-actions[bot]' }}"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: capacitor-mobile
+
+      - name: Patch review deletion
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/WeeklyReview.tsx')
+          s = p.read_text()
+          old = """async function deleteReview(id: string) { if (!session) return; if (!confirm('Delete this review? The review record will be removed, but commitments and sessions already created from it will remain.')) return; setActionError(''); const { data, error } = await supabase.rpc('delete_own_review', { p_review_id: id }); if (error) { setActionError(`Could not delete this review: ${error.message}`); return; } if (data !== true) { setActionError('VOW could not delete that review. Refresh the page and try again.'); return; } if (review?.id === id) { setReview(null); setExistingReview(null); } setPastReviews((items) => items.filter((item) => item.id !== id)); setActionError(''); await load(); }"""
+          new = """async function deleteReview(id: string) { if (!session) return; if (!confirm('Delete this review? The review record will be removed, but commitments and sessions already created from it will remain.')) return; setActionError(''); let deleted = false; const directDelete = await supabase.from('reviews').delete().eq('id', id).eq('user_id', session.user.id); if (!directDelete.error) { const { data: remaining, error: verifyError } = await supabase.from('reviews').select('id').eq('id', id).eq('user_id', session.user.id).maybeSingle(); if (!verifyError && !remaining) deleted = true; } if (!deleted) { const { data, error } = await supabase.rpc('delete_own_review', { p_review_id: id }); if (error) { setActionError(`Could not delete this review: ${error.message}`); return; } deleted = data === true; } if (!deleted) { setActionError('VOW could not delete that review. The database did not confirm the deletion.'); return; } if (review?.id === id) { setReview(null); setExistingReview(null); } setPastReviews((items) => items.filter((item) => item.id !== id)); setActionError(''); await load(); }"""
+          if old not in s:
+              raise SystemExit('Expected deleteReview implementation not found; refusing to modify the file.')
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+      - name: Remove repair workflow and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/fix-review-delete.yml
+          git add src/components/WeeklyReview.tsx .github/workflows/fix-review-delete.yml
+          git commit -m "fix: make weekly review deletion resilient"
+          git push origin capacitor-mobile
