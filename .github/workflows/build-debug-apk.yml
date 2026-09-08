@@ -1,6 +1,7 @@
 name: Build Android APK
 
 # Release verification build: includes the current core + hardened branch state.
+# Runtime repair verification build.
 
 on:
   push:
