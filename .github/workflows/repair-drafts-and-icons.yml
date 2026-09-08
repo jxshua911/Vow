@@ -1,0 +1,144 @@
+name: Repair Draft Editing and Adaptive Icons
+
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-drafts-and-icons.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Repair goal drafts, AI modes and Android icons
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # --- GoalPlanner: make drafts resumable/editable and save on back ---
+          p = Path('src/components/GoalPlanner.tsx')
+          s = p.read_text()
+          original = s
+
+          s = s.replace("import { useState } from 'react';", "import { useEffect, useState } from 'react';\nimport { App } from '@capacitor/app';")
+          s = s.replace("import type { Session } from '@/types/database';", "import type { Session } from '@/types/database';")
+
+          marker = "export function GoalPlanner({ userId, onCreated, onCancel }: { userId: string; onCreated: () => void; onCancel?: () => void }) {"
+          replacement = "type DraftGoal = { id: string; title?: string | null; outcome?: string | null; why_it_matters?: string | null; duration?: string | null; weekly_commitment_target?: number | null; plan_json?: unknown };\n\nexport function GoalPlanner({ userId, onCreated, onCancel, draftGoal }: { userId: string; onCreated: () => void; onCancel?: () => void | Promise<void>; draftGoal?: DraftGoal | null }) {"
+          if marker not in s:
+              raise SystemExit('GoalPlanner signature marker not found')
+          s = s.replace(marker, replacement, 1)
+
+          state_marker = "const [rawInput,setRawInput]=useState(''); const [why,setWhy]=useState(''); const [durationWeeks,setDurationWeeks]=useState(8); const [availableDays,setAvailableDays]=useState<string[]>([]); const [dayTimes,setDayTimes]=useState<Record<string,string>>({});"
+          if state_marker not in s:
+              raise SystemExit('GoalPlanner state marker not found')
+          state_replacement = state_marker + "\n  useEffect(() => { if (!draftGoal) return; const planData = draftGoal.plan_json && typeof draftGoal.plan_json === 'object' ? draftGoal.plan_json as Record<string, unknown> : {}; const schedule = Array.isArray(planData.schedule) ? planData.schedule as Array<Record<string, unknown>> : []; const scheduleDays = [...new Set(schedule.map((item) => typeof item.day === 'string' ? item.day : '').filter((day): day is string => DAYS.includes(day)))]; const rawDays = Array.isArray(planData.available_days) ? planData.available_days.filter((day): day is string => typeof day === 'string' && DAYS.includes(day)) : []; const storedDays = rawDays.length ? rawDays : scheduleDays; const rawTimes = planData.preferred_times_by_day && typeof planData.preferred_times_by_day === 'object' ? planData.preferred_times_by_day as Record<string, unknown> : {}; const storedTimes = Object.fromEntries(Object.entries(rawTimes).filter(([day, time]) => DAYS.includes(day) && typeof time === 'string')) as Record<string,string>; const parsedWeeks = Number(String(draftGoal.duration || '').match(/\\d+/)?.[0] || 8); setRawInput(draftGoal.title || draftGoal.outcome || ''); setWhy(draftGoal.why_it_matters || ''); setDurationWeeks([1,2,4,8,12,26,52].includes(parsedWeeks) ? parsedWeeks : 8); setAvailableDays(storedDays); setDayTimes(storedTimes); setDraftGoalId(draftGoal.id); }, [draftGoal]);\n  useEffect(() => { if (!draftGoal?.id) return; let cancelled = false; (async () => { const { data } = await supabase.from('goal_clarification_answers').select('question,answer,question_order').eq('goal_id',draftGoal.id).eq('user_id',userId).order('question_order',{ascending:true}); if (cancelled || !data?.length) return; const questions = data.map((row) => row.question).filter((value): value is string => typeof value === 'string'); if (!questions.length) return; setClarification({ questions, recommended_duration_weeks: Number(draftGoal.duration?.replace(/\\D/g,'')) || durationWeeks, rationale: 'Saved clarification questions from this draft.' }); setAnswers(data.map((row) => typeof row.answer === 'string' ? row.answer : '')); })(); return () => { cancelled = true; }; }, [draftGoal?.id, userId]);"
+          s = s.replace(state_marker, state_replacement, 1)
+
+          ensure_marker = "async function ensureDraft(){if(draftGoalId)return draftGoalId;"
+          if ensure_marker not in s:
+              raise SystemExit('GoalPlanner ensureDraft marker not found')
+
+          save_code = "async function saveDraft(){ const title=rawInput.trim(); if(!title){ if(onCancel) await onCancel(); return null; } const start=nextMonday(); const payload={user_id:userId,title,outcome:title,why_it_matters:why.trim()||null,start_date:toDateString(start),deadline:deadlineFor(start,durationWeeks),duration:`${durationWeeks}w`,status:'draft',weekly_commitment_target:availableDays.length,plan_json:plan ? {...plan,available_days:[...availableDays],preferred_times_by_day:{...dayTimes}} : {available_days:[...availableDays],preferred_times_by_day:{...dayTimes}}}; let id=draftGoalId||draftGoal?.id||null; if(id){ const {error:e}=await supabase.from('goals').update(payload).eq('id',id).eq('user_id',userId); if(e) throw e; } else { const {data,error:e}=await supabase.from('goals').insert(payload).select('id').single(); if(e||!data) throw e||new Error('Could not save this draft.'); id=data.id; setDraftGoalId(id); } if(clarification && id){ const {error:de}=await supabase.from('goal_clarification_answers').delete().eq('goal_id',id).eq('user_id',userId); if(de) throw de; const clean=answers.map((answer)=>answer.trim()); const {error:ie}=await supabase.from('goal_clarification_answers').insert(clarification.questions.map((question,index)=>({goal_id:id,user_id:userId,question,answer:clean[index]||null,question_order:index}))); if(ie) throw ie; } return id; }\n  async function saveAndExit(){ try { setError(''); await saveDraft(); if(onCancel) await onCancel(); } catch(err){ setError(err instanceof Error ? err.message : 'Could not save this draft.'); } }\n  useEffect(() => { let handle: { remove: () => Promise<void> } | null = null; App.addListener('backButton', () => { void saveAndExit(); }).then((listener) => { handle = listener; }).catch(() => {}); return () => { if(handle) void handle.remove(); }; }, [rawInput,why,durationWeeks,availableDays,dayTimes,draftGoalId,draftGoal,clarification,answers,plan,userId,onCancel]);\n  "
+          s = s.replace(ensure_marker, save_code + ensure_marker, 1)
+
+          # The current backend accepts plan/clarify. Keep compatibility response parsing.
+          s = s.replace("mode:'goal-plan'", "mode:'plan'")
+          s = s.replace("mode:'goal-clarify'", "mode:'clarify'")
+
+          # Ensure the planner's back control saves the current draft first.
+          s = s.replace("onClick={onCancel}", "onClick={saveAndExit}")
+
+          if s == original:
+              raise SystemExit('GoalPlanner was not changed')
+          p.write_text(s)
+
+          # --- Goals: draft rows open the full GoalPlanner, not the limited GoalDetail ---
+          p = Path('src/components/Goals.tsx')
+          s = p.read_text()
+          original = s
+          state = "const [goals, setGoals] = useState<Goal[]>([]); const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null); const [showCreate, setShowCreate] = useState(false);"
+          if state not in s:
+              raise SystemExit('Goals state marker not found')
+          s = s.replace(state, state.replace("const [showCreate", "const [editingDraft, setEditingDraft] = useState<Goal | null>(null); const [showCreate"), 1)
+          render = "if (selectedGoal) return <GoalDetail initialGoal={selectedGoal} goalId={selectedGoal.id} onBack={() => { setSelectedGoal(null); loadGoals(); }} />; if (showCreate) return <GoalPlanner userId={session!.user.id} onCreated={() => { setShowCreate(false); loadGoals(); }} onCancel={() => setShowCreate(false)} />;"
+          if render not in s:
+              raise SystemExit('Goals render marker not found')
+          render_new = "if (editingDraft) return <GoalPlanner userId={session!.user.id} draftGoal={editingDraft} onCreated={() => { setEditingDraft(null); loadGoals(); }} onCancel={async () => { setEditingDraft(null); await loadGoals(); }} />; if (selectedGoal) return <GoalDetail initialGoal={selectedGoal} goalId={selectedGoal.id} onBack={() => { setSelectedGoal(null); loadGoals(); }} />; if (showCreate) return <GoalPlanner userId={session!.user.id} onCreated={() => { setShowCreate(false); loadGoals(); }} onCancel={async () => { setShowCreate(false); await loadGoals(); }} />;"
+          s = s.replace(render, render_new, 1)
+          draft_section = '<GoalSection title="Drafts" goals={draftGoals} onSelect={setSelectedGoal} onDelete={deleteGoal} />'
+          if draft_section not in s:
+              raise SystemExit('Goals draft section marker not found')
+          s = s.replace(draft_section, '<GoalSection title="Drafts" goals={draftGoals} onSelect={(goal) => setEditingDraft(goal)} onDelete={deleteGoal} />', 1)
+          if s == original:
+              raise SystemExit('Goals was not changed')
+          p.write_text(s)
+
+          # --- Android launcher: restore the clean greater-than mark and adaptive icon ---
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
+          s = s.replace('android:icon="@drawable/vow_icon_white_black"', 'android:icon="@mipmap/ic_vow_launcher"')
+          s = s.replace('android:roundIcon="@drawable/vow_icon_white_black"', 'android:roundIcon="@mipmap/ic_vow_launcher_round"')
+          variants = [
+            ('purple-green','#7C3AED','#22C55E'),('orange-blue','#F97316','#2563EB'),('black-pink','#111111','#F472B6'),
+            ('teal-white','#0F766E','#FFFFFF'),('red-blue','#EF4444','#2563EB'),('gold-blue','#D4A72C','#2563EB'),
+            ('white-green','#F7F7F5','#16A34A'),('pink-orange','#DB2777','#F97316'),('blue-white','#2563EB','#FFFFFF'),
+            ('green-purple','#16A34A','#7C3AED'),('black-red','#111111','#F43F5E'),('purple-gold','#7C3AED','#F59E0B'),
+            ('orange-white','#EA580C','#FFFFFF'),('pink-teal','#DB2777','#14B8A6'),('black-blue','#111111','#60A5FA'),
+            ('teal-orange','#0F766E','#FB923C'),('blue-red','#2563EB','#EF4444'),('white-black','#F7F7F5','#111111'),
+            ('gold-purple','#D4A72C','#7C3AED'),('green-teal','#16A34A','#0F766E')
+          ]
+          for ident,bg,fg in variants:
+              drawable = '@mipmap/vow_icon_' + ident.replace('-','_')
+              s = s.replace('@drawable/vow_icon_' + ident.replace('-','_'), drawable)
+          manifest.write_text(s)
+
+          # Exact greater-than foreground used by the adaptive launcher.
+          fg = Path('android/app/src/main/res/drawable/vow_icon_white_foreground.xml')
+          fg.write_text('''<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">\n    <path android:fillColor="#FF000000" android:pathData="M18,18 L38,18 L90,54 L38,90 L18,90 L70,54 Z" />\n</vector>\n''')
+
+          # Keep the adaptive icon's existing white/black treatment, but with the exact mark.
+          Path('android/app/src/main/res/drawable/ic_vow_launcher_foreground.xml').write_text('''<?xml version="1.0" encoding="utf-8"?>\n<scale xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@drawable/vow_icon_white_foreground" android:scaleWidth="120%" android:scaleHeight="120%" android:scaleGravity="center" android:level="10000" />\n''')
+
+          # Generate adaptive variants plus pre-26 vector fallbacks. Every launcher icon is the > mark.
+          values = Path('android/app/src/main/res/values/vow_icon_colours.xml')
+          colour_lines = ['<?xml version="1.0" encoding="utf-8"?>','<resources>']
+          for ident,bg,fgcol in variants:
+              key = ident.replace('-','_')
+              colour_lines += [f'    <color name="vow_icon_{key}_bg">{bg}</color>', f'    <color name="vow_icon_{key}_fg">{fgcol}</color>']
+          colour_lines += ['</resources>','']
+          values.write_text('\n'.join(colour_lines))
+
+          base_dir = Path('android/app/src/main/res/mipmap-anydpi')
+          v26_dir = Path('android/app/src/main/res/mipmap-anydpi-v26')
+          base_dir.mkdir(parents=True, exist_ok=True)
+          v26_dir.mkdir(parents=True, exist_ok=True)
+          for ident,bg,fgcol in variants:
+              key = ident.replace('-','_')
+              Path(f'android/app/src/main/res/drawable/vow_icon_{key}_foreground.xml').write_text(f'''<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">\n    <path android:fillColor="{fgcol}" android:pathData="M18,18 L38,18 L90,54 L38,90 L18,90 L70,54 Z" />\n</vector>\n''')
+              Path(f'android/app/src/main/res/mipmap-anydpi/vow_icon_{key}.xml').write_text(f'''<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">\n    <path android:fillColor="{bg}" android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />\n    <path android:fillColor="{fgcol}" android:pathData="M18,18 L38,18 L90,54 L38,90 L18,90 L70,54 Z" />\n</vector>\n''')
+              Path(f'android/app/src/main/res/mipmap-anydpi-v26/vow_icon_{key}.xml').write_text(f'''<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@color/vow_icon_{key}_bg" />\n    <foreground android:drawable="@drawable/vow_icon_{key}_foreground" />\n</adaptive-icon>\n''')
+
+          # Make the default adaptive icon use the same exact > mark and white/black colours.
+          Path('android/app/src/main/res/mipmap-anydpi-v26/ic_vow_launcher.xml').write_text('''<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@color/vow_icon_white_black_bg" />\n    <foreground android:drawable="@drawable/vow_icon_white_foreground" />\n</adaptive-icon>\n''')
+          Path('android/app/src/main/res/mipmap-anydpi-v26/ic_vow_launcher_round.xml').write_text('''<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@color/vow_icon_white_black_bg" />\n    <foreground android:drawable="@drawable/vow_icon_white_foreground" />\n</adaptive-icon>\n''')
+
+          print('Repair complete')
+          PY
+
+      - name: Commit repair and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/GoalPlanner.tsx src/components/Goals.tsx android/app/src/main/AndroidManifest.xml android/app/src/main/res
+          git commit -m 'fix: make drafts editable and restore adaptive greater-than icons'
+          git push
+          git rm .github/workflows/repair-drafts-and-icons.yml || true
+          git commit -m 'chore: remove temporary draft icon repair workflow' || true
+          git push || true
