@@ -1,0 +1,38 @@
+name: Repair AI Clarification Compatibility
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-ai-clarify.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch GoalPlanner AI compatibility
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/GoalPlanner.tsx')
+          s=p.read_text()
+          s=s.replace("body:{mode:'plan',", "body:{mode:'goal-plan',")
+          s=s.replace("body:{mode:'clarify',", "body:{mode:'goal-clarify',")
+          s=s.replace("if(e||!data?.structured)throw new Error(await functionError(e)||data?.error||'VOW AI could not build the plan.');const next={...(data.structured as Plan),", "const structured=data?.structured||data?.plan||data;if(e||!structured)throw new Error(await functionError(e)||data?.error||'VOW AI could not build the plan.');const next={...(structured as Plan),")
+          s=s.replace("if(e||!data?.structured||!Array.isArray(data.structured.questions)||!data.structured.questions.length)throw new Error(await functionError(e)||data?.error||'VOW AI could not prepare the follow-up questions.');const next={...(data.structured as Clarification),", "const structured=data?.structured||data;if(e||!structured||!Array.isArray(structured.questions)||!structured.questions.length)throw new Error(await functionError(e)||data?.error||'VOW AI could not prepare the follow-up questions.');const next={...(structured as Clarification),")
+          p.write_text(s)
+          PY
+      - name: Commit repair
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/GoalPlanner.tsx
+          git commit -m 'fix: align goal AI modes and response shapes' || exit 0
+          git push
+      - name: Remove repair workflow
+        if: always()
+        run: |
+          git rm .github/workflows/repair-ai-clarify.yml || true
+          git commit -m 'chore: remove temporary AI repair workflow' || true
+          git push || true
