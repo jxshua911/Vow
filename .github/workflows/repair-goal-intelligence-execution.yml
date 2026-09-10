@@ -1,0 +1,155 @@
+name: Repair Goal Intelligence, Execution and Icon UX
+
+on:
+  workflow_dispatch:
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: capacitor-mobile
+
+      - name: Apply focused repairs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Backend: make explicit Armadillo time targets first-class planning constraints,
+          # make video queries topic-based, and keep old/new mode names compatible.
+          p = Path('supabase/functions/vow-goal-ai/index.ts')
+          s = p.read_text()
+
+          old = 'function contextualVideoQuery(a: any, g: any, session: any) { const text = `${g?.title || g?.outcome || ""} ${a?.category || ""} ${a?.goal_type || ""}`.toLowerCase(); const target = `${a?.target || ""} ${a?.target_unit || ""}`.toLowerCase(); const metric = str(a?.metric, 120); const equipment = Array.isArray(session?.equipment) ? session.equipment.slice(0, 2).join(" ") : ""; const difficulty = /50\\s*km|long|endurance|marathon|half[- ]marathon|advanced/.test(`${text} ${target}`) ? "long distance" : /10\\s*km|5\\s*km|beginner|first|learn/.test(`${text} ${target}`) ? "beginner" : "fundamentals"; if (/cycle|cycling|bike|bicycle/.test(text)) return `${difficulty} cycling endurance training ${metric} ${equipment} tips`.trim(); if (/run|running/.test(text)) return `${difficulty} running training ${metric} technique tips`.trim(); if (/swim|swimming/.test(text)) return `${difficulty} swimming technique ${metric} training tips`.trim(); if (/football|soccer/.test(text)) return `${difficulty} football training ${metric} drills`.trim(); return `${a?.category || "goal"} ${difficulty} fundamentals ${metric} practical tips`.trim(); }'
+          new = '''function parseTargetMinutes(timeTarget: unknown): number | null {
+            const text = str(timeTarget, 80).toLowerCase();
+            const m = text.match(/(\\d+(?:\\.\\d+)?)\\s*(hours?|hrs?|minutes?|mins?)/);
+            if (!m) return /\\b(?:an?|one)\\s+hour\\b/.test(text) ? 60 : null;
+            const value = Number(m[1]);
+            if (!Number.isFinite(value) || value <= 0) return null;
+            return /hour|hr/.test(m[2]) ? Math.round(value * 60) : Math.round(value);
+          }
+          function targetSessionDuration(a: any): number | null {
+            const minutes = parseTargetMinutes(a?.time_target);
+            return minutes && minutes >= 5 && minutes <= 240 ? minutes : null;
+          }
+          function contextualVideoQuery(a: any, g: any, session: any) {
+            const category = `${a?.category || ""}`.toLowerCase();
+            const goalType = `${a?.goal_type || ""}`.toLowerCase();
+            const target = `${a?.target || ""}`.toLowerCase();
+            const metric = str(a?.metric, 120).toLowerCase();
+            const equipment = Array.isArray(session?.equipment) ? session.equipment.slice(0, 2).join(" ") : "";
+            const time = str(a?.time_target, 60).toLowerCase();
+            const domain = `${category} ${goalType}`;
+            const difficulty = /50\\s*km|long|endurance|marathon|half[- ]marathon|advanced/.test(`${target} ${time}`) ? "long distance" : /10\\s*km|5\\s*km|beginner|first|learn/.test(`${target} ${time}`) ? "beginner" : "fundamentals";
+            const benchmark = time ? ` ${time} target` : "";
+            if (/cycle|cycling|bike|bicycle/.test(domain)) return `${difficulty} cycling pacing endurance technique${benchmark} ${equipment}`.replace(/\\s+/g, " ").trim();
+            if (/run|running/.test(domain)) return `${difficulty} running pacing endurance technique${benchmark} ${metric}`.replace(/\\s+/g, " ").trim();
+            if (/swim|swimming/.test(domain)) return `${difficulty} swimming technique pacing endurance${benchmark} ${metric}`.replace(/\\s+/g, " ").trim();
+            if (/football|soccer/.test(domain)) return `${difficulty} football training drills decision making ${metric}`.replace(/\\s+/g, " ").trim();
+            return `${category || "goal"} ${goalType || "training"} ${difficulty} fundamentals practical technique${benchmark}`.replace(/\\s+/g, " ").trim();
+          }'''
+          if old not in s:
+              raise SystemExit('contextualVideoQuery block not found')
+          s = s.replace(old, new)
+
+          # Enforce the explicit time target after generation. This does not invent a duration
+          # when Armadillo found none; it only anchors sessions when the user actually stated one.
+          old = 'function enrichPlan(b: any, a: any, w: number, ds: string[], g: any, knowledge: any[], references: any[]) { const sessions = Array.isArray(b.session_templates) ? b.session_templates : []; return { ...b, session_templates: sessions.map((x: any) => enrichExecution(x, a, g, references)), assumptions:'
+          new = 'function enrichPlan(b: any, a: any, w: number, ds: string[], g: any, knowledge: any[], references: any[]) { const sessions = Array.isArray(b.session_templates) ? b.session_templates : []; const explicitDuration = targetSessionDuration(a); const normalised = sessions.map((x: any) => ({ ...x, duration_minutes: explicitDuration || Math.max(5, Math.min(240, Number(x?.duration_minutes) || 30)) })); return { ...b, session_templates: normalised.map((x: any) => enrichExecution(x, a, g, references)), assumptions:'
+          if old not in s:
+              raise SystemExit('enrichPlan anchor not found')
+          s = s.replace(old, new)
+
+          # Fallback plans must obey the same explicit timing rule.
+          s = s.replace('duration_minutes: 45, preferred_time: "09:00", ...fallbackExecution(a, g, task)', 'duration_minutes: targetSessionDuration(a) || 45, preferred_time: "09:00", ...fallbackExecution(a, g, task)')
+
+          # Support both historical and current mode names while standardising internally.
+          s = s.replace('const requested = p?.mode; mode = ["goal-clarify", "goal-plan", "chat"].includes(requested) ? requested : "chat"; const kind = mode === "goal-plan" ? "plan" : mode === "goal-clarify" ? "clarify" : "chat";', 'const requested = p?.mode; const normalisedMode = requested === "goal-plan" ? "plan" : requested === "goal-clarify" ? "clarify" : requested; mode = ["plan", "clarify", "chat"].includes(normalisedMode) ? normalisedMode : "chat"; const kind = mode as "plan" | "clarify" | "chat";')
+
+          # Make the planner system prompt explicit about Armadillo timing and execution.
+          needle = 'For fitness/sports goals, reason about the target\'s scale: distinguish easy, moderate and demanding distances/workloads and adapt progression accordingly.'
+          replacement = needle + ' If Armadillo supplies time_target, treat it as a hard benchmark for session duration: generate sessions at that stated target duration rather than arbitrarily shortening them. If no time_target exists, choose duration from the goal, workload and recovery needs instead. The plan must be executable: every generated session is intended to become a scheduled VOW session with the exact duration returned here.'
+          if needle not in s:
+              raise SystemExit('planning prompt anchor not found')
+          s = s.replace(needle, replacement)
+          p.write_text(s)
+
+          # Frontend: pass Armadillo's explicit time target into the planning instruction and make
+          # the execution action obvious to the user.
+          p = Path('src/components/GoalPlanner.tsx')
+          s = p.read_text()
+          old = 'The execution layer must turn that interpretation into specific guidance and choose the most appropriate demonstration strategy for each session.'
+          new = 'The execution layer must turn that interpretation into specific guidance, choose the most appropriate demonstration strategy for each session, and execute the returned schedule into VOW sessions when the user locks it in. If Armadillo found an explicit time target, session duration must align with that target instead of defaulting to an arbitrary shorter duration.'
+          if old not in s:
+              raise SystemExit('planner instruction anchor not found')
+          s = s.replace(old, new)
+          s = s.replace("{saving?'Locking in...':'Lock in VOW'}", "{saving?'Scheduling...':'Lock in & schedule VOW'}")
+          p.write_text(s)
+
+          # Goal Intelligence: integration actions must reflect actual connection state.
+          p = Path('src/components/AnteaterGuide.tsx')
+          s = p.read_text()
+          old = "const resources = resourceLinks(session.activity_type, goalText, goal?.armadillo);"
+          new = '''const resources = resourceLinks(session.activity_type, goalText, goal?.armadillo);'''
+          # Replace the resource helper and derive connection state inside the component.
+          old_helper = '''function resourceLinks(activityType: string | undefined, goalText: string, armadillo?: GoalLike['armadillo']) {
+  const value = `${activityType || ''} ${goalText} ${armadillo?.category || ''} ${armadillo?.goal_type || ''}`.toLowerCase();
+  const links: Array<{ name: string; prompt: string; url: string }> = [];
+  if (/run|running|cycle|cycling|bike|swim|football|training|fitness|workout|endurance|sport/.test(value)) {
+    links.push({ name: 'Strava', prompt: 'Track the session and let VOW use the activity evidence later.', url: 'https://www.strava.com/' });
+  }
+  if (/health|fitness|run|running|cycle|cycling|bike|swim|walking|steps|workout|endurance/.test(value)) {
+    links.push({ name: 'Samsung Health', prompt: 'Connect your health and activity data for broader progress evidence.', url: 'https://www.samsung.com/global/samsung-health/' });
+  }
+  return links;
+}'''
+          new_helper = '''function resourceLinks(activityType: string | undefined, goalText: string, armadillo?: GoalLike['armadillo']) {
+  const value = `${activityType || ''} ${goalText} ${armadillo?.category || ''} ${armadillo?.goal_type || ''}`.toLowerCase();
+  const links: Array<{ name: string; prompt: string; url: string }> = [];
+  const userId = typeof window !== 'undefined' ? Object.keys(localStorage).find((key) => key.startsWith('vow:connections:')) : undefined;
+  const connectionValue = userId ? localStorage.getItem(userId) || '' : '';
+  const stravaConnected = connectionValue.includes('strava');
+  const samsungConnected = connectionValue.includes('samsung-health') || connectionValue.includes('samsung');
+  if (/run|running|cycle|cycling|bike|swim|football|training|fitness|workout|endurance|sport/.test(value)) {
+    links.push({ name: 'Strava', prompt: stravaConnected ? 'Open Strava to review the activity evidence.' : 'Connect Strava so VOW can use activity evidence later.', url: 'https://www.strava.com/' });
+  }
+  if (/health|fitness|run|running|cycle|cycling|bike|swim|walking|steps|workout|endurance/.test(value)) {
+    links.push({ name: 'Samsung Health', prompt: samsungConnected ? 'Open Samsung Health to review health and activity evidence.' : 'Connect Samsung Health so VOW can use broader progress evidence.', url: 'https://www.samsung.com/global/samsung-health/' });
+  }
+  return links;
+}'''
+          if old_helper not in s:
+              raise SystemExit('resource helper not found')
+          s = s.replace(old_helper, new_helper)
+          # Topic query is already derived from Armadillo; make the UI copy explicit.
+          s = s.replace('VOW is searching by the goal domain, difficulty, metric and practical context — not by copying the session sentence.', 'VOW is searching by Armadillo\'s goal domain, target, difficulty, metric and practical context — not by copying the goal name.')
+          p.write_text(s)
+
+          # Profile: make the greater-than mark visually centred in the preview.
+          p = Path('src/components/Profile.tsx')
+          s = p.read_text()
+          s = s.replace('M28 24 L70 54 L28 84', 'M32 24 L76 54 L32 84')
+          s = s.replace('w-16 h-16 rounded-xl', 'w-20 h-20 rounded-xl')
+          p.write_text(s)
+          PY
+
+      - name: Commit repairs
+        shell: bash
+        run: |
+          git config user.name "VOW Repair Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/vow-goal-ai/index.ts src/components/GoalPlanner.tsx src/components/AnteaterGuide.tsx src/components/Profile.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: align Armadillo timing and execute goal plans"
+          git push origin capacitor-mobile
+
+      - name: Remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/repair-goal-intelligence-execution.yml
+          git commit -m "chore: remove temporary goal intelligence repair workflow"
+          git push origin capacitor-mobile
