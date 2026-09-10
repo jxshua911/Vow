@@ -12,50 +12,22 @@ type ConnectState = Record<string, 'connected' | 'setup'>;
 const categories: { id: IntegrationCategory | 'all'; label: string }[] = [
   { id: 'all', label: 'All' }, { id: 'fitness', label: 'Fitness' }, { id: 'health', label: 'Health' }, { id: 'education', label: 'Education' }, { id: 'productivity', label: 'Productivity' }, { id: 'reading', label: 'Reading' }, { id: 'mindfulness', label: 'Mindfulness' }, { id: 'faith', label: 'Faith' },
 ];
-
 function integrationMatchesGoal(integration: IntegrationDefinition, goal: any): boolean {
   const armadillo = goal?.armadillo && typeof goal.armadillo === 'object' ? goal.armadillo : {};
-  const haystack = [
-    armadillo.integration,
-    ...(Array.isArray(armadillo.evidence_source) ? armadillo.evidence_source : []),
-    ...(Array.isArray(armadillo.evidence) ? armadillo.evidence : []),
-    armadillo.category,
-    armadillo.goal_type,
-    goal?.title,
-    goal?.outcome,
-  ].filter(Boolean).join(' ').toLowerCase();
+  const haystack = [armadillo.integration, ...(Array.isArray(armadillo.evidence_source) ? armadillo.evidence_source : []), ...(Array.isArray(armadillo.evidence) ? armadillo.evidence : []), armadillo.category, armadillo.goal_type, goal?.title, goal?.outcome].filter(Boolean).join(' ').toLowerCase();
   if (haystack.includes(integration.id.toLowerCase()) || haystack.includes(integration.name.toLowerCase())) return true;
-  return integration.recommendedGoalKeywords.some((keyword) => haystack.includes(keyword.toLowerCase())) && Boolean(armadillo.integration || armadillo.evidence_source?.length);
+  return integration.recommendedGoalKeywords.some((keyword) => haystack.includes(keyword.toLowerCase())) && Boolean(armadillo.integration || (Array.isArray(armadillo.evidence_source) && armadillo.evidence_source.length));
 }
-
 export function ConnectPage({ onBack }: { onBack?: () => void }) {
   const { session } = useAuth(); const userId = session?.user.id; const connectionKey = userId ? `vow:connections:${userId}` : '';
   const [category, setCategory] = useState<IntegrationCategory | 'all'>('all'); const [query, setQuery] = useState(''); const [connected, setConnected] = useState<ConnectState>({}); const [connecting, setConnecting] = useState<string | null>(null); const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false); const [googleCalendarAvailable, setGoogleCalendarAvailable] = useState(false); const [activeGoals, setActiveGoals] = useState<any[]>([]); const [loadingGoals, setLoadingGoals] = useState(false);
-
   useEffect(() => { if (!userId) { setConnected({}); return; } try { setConnected(JSON.parse(localStorage.getItem(connectionKey) || '{}')); } catch { setConnected({}); } }, [userId, connectionKey]);
   useEffect(() => { if (userId) localStorage.setItem(connectionKey, JSON.stringify(connected)); }, [connected, userId, connectionKey]);
-  useEffect(() => {
-    if (!userId) { setActiveGoals([]); return; }
-    let cancelled = false; setLoadingGoals(true);
-    supabase.from('goals').select('id,title,outcome,status,armadillo').eq('user_id', userId).eq('status', 'active').then(({ data, error }) => {
-      if (!cancelled) { setActiveGoals(error ? [] : (data || [])); setLoadingGoals(false); }
-    }).catch(() => { if (!cancelled) { setActiveGoals([]); setLoadingGoals(false); } });
-    return () => { cancelled = true; };
-  }, [userId]);
+  useEffect(() => { if (!userId) { setActiveGoals([]); return; } let cancelled = false; setLoadingGoals(true); supabase.from('goals').select('id,title,outcome,status,armadillo').eq('user_id', userId).eq('status', 'active').then(({ data, error }) => { if (!cancelled) { setActiveGoals(error ? [] : (data || [])); setLoadingGoals(false); } }); return () => { cancelled = true; }; }, [userId]);
   useEffect(() => { if (!session) return; let cancelled = false; supabase.functions.invoke('google-calendar-auth', { body: { action: 'status' } }).then(({ data, error }) => { if (cancelled) return; const available = !error && data?.available === true && data?.configured === true; setGoogleCalendarAvailable(available); setGoogleCalendarConnected(available && Boolean(data?.connected)); if (available && data?.connected) setConnected((current) => ({ ...current, 'google-calendar': 'connected' })); }).catch(() => { if (!cancelled) { setGoogleCalendarAvailable(false); setGoogleCalendarConnected(false); } }); return () => { cancelled = true; }; }, [session]);
-
   const goalRelevantIntegrations = useMemo(() => INTEGRATIONS.filter((integration) => activeGoals.some((goal) => integrationMatchesGoal(integration, goal))), [activeGoals]);
-  const integrations = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return goalRelevantIntegrations.filter((integration) => {
-      const categoryMatch = category === 'all' || integration.category === category;
-      const queryMatch = !q || `${integration.name} ${integration.description} ${integration.category}`.toLowerCase().includes(q);
-      return categoryMatch && queryMatch;
-    });
-  }, [category, query, goalRelevantIntegrations]);
-
+  const integrations = useMemo(() => { const q = query.trim().toLowerCase(); return goalRelevantIntegrations.filter((integration) => { const categoryMatch = category === 'all' || integration.category === category; const queryMatch = !q || `${integration.name} ${integration.description} ${integration.category}`.toLowerCase().includes(q); return categoryMatch && queryMatch; }); }, [category, query, goalRelevantIntegrations]);
   async function connectIntegration(id: string) { if (!session || connecting || id !== 'google-calendar' || !googleCalendarAvailable) return; setConnecting(id); try { const redirectUri = Capacitor.isNativePlatform() ? NATIVE_CALENDAR_REDIRECT : `${window.location.origin}/calendar/oauth/callback`; const { data, error: invokeError } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'start', redirectUri } }); if (invokeError || !data?.authorizationUrl) throw invokeError || new Error('Google Calendar is not configured yet.'); if (Capacitor.isNativePlatform()) await Browser.open({ url: data.authorizationUrl }); else window.location.assign(data.authorizationUrl); } catch { setGoogleCalendarAvailable(false); } finally { setConnecting(null); } }
-
   return <div>
     {onBack && <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors"><Glyph>←</Glyph>Back to profile</button>}
     <PageHeader title="Hedgehog" subtitle="Third-party connectors that matter to your active VOWs." />
