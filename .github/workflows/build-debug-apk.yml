@@ -1,7 +1,6 @@
 name: Build Android APK
 
-# Release verification build: includes the current core + hardened branch state.
-# Runtime repair verification build.
+# Release verification build for the current VOW mobile state.
 
 on:
   push:
