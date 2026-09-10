@@ -3,6 +3,7 @@ name: Deploy Supabase Edge Functions
 on:
   push:
     branches:
+      - vow-1.3
       - capacitor-mobile
     paths:
       - 'supabase/functions/**'
@@ -15,32 +16,30 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
-
       - name: Deploy Google Calendar auth function
         run: supabase functions deploy google-calendar-auth --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
       - name: Deploy Google Calendar events function
         run: supabase functions deploy google-calendar-events --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
       - name: Deploy VOW AI function
         run: supabase functions deploy vow-goal-ai --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
+      - name: Deploy VOW resource discovery function
+        run: supabase functions deploy vow-goal-resources --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       - name: Deploy VOW content safety function
         run: supabase functions deploy vow-content-safety --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
       - name: Deploy goal calendar sync function
         run: supabase functions deploy google-calendar-sync-goal --project-ref vqsrdausvmfjayffxiuh
         env:
