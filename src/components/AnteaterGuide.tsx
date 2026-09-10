@@ -32,11 +32,15 @@ function youtubeSearchUrl(query: string) { return `https://www.youtube.com/resul
 function resourceLinks(activityType: string | undefined, goalText: string, armadillo?: GoalLike['armadillo']) {
   const value = `${activityType || ''} ${goalText} ${armadillo?.category || ''} ${armadillo?.goal_type || ''}`.toLowerCase();
   const links: Array<{ name: string; prompt: string; url: string }> = [];
+  const keys = typeof window !== 'undefined' ? Object.keys(localStorage).filter((key) => key.startsWith('vow:connections:')) : [];
+  const connected = keys.length ? localStorage.getItem(keys[0]) || '' : '';
+  const stravaConnected = connected.includes('strava');
+  const samsungConnected = connected.includes('samsung-health') || connected.includes('samsung');
   if (/run|running|cycle|cycling|bike|swim|football|training|fitness|workout|endurance|sport/.test(value)) {
-    links.push({ name: 'Strava', prompt: 'Track the session and let VOW use the activity evidence later.', url: 'https://www.strava.com/' });
+    links.push({ name: 'Strava', prompt: stravaConnected ? 'Open Strava to review the activity evidence.' : 'Connect Strava so VOW can use activity evidence later.', url: 'https://www.strava.com/' });
   }
   if (/health|fitness|run|running|cycle|cycling|bike|swim|walking|steps|workout|endurance/.test(value)) {
-    links.push({ name: 'Samsung Health', prompt: 'Connect your health and activity data for broader progress evidence.', url: 'https://www.samsung.com/global/samsung-health/' });
+    links.push({ name: 'Samsung Health', prompt: samsungConnected ? 'Open Samsung Health to review health and activity evidence.' : 'Connect Samsung Health so VOW can use broader progress evidence.', url: 'https://www.samsung.com/global/samsung-health/' });
   }
   return links;
 }
@@ -88,7 +92,7 @@ export function AnteaterGuide({ goal, session: suppliedSession }: AnteaterGuideP
       {cues.length > 0 && <div><p className="text-xs font-medium text-vow-ink mb-2">Quality cues</p><ul className="space-y-1">{cues.map((cue, index) => <li key={`${cue}-${index}`} className="text-xs text-vow-muted">• {cue}</li>)}</ul></div>}
       {alternatives.length > 0 && <div><p className="text-xs font-medium text-vow-ink mb-2">If your setup is different</p><ul className="space-y-2">{alternatives.map((alternative, index) => <li key={`${alternative.constraint || alternative.task || index}-${index}`} className="text-xs text-vow-muted">{alternative.constraint && <span className="font-medium text-vow-ink">{alternative.constraint}: </span>}{alternative.task || alternative.instructions || 'Alternative session'}{alternative.equipment?.length ? ` (${alternative.equipment.join(', ')})` : ''}</li>)}</ul></div>}
       {video && <div><p className="text-xs font-medium text-vow-ink mb-2">Demonstration</p><div className="aspect-video overflow-hidden border border-vow-border bg-black"><iframe src={video} title={demo?.source_title || demo?.title || 'Session demonstration'} className="h-full w-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div><p className="text-xs text-vow-muted mt-2">{demo?.source_title || demo?.title}</p></div>}
-      {!video && demo?.kind === 'video' && <div className="border-l-2 border-vow-border pl-3"><p className="text-xs font-medium text-vow-ink">YouTube demonstration</p><p className="text-xs text-vow-muted mt-1">VOW is searching by the goal domain, difficulty, metric and practical context — not by copying the session sentence.</p><a href={youtubeSearchUrl(query)} target="_blank" rel="noreferrer" className="vow-btn-soft inline-flex mt-3 min-h-10">Find a relevant YouTube video →</a></div>}
+      {!video && demo?.kind === 'video' && <div className="border-l-2 border-vow-border pl-3"><p className="text-xs font-medium text-vow-ink">YouTube demonstration</p><p className="text-xs text-vow-muted mt-1">VOW is searching by Armadillo's goal domain, target, difficulty, metric and practical context — not by copying the goal name.</p><a href={youtubeSearchUrl(query)} target="_blank" rel="noreferrer" className="vow-btn-soft inline-flex mt-3 min-h-10">Find a relevant YouTube video →</a></div>}
       {demo?.kind === 'image' && <div className="border-l-2 border-vow-border pl-3"><p className="text-xs font-medium text-vow-ink">Visual demonstration</p><p className="text-xs text-vow-muted mt-1">A visual demonstration was identified as the best fit for this session.</p></div>}
       {resources.length > 0 && <div className="border-t border-vow-border pt-4 space-y-3">{resources.map((resource) => <div key={resource.name} className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-xs font-medium text-vow-ink">{resource.name}</p><p className="text-xs text-vow-muted mt-1">{resource.prompt}</p></div><a href={resource.url} target="_blank" rel="noreferrer" className="vow-btn-soft shrink-0 min-h-10">Open {resource.name} →</a></div>)}</div>}
     </div>

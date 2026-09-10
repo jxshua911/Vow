@@ -104,7 +104,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 }
 
 function VowIconPreview({ background, foreground }: { background: string; foreground: string }) {
-  return <span className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center overflow-hidden" style={{ background }} aria-hidden="true"><svg viewBox="0 0 108 108" className="w-full h-full" role="presentation"><path d="M28 24 L70 54 L28 84" fill="none" stroke={foreground} strokeWidth="8" strokeLinecap="butt" strokeLinejoin="miter" /></svg></span>;
+  return <span className="mx-auto w-20 h-20 rounded-xl flex items-center justify-center overflow-hidden" style={{ background }} aria-hidden="true"><svg viewBox="0 0 108 108" className="w-full h-full" role="presentation"><path d="M32 24 L76 54 L32 84" fill="none" stroke={foreground} strokeWidth="8" strokeLinecap="butt" strokeLinejoin="miter" /></svg></span>;
 }
 
 function CustomisePage({ selectedStyle, message, onIconChange, onShuffle, onBack }: { selectedStyle: string; message: string; onIconChange: (style: IconStyle) => void; onShuffle: () => void; onBack: () => void }) {
