@@ -1,0 +1,145 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Content-Type": "application/json",
+};
+
+type ResourceType = "youtube" | "web" | "app";
+type Resource = {
+  type: ResourceType;
+  title: string;
+  url: string;
+  relevance_score: number;
+  goal_id: string;
+  plan_step: string | null;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  reason_recommended: string;
+};
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: CORS });
+const text = (value: unknown, limit = 500) => typeof value === "string" ? value.trim().slice(0, limit) : "";
+const arr = (value: unknown) => Array.isArray(value) ? value : [];
+
+function adminClient() {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) throw new Error("SUPABASE_CONFIG_MISSING");
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+function userClient(req: Request) {
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("VITE_SUPABASE_ANON_KEY");
+  if (!url || !anonKey) throw new Error("SUPABASE_CONFIG_MISSING");
+  return createClient(url, anonKey, { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } });
+}
+
+function safeYouTube(url: string) {
+  try {
+    const parsed = new URL(url);
+    return ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtu.be"].includes(parsed.hostname.toLowerCase()) && Boolean(parsed.pathname || parsed.searchParams.get("v"));
+  } catch { return false; }
+}
+
+function normaliseType(url: string, declared: unknown): ResourceType | null {
+  if (safeYouTube(url)) return "youtube";
+  if (declared === "web") return "web";
+  return /^https?:\/\//i.test(url) ? "web" : null;
+}
+
+function extractJson(content: string): unknown {
+  const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  try { return JSON.parse(cleaned); } catch {
+    const start = cleaned.indexOf("[");
+    const end = cleaned.lastIndexOf("]");
+    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+    throw new Error("INVALID_RESOURCE_JSON");
+  }
+}
+
+async function discover(goalContext: Record<string, unknown>, queryPlan: Record<string, unknown>, breadth: "specific" | "broad") {
+  const key = Deno.env.get("GROQ_API_KEY");
+  if (!key) throw new Error("GROQ_API_KEY_MISSING");
+  const extra = breadth === "broad" ? " If exact matches are scarce, broaden the subject while staying faithful to the goal." : "";
+  const prompt = `You are VOW's resource discovery engine. Find genuinely useful resources for the user's exact goal. Use web search and visit authoritative sources. ${extra}
+Return ONLY a JSON array of 4-10 objects with: type (youtube|web), title, url, relevance_score (0..1), plan_step, difficulty (beginner|intermediate|advanced), reason_recommended. Only return real, directly useful URLs. For YouTube, return actual video/watch URLs, not search pages. Prefer primary sources, recognised educators, reputable institutions and high-quality tutorials. Do not invent URLs. Avoid duplicate domains and near-duplicate resources. Goal context: ${JSON.stringify(goalContext)}. Search plan: ${JSON.stringify(queryPlan)}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 35000);
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, "Groq-Model-Version": "latest" },
+      signal: controller.signal,
+      body: JSON.stringify({ model: "groq/compound", messages: [{ role: "user", content: prompt }], max_completion_tokens: 3000, temperature: 0.15, compound_custom: { tools: { enabled_tools: ["web_search", "visit_website"] } } }),
+    });
+    const raw = await response.text();
+    if (!response.ok) throw new Error(`GROQ_${response.status}`);
+    const content = JSON.parse(raw)?.choices?.[0]?.message?.content;
+    if (typeof content !== "string") throw new Error("GROQ_EMPTY_RESPONSE");
+    return extractJson(content);
+  } finally { clearTimeout(timer); }
+}
+
+function normaliseResources(value: unknown, goalId: string, fallbackDifficulty: Resource["difficulty"]): Resource[] {
+  const seen = new Set<string>();
+  return arr(value).flatMap((item): Resource[] => {
+    if (!item || typeof item !== "object") return [];
+    const candidate = item as Record<string, unknown>;
+    const url = text(candidate.url, 1000);
+    const type = normaliseType(url, candidate.type);
+    const title = text(candidate.title, 220);
+    if (!url || !type || !title || seen.has(url)) return [];
+    const score = Math.min(1, Math.max(0, Number(candidate.relevance_score) || 0));
+    const difficulty = ["beginner", "intermediate", "advanced"].includes(String(candidate.difficulty)) ? String(candidate.difficulty) as Resource["difficulty"] : fallbackDifficulty;
+    seen.add(url);
+    return [{ type, title, url, relevance_score: score, goal_id: goalId, plan_step: text(candidate.plan_step, 220) || null, difficulty, reason_recommended: text(candidate.reason_recommended, 500) || "Relevant to the current goal plan." }];
+  }).sort((a, b) => b.relevance_score - a.relevance_score).slice(0, 10);
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  try {
+    const auth = req.headers.get("Authorization") || "";
+    if (!auth.startsWith("Bearer ")) return json({ error: "Authentication required." }, 401);
+    const client = userClient(req);
+    const { data: { user }, error: authError } = await client.auth.getUser();
+    if (authError || !user) return json({ error: "Authentication required." }, 401);
+
+    const body = await req.json();
+    const goalId = text(body?.goal_id, 120);
+    if (!goalId) return json({ error: "goal_id is required." }, 400);
+    const { data: goal, error: goalError } = await client.from("goals").select("*").eq("id", goalId).eq("user_id", user.id).single();
+    if (goalError || !goal) return json({ error: "Goal not found." }, 404);
+
+    const context = body?.goal_context && typeof body.goal_context === "object" ? body.goal_context : { goal };
+    const queryPlan = body?.resource_search && typeof body.resource_search === "object" ? body.resource_search : {};
+    const difficulty = ["beginner", "intermediate", "advanced"].includes(context?.difficulty) ? context.difficulty : "beginner";
+    let discovered: unknown = [];
+    try {
+      discovered = await discover(context, queryPlan, "specific");
+      let resources = normaliseResources(discovered, goalId, difficulty);
+      if (resources.length < 3) {
+        discovered = await discover(context, queryPlan, "broad");
+        resources = normaliseResources([...(Array.isArray(discovered) ? discovered : []), ...resources], goalId, difficulty);
+      }
+      if (!resources.length) return json({ resources: [], fallback: true, message: "No matching resources were found." });
+      const db = adminClient();
+      const rows = resources.map((resource) => ({ goal_id: goalId, title: resource.title, url: resource.url, resource_type: resource.type === "youtube" ? "youtube" : "web", relevance_score: resource.relevance_score, plan_step: resource.plan_step, difficulty: resource.difficulty, reason_recommended: resource.reason_recommended }));
+      const { data: saved, error: saveError } = await db.from("goal_resources").insert(rows).select("id,url,title,resource_type,relevance_score,plan_step,difficulty,reason_recommended,created_at");
+      if (saveError) throw saveError;
+      return json({ resources: saved || resources, fallback: false });
+    } catch (error) {
+      console.warn("resource discovery failed", error);
+      return json({ resources: [], fallback: true, error: "RESOURCE_DISCOVERY_UNAVAILABLE" }, 200);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("vow-goal-resources", message);
+    return json({ error: "VOW could not load goal resources right now." }, 500);
+  }
+});
