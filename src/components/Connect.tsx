@@ -16,14 +16,14 @@ const categories: { id: IntegrationCategory | 'all'; label: string }[] = [
 ];
 function integrationMatchesGoal(integration: IntegrationDefinition, goal: ActiveGoal): boolean {
   const armadillo = goal.armadillo && typeof goal.armadillo === 'object' ? goal.armadillo : {};
-  const integration = typeof armadillo.integration === 'string' ? armadillo.integration : '';
+  const armadilloIntegration = typeof armadillo.integration === 'string' ? armadillo.integration : '';
   const evidenceSource = Array.isArray(armadillo.evidence_source) ? armadillo.evidence_source.filter((value): value is string => typeof value === 'string') : [];
   const evidence = Array.isArray(armadillo.evidence) ? armadillo.evidence.filter((value): value is string => typeof value === 'string') : [];
   const category = typeof armadillo.category === 'string' ? armadillo.category : '';
   const goalType = typeof armadillo.goal_type === 'string' ? armadillo.goal_type : '';
-  const haystack = [integration, ...evidenceSource, ...evidence, category, goalType, goal.title, goal.outcome].filter(Boolean).join(' ').toLowerCase();
+  const haystack = [armadilloIntegration, ...evidenceSource, ...evidence, category, goalType, goal.title, goal.outcome].filter(Boolean).join(' ').toLowerCase();
   if (haystack.includes(integration.id.toLowerCase()) || haystack.includes(integration.name.toLowerCase())) return true;
-  return integration.recommendedGoalKeywords.some((keyword) => haystack.includes(keyword.toLowerCase())) && Boolean(integration || evidenceSource.length);
+  return integration.recommendedGoalKeywords.some((keyword) => haystack.includes(keyword.toLowerCase())) && Boolean(armadilloIntegration || evidenceSource.length);
 }
 export function ConnectPage({ onBack }: { onBack?: () => void }) {
   const { session } = useAuth(); const userId = session?.user.id; const connectionKey = userId ? `vow:connections:${userId}` : '';
