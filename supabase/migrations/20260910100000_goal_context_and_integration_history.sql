@@ -21,24 +21,20 @@ alter table public.integration_connections enable row level security;
 
 drop policy if exists "Users can read their integration history" on public.integration_connections;
 create policy "Users can read their integration history"
-  on public.integration_connections for select
-  to authenticated
-  using ((select auth.uid()) = user_id);
+  on public.integration_connections for select to authenticated using ((select auth.uid()) = user_id);
 
 drop policy if exists "Users can create their integration history" on public.integration_connections;
 create policy "Users can create their integration history"
-  on public.integration_connections for insert
-  to authenticated
-  with check ((select auth.uid()) = user_id);
+  on public.integration_connections for insert to authenticated with check ((select auth.uid()) = user_id);
 
 drop policy if exists "Users can update their integration history" on public.integration_connections;
 create policy "Users can update their integration history"
-  on public.integration_connections for update
-  to authenticated
-  using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
+  on public.integration_connections for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
--- Keep updated_at current without relying on client clocks.
+drop policy if exists "Users can delete their integration history" on public.integration_connections;
+create policy "Users can delete their integration history"
+  on public.integration_connections for delete to authenticated using ((select auth.uid()) = user_id);
+
 create or replace function public.touch_integration_connection_updated_at()
 returns trigger
 language plpgsql
@@ -51,6 +47,4 @@ end;
 $$;
 
 drop trigger if exists trg_touch_integration_connection_updated_at on public.integration_connections;
-create trigger trg_touch_integration_connection_updated_at
-before update on public.integration_connections
-for each row execute function public.touch_integration_connection_updated_at();
+create trigger trg_touch_integration_connection_updated_at before update on public.integration_connections for each row execute function public.touch_integration_connection_updated_at();
