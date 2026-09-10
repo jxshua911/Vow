@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { checkContentSafety } from '@/lib/contentSafety';
-import type { Goal, Session } from '@/types/database';
+import type { Goal, GoalClarificationAnswer, Session } from '@/types/database';
+import { buildGoalContext, goalContextPrompt } from '@/lib/goalContext';
 
 function readAIText(data: unknown): string {
   if (!data || typeof data !== 'object') return '';
@@ -41,9 +42,22 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
         const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).gte('scheduled_at', start.toISOString()).lte('scheduled_at', end.toISOString()).order('scheduled_at', { ascending: true });
         upcoming = (data || []) as Session[];
       }
-      const context = goal
-        ? { title: goal.title, outcome: goal.outcome, status: goal.status, deadline: goal.deadline, weekly_commitment_target: goal.weekly_commitment_target, why_it_matters: goal.why_it_matters }
-        : { title: 'General planning', outcome: 'No single goal selected' };
+
+      let goalContext: ReturnType<typeof buildGoalContext> | null = null;
+      if (goal) {
+        const { data: answers, error: answerError } = await supabase.from('goal_clarification_answers').select('*').eq('goal_id', goal.id).order('question_order', { ascending: true });
+        if (answerError) throw answerError;
+        goalContext = buildGoalContext(goal, (answers || []) as GoalClarificationAnswer[]);
+      }
+
+      const context = goalContext ? {
+        title: goalContext.goal.title,
+        outcome: goalContext.goal.outcome,
+        status: goalContext.goal.status,
+        deadline: goalContext.goal.deadline,
+        weekly_commitment_target: goalContext.goal.weekly_commitment_target,
+        why_it_matters: goalContext.goal.why_it_matters,
+      } : { title: 'General planning', outcome: 'No single goal selected' };
       let references: Array<{ url: string; title: string | null; resource_type: string }> = [];
       if (goal) {
         const { data } = await supabase.from('goal_resources').select('url,title,resource_type').eq('goal_id', goal.id).order('created_at', { ascending: true });
@@ -53,11 +67,12 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
       const { data, error: invokeError } = await supabase.functions.invoke('vow-goal-ai', {
         body: {
           goal: context,
-          message: question,
+          goal_context: goalContext,
+          message: goalContext ? `${goalContextPrompt(goalContext)}\n\nUser request: ${question}` : question,
           scope: 'general-life-planning',
           calendar,
           references,
-          instruction: 'You are VOW AI, a rigorous planning and accountability assistant. Give useful, goal-specific reasoning, not motivational filler. Do not say “define what better looks like”, “stay consistent”, “break it into smaller steps”, or similar generic coaching phrases unless you immediately replace them with concrete actions, numbers, checkpoints, or decision rules tied to this exact goal. If the goal is measurable, identify the metric and a credible baseline/target. If it is skill-based, specify practice structure and progression. If it is a project, specify deliverables, dependencies and milestones. If it is a study goal, specify topics, workload and assessment. If it is a fitness goal, specify training variables and recovery considerations without pretending certainty. Use the supplied VOW calendar to find conflicts and realistic weekly capacity. Use attached goal references as evidence of the user’s intended outcome; inspect public links when relevant. Use web research when current, specialised, empirical, or time-sensitive information would materially improve the answer, and cite or name the important sources/findings rather than pretending research was done. If critical information is missing, ask only the minimum necessary question; otherwise make a reasonable assumption and state it. Challenge unrealistic or contradictory goals instead of blindly encouraging them. Return a practical plan with: target, success metric, assumptions/baseline, milestone sequence, weekly workload, concrete actions/sessions, progression, checkpoints, risks and fallback rules. Be concise, specific and age-appropriate.',
+          instruction: 'You are VOW AI, a rigorous planning and accountability assistant. Use the supplied canonical Goal Context as the source of truth when a goal is selected. Give useful, goal-specific reasoning, not motivational filler. Do not say “define what better looks like”, “stay consistent”, “break it into smaller steps”, or similar generic coaching phrases unless you immediately replace them with concrete actions, numbers, checkpoints, or decision rules tied to this exact goal. If the goal is measurable, identify the metric and a credible baseline/target. If it is skill-based, specify practice structure and progression. If it is a project, specify deliverables, dependencies and milestones. If it is a study goal, specify topics, workload and assessment. If it is a fitness goal, specify training variables and recovery considerations without pretending certainty. Use the supplied VOW calendar to find conflicts and realistic weekly capacity. Use attached goal references as evidence of the user’s intended outcome; inspect public links when relevant. Use web research when current, specialised, empirical, or time-sensitive information would materially improve the answer, and cite or name the important sources/findings rather than pretending research was done. If critical information is missing, ask only the minimum necessary question; otherwise make a reasonable assumption and state it. Challenge unrealistic or contradictory goals instead of blindly encouraging them. Return a practical plan with: target, success metric, assumptions/baseline, milestone sequence, weekly workload, concrete actions/sessions, progression, checkpoints, risks and fallback rules. Be concise, specific and age-appropriate.',
         },
       });
       if (invokeError) throw new Error('VOW AI could not complete that request.');
