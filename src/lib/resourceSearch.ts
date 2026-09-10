@@ -1,4 +1,5 @@
 import type { GoalContext } from '@/lib/goalContext';
+import { buildResourceSearchPlan as buildContextResourceSearchPlan } from '@/lib/goalContext';
 
 export interface ResourceSearchPlan {
   level: 'beginner' | 'intermediate' | 'advanced';
@@ -8,23 +9,12 @@ export interface ResourceSearchPlan {
 }
 
 export function buildResourceSearchPlan(context: GoalContext): ResourceSearchPlan {
-  const level = context.personalisationComplete ? context.difficulty : 'beginner';
-  const base = [context.goal.title, context.armadillo.goal_type].filter(Boolean).join(' ');
-  const step = context.activeStep ? ` ${context.activeStep}` : '';
-  const answers = context.answers.filter((answer) => answer.answer?.trim()).map((answer) => answer.answer!.trim()).slice(0, 3);
-  const personalContext = answers.length ? ` ${answers.join(' ')}` : '';
-
+  const plan = buildContextResourceSearchPlan(context);
   return {
-    level,
-    youtubeQueries: [
-      `${base}${step} ${level} tutorial${personalContext}`,
-      `${base}${step} ${level} walkthrough${personalContext}`,
-    ],
-    webQueries: [
-      `${base}${step} ${level} guide${personalContext}`,
-      `${base}${step} ${level} resources${personalContext}`,
-    ],
-    appKeywords: [context.armadillo.goal_type, context.armadillo.category, ...context.armadillo.evidence].filter(Boolean),
+    level: context.personalisationComplete ? context.difficulty : 'beginner',
+    youtubeQueries: plan.youtube,
+    webQueries: plan.web,
+    appKeywords: plan.apps,
   };
 }
 
