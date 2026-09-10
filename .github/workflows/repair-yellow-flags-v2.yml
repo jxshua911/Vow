@@ -1,0 +1,45 @@
+name: Repair Yellow Flags v2
+on:
+  workflow_dispatch:
+  push:
+    branches: [capacitor-mobile]
+    paths: ['.github/workflows/repair-yellow-flags-v2.yml']
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: capacitor-mobile}
+      - name: Apply source repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('src/components/GoalPlanner.tsx'); s=p.read_text(); start=s.find('  async function handleCreate(){'); end=s.find('  if(plan){',start)
+          if start<0 or end<0: raise SystemExit('GoalPlanner handleCreate boundary missing')
+          old=s[start:end]
+          if "supabase.rpc('lock_goal_plan'" not in old:
+            new=r'''  async function handleCreate(){if(!plan||!draftGoalId||saving)return;setSaving(true);setError('');try{const start=nextMonday();const version=1;const {data:existingSessions,error:existingError}=await supabase.from('sessions').select('scheduled_at,duration_minutes').eq('user_id',userId).eq('status','scheduled').neq('goal_id',draftGoalId);if(existingError)throw existingError;const occupied=toOccupiedSlots((existingSessions||[]).map(row=>({scheduledAt:row.scheduled_at,durationMinutes:row.duration_minutes})));const schedule=plan.schedule.filter(item=>availableDays.includes(item.day)).map(item=>{const week=Math.max(1,Math.min(durationWeeks,Number(item.week)||1));const dayIndex=Math.max(0,DAYS.indexOf(item.day));const requested=addDays(start,(week-1)*7+dayIndex);const preferredTime=dayTimes[item.day]||plan.preferred_times_by_day?.[item.day];const match=/^(\d{1,2}):(\d{2})$/.exec(preferredTime||'');if(!match)throw new Error(`Choose a time for ${item.day} before locking in your goal.`);requested.setHours(Math.min(23,Number(match[1])),Math.min(59,Number(match[2])),0,0);const durationMinutes=Math.max(5,Number(item.duration_minutes)||30);const slot=allocateSameDaySlot(requested,durationMinutes,occupied);if(!slot)throw new Error(`No available time remains on ${item.day} for week ${week}. Choose another day or reduce the number of sessions.`);reserveSlot(slot,occupied);return{item,week,date:slot.date,durationMinutes};});if(!schedule.length)throw new Error('The generated schedule does not match your selected days.');const milestoneRows=plan.milestones.map((m,i)=>({title:m.title,description:m.description,sort_order:i,deadline:deadlineFor(start,Math.min(durationWeeks,Math.max(1,m.week))),status:i===0?'in_progress':'pending'}));const planRows=schedule.map(({item,week,date,durationMinutes})=>({plan_version:version,week_number:week,day_of_week:item.day,scheduled_at:date.toISOString(),task:item.task,purpose:item.purpose||null,target_metric:item.target_metric||plan.success_metric,duration_minutes:durationMinutes,status:'scheduled'}));const sessionRows=schedule.map(({item,week,date,durationMinutes})=>({milestone_sort_order:Math.min(plan.milestones.length-1,Math.floor(((Math.max(1,week)-1)/Math.max(1,durationWeeks))*plan.milestones.length)),title:item.task,scheduled_at:date.toISOString(),duration_minutes:durationMinutes,status:'scheduled',moved_count:0,notes:[item.purpose,item.target_metric?`Target: ${item.target_metric}`:null].filter(Boolean).join('\n')||null,external_event_id:null}));const goalPayload={title:rawInput.trim(),outcome:plan.outcome||rawInput.trim(),why_it_matters:why.trim()||null,start_date:toDateString(start),deadline:deadlineFor(start,durationWeeks),duration:`${durationWeeks}w`,status:'active',weekly_commitment_target:availableDays.length,armadillo:plan.armadillo||armadillo,armadillo_analyzed_at:new Date().toISOString(),plan_json:plan,plan_version:version,plan_generated_at:new Date().toISOString(),planning_horizon_weeks:durationWeeks,planning_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone};const {data,error:rpcError}=await supabase.rpc('lock_goal_plan',{p_goal_id:draftGoalId,p_goal:goalPayload,p_milestones:milestoneRows,p_plan_items:planRows,p_sessions:sessionRows});if(rpcError||!data)throw rpcError||new Error('VOW could not lock the goal plan. Nothing was committed.');const {data:sessions,error:sessionReadError}=await supabase.from('sessions').select('*').eq('goal_id',draftGoalId).eq('user_id',userId).eq('status','scheduled').order('scheduled_at',{ascending:true});if(sessionReadError)throw sessionReadError;try{if(sessions)await syncUpcomingSessionNotifications(sessions as Session[]);}catch{console.warn('[VOW] Session notifications could not be synced.');}const {data:calendar,error:ce}=await supabase.functions.invoke('google-calendar-sync-goal',{body:{goalId:draftGoalId}});if(ce)console.warn('[VOW] Google Calendar sync unavailable or not connected.',ce);else if(calendar?.created_count)console.info(`[VOW] ${calendar.created_count} Google Calendar events created.`);onCreated();}catch(err){setError(err instanceof Error?err.message:'Failed to create goal.');}finally{setSaving(false);}}
+'''
+            s=s[:start]+new+s[end:]; p.write_text(s)
+          p=Path('src/components/Onboarding.tsx'); s=p.read_text(); start=s.find('  async function handleComplete(){'); end=s.find('  const steps =',start)
+          if start<0 or end<0: raise SystemExit('Onboarding handleComplete boundary missing')
+          old=s[start:end]
+          if "supabase.rpc('complete_onboarding'" not in old:
+            new=r'''  async function handleComplete(){if(!decomposed)return;if(selectedDays.length===0){setError('Choose at least one day that works for you.');return;}const missing=missingTimes();if(missing.length){setError(`Choose a comfortable time for ${missing.join(', ')} before locking in your first goal.`);return;}setSaving(true);setError(null);try{const safety=await checkContentSafety([decomposed.outcome||rawGoal.trim(),whyItMatters.trim()].filter(Boolean).join('\n'));if(safety.status!=='safe')throw new Error(safety.message||'Please reword your goal and try again.');const settings={user_id:userId,timezone,preferred_session_times:JSON.stringify(dayTimes),notification_frequency:notificationFreq,coaching_tone:'honest_encouraging'};const milestoneRows=decomposed.milestones.map((m,i)=>({title:m.title,description:m.description,sort_order:i,deadline:toDateString(addDays(new Date(),m.weeksOut*7)),status:i===0?'in_progress':'pending'}));const firstMilestone=decomposed.milestones[0]?.title||decomposed.outcome;const sessions=selectedDays.map((day)=>{const start=new Date();const currentDay=start.getDay()===0?7:start.getDay();const targetDay=DAYS.indexOf(day)+1;const offset=(targetDay-currentDay+7)%7||7;const sessionDate=addDays(start,offset);const [hour,minute]=dayTimes[day].split(':').map(Number);sessionDate.setHours(hour,minute,0,0);return{milestone_sort_order:0,title:firstMilestone,scheduled_at:sessionDate.toISOString(),duration_minutes:decomposed.suggestedSessionDuration,status:'scheduled'};});const goal={title:decomposed.outcome,outcome:decomposed.outcome,why_it_matters:whyItMatters.trim()||null,deadline:decomposed.deadline,weekly_commitment_target:selectedDays.length,plan_json:{available_days:selectedDays,preferred_times_by_day:dayTimes,onboarding_generated:true}};const {data,error:rpcError}=await supabase.rpc('complete_onboarding',{p_settings:settings,p_goal:goal,p_milestones:milestoneRows,p_sessions:sessions});if(rpcError||!data)throw rpcError||new Error('VOW could not complete onboarding. Nothing was committed.');onComplete();}catch(err){setError(err instanceof Error?err.message:'Failed to save. Please try again.');}finally{setSaving(false);}}
+'''
+            s=s[:start]+new+s[end:]; p.write_text(s)
+          PY
+      - name: Commit source repairs
+        shell: bash
+        run: |
+          git config user.name 'VOW Repair Bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/GoalPlanner.tsx src/components/Onboarding.tsx
+          if git diff --cached --quiet; then echo 'No source changes needed'; exit 0; fi
+          git commit -m 'fix: make goal flows transactional'
+          git push origin capacitor-mobile
