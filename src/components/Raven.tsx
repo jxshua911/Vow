@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
 import { calculateRavenSnapshot, getRavenAwards, goalProgress, type RavenAward, type RavenSnapshot } from '@/lib/raven';
+import { buildGoalContext } from '@/lib/goalContext';
 import { PageHeader } from './AppShell';
 
 export function RavenPage() {
@@ -45,6 +46,34 @@ export function RavenPage() {
         await supabase.from('raven_weekly_snapshots').upsert({ user_id: session.user.id, week_start: currentWeek.week_start, week_end: currentWeek.week_end, score: next.score, completion_pct: currentWeek.completion_pct, snapshot: next }, { onConflict: 'user_id,week_start' });
       }
 
+      await Promise.all(allGoals.map(async (goal) => {
+        const context = buildGoalContext(goal);
+        const goalStats = goalProgress(allSessions, [goal])[0];
+        const priorLearning = goal.goal_context_json || {};
+        const updatedLearning = {
+          ...priorLearning,
+          raven: {
+            score: next.score,
+            trend: next.trend,
+            score_delta: next.score_delta,
+            current_streak: next.current_streak,
+            best_streak: next.best_streak,
+            completion_pct: goalStats?.pct ?? null,
+            completed_sessions: goalStats?.completed ?? 0,
+            scheduled_sessions: goalStats?.total ?? 0,
+            signals: next.signals.slice(0, 8),
+            observed_at: new Date().toISOString(),
+          },
+          armadillo: context.armadillo,
+          difficulty: context.difficulty,
+          preferences: context.preferences,
+          constraints: context.constraints,
+          current_plan_step: context.activeStep,
+        };
+        const { error: updateError } = await supabase.from('goals').update({ goal_context_json: updatedLearning }).eq('id', goal.id).eq('user_id', session.user.id);
+        if (updateError) console.warn('[VOW] Could not persist Raven learning for goal:', goal.id);
+      }));
+
       setSnapshot(next);
       setAwards([...earned, ...storedAwards]);
       setGoals(allGoals);
@@ -68,9 +97,7 @@ export function RavenPage() {
 
   return <div>
     <PageHeader title="Raven" subtitle="Your progress, as it actually happened." action={<button onClick={load} className="text-xs text-vow-muted hover:text-vow-ink">Refresh</button>} />
-
     {error && <div className="border-l-2 border-vow-ink pl-3 mb-8"><p className="text-xs text-vow-muted">{error}</p></div>}
-
     <section className="border border-vow-border p-6 mb-8">
       <div className="flex items-start justify-between gap-6">
         <div><p className="vow-label mb-2">Raven score</p><div className="flex items-end gap-3"><span className="vow-heading text-5xl text-vow-ink">{snapshot.score}</span><span className="text-sm text-vow-muted mb-2">/ 100</span></div><div className="flex items-center gap-1 mt-3 text-xs text-vow-muted"><TrendIcon className="w-3.5 h-3.5" />{trendText}</div></div>
@@ -80,20 +107,10 @@ export function RavenPage() {
       {snapshot.trend === 'down' && <div className="mt-5 border-t border-vow-border pt-5"><p className="text-sm text-vow-ink font-medium">Your score went down. What’s happening, bro?</p><p className="text-xs text-vow-muted mt-1">Raven noticed the change. It’s a signal to understand, not a reason to beat yourself up.</p></div>}
       {snapshot.trend === 'up' && <div className="mt-5 border-t border-vow-border pt-5"><p className="text-sm text-vow-ink font-medium">Your consistency is moving up.</p><p className="text-xs text-vow-muted mt-1">Keep doing the work. Raven is tracking the pattern.</p></div>}
     </section>
-
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border border border-vow-border mb-10">
-      <Metric label="Completion" value={`${snapshot.completion_pct}%`} />
-      <Metric label="Completed" value={snapshot.total_completed} />
-      <Metric label="Best week" value={`${snapshot.best_weekly_completion_pct}%`} />
-      <Metric label="Weeks tracked" value={snapshot.weeks_observed} />
-    </div>
-
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border border border-vow-border mb-10"><Metric label="Completion" value={`${snapshot.completion_pct}%`} /><Metric label="Completed" value={snapshot.total_completed} /><Metric label="Best week" value={`${snapshot.best_weekly_completion_pct}%`} /><Metric label="Weeks tracked" value={snapshot.weeks_observed} /></div>
     {snapshot.signals.length > 0 && <section className="border-t border-vow-border pt-8 mb-10"><p className="vow-label mb-4">What Raven noticed</p><div className="space-y-3">{snapshot.signals.map((signal) => <div key={signal} className="text-sm text-vow-ink border-l border-vow-border pl-3">{signal}</div>)}</div></section>}
-
     {progress.length > 0 && <section className="border-t border-vow-border pt-8 mb-10"><p className="vow-label mb-4">Goal progress</p><div className="space-y-5">{progress.map(({ goal, completed, total, pct }) => <div key={goal.id}><div className="flex items-center justify-between gap-4 mb-2"><p className="text-sm text-vow-ink truncate">{goal.outcome}</p><p className="text-xs text-vow-muted shrink-0">{completed}/{total} · {pct}%</p></div><div className="h-1 bg-vow-border"><div className="h-full bg-vow-ink" style={{ width: `${pct}%` }} /></div></div>)}</div></section>}
-
     <section className="border-t border-vow-border pt-8 mb-10"><div className="flex items-center gap-2 mb-4"><Trophy className="w-4 h-4" /><p className="vow-label">Personal bests</p></div><div className="grid grid-cols-2 gap-px bg-vow-border border border-vow-border"><Metric label="Longest streak" value={`${snapshot.best_streak} days`} /><Metric label="Best weekly completion" value={`${snapshot.best_weekly_completion_pct}%`} /><Metric label="Most completed in a week" value={snapshot.weekly_completed_best} /><Metric label="Total completed" value={snapshot.total_completed} /></div></section>
-
     {awards.length > 0 && <section className="border-t border-vow-border pt-8"><div className="flex items-center gap-2 mb-4"><Award className="w-4 h-4" /><p className="vow-label">Awards</p></div><div className="border-t border-vow-border">{awards.slice(0, 12).map((award) => <div key={`${award.key}-${award.earned_at}`} className="border-b border-vow-border py-4 flex items-center gap-4"><div className="w-8 h-8 border border-vow-border flex items-center justify-center shrink-0"><Award className="w-4 h-4" /></div><div><p className="text-sm text-vow-ink font-medium">{award.title}</p><p className="text-xs text-vow-muted mt-1">{award.description}</p></div></div>)}</div></section>}
   </div>;
 }
