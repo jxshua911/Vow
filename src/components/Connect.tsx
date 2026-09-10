@@ -6,24 +6,31 @@ import { useAuth } from '@/lib/auth';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { NATIVE_CALENDAR_REDIRECT } from '@/lib/nativeAuth';
+import type { Goal } from '@/types/database';
 
 function Glyph({ children, className = '' }: { children: string; className?: string }) { return <span aria-hidden="true" className={`inline-flex items-center justify-center font-medium leading-none ${className}`}>{children}</span>; }
 type ConnectState = Record<string, 'connected' | 'setup'>;
+type ActiveGoal = Pick<Goal, 'id' | 'title' | 'outcome' | 'status' | 'armadillo'>;
 const categories: { id: IntegrationCategory | 'all'; label: string }[] = [
   { id: 'all', label: 'All' }, { id: 'fitness', label: 'Fitness' }, { id: 'health', label: 'Health' }, { id: 'education', label: 'Education' }, { id: 'productivity', label: 'Productivity' }, { id: 'reading', label: 'Reading' }, { id: 'mindfulness', label: 'Mindfulness' }, { id: 'faith', label: 'Faith' },
 ];
-function integrationMatchesGoal(integration: IntegrationDefinition, goal: any): boolean {
-  const armadillo = goal?.armadillo && typeof goal.armadillo === 'object' ? goal.armadillo : {};
-  const haystack = [armadillo.integration, ...(Array.isArray(armadillo.evidence_source) ? armadillo.evidence_source : []), ...(Array.isArray(armadillo.evidence) ? armadillo.evidence : []), armadillo.category, armadillo.goal_type, goal?.title, goal?.outcome].filter(Boolean).join(' ').toLowerCase();
+function integrationMatchesGoal(integration: IntegrationDefinition, goal: ActiveGoal): boolean {
+  const armadillo = goal.armadillo && typeof goal.armadillo === 'object' ? goal.armadillo : {};
+  const integration = typeof armadillo.integration === 'string' ? armadillo.integration : '';
+  const evidenceSource = Array.isArray(armadillo.evidence_source) ? armadillo.evidence_source.filter((value): value is string => typeof value === 'string') : [];
+  const evidence = Array.isArray(armadillo.evidence) ? armadillo.evidence.filter((value): value is string => typeof value === 'string') : [];
+  const category = typeof armadillo.category === 'string' ? armadillo.category : '';
+  const goalType = typeof armadillo.goal_type === 'string' ? armadillo.goal_type : '';
+  const haystack = [integration, ...evidenceSource, ...evidence, category, goalType, goal.title, goal.outcome].filter(Boolean).join(' ').toLowerCase();
   if (haystack.includes(integration.id.toLowerCase()) || haystack.includes(integration.name.toLowerCase())) return true;
-  return integration.recommendedGoalKeywords.some((keyword) => haystack.includes(keyword.toLowerCase())) && Boolean(armadillo.integration || (Array.isArray(armadillo.evidence_source) && armadillo.evidence_source.length));
+  return integration.recommendedGoalKeywords.some((keyword) => haystack.includes(keyword.toLowerCase())) && Boolean(integration || evidenceSource.length);
 }
 export function ConnectPage({ onBack }: { onBack?: () => void }) {
   const { session } = useAuth(); const userId = session?.user.id; const connectionKey = userId ? `vow:connections:${userId}` : '';
-  const [category, setCategory] = useState<IntegrationCategory | 'all'>('all'); const [query, setQuery] = useState(''); const [connected, setConnected] = useState<ConnectState>({}); const [connecting, setConnecting] = useState<string | null>(null); const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false); const [googleCalendarAvailable, setGoogleCalendarAvailable] = useState(false); const [activeGoals, setActiveGoals] = useState<any[]>([]); const [loadingGoals, setLoadingGoals] = useState(false);
+  const [category, setCategory] = useState<IntegrationCategory | 'all'>('all'); const [query, setQuery] = useState(''); const [connected, setConnected] = useState<ConnectState>({}); const [connecting, setConnecting] = useState<string | null>(null); const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false); const [googleCalendarAvailable, setGoogleCalendarAvailable] = useState(false); const [activeGoals, setActiveGoals] = useState<ActiveGoal[]>([]); const [loadingGoals, setLoadingGoals] = useState(false);
   useEffect(() => { if (!userId) { setConnected({}); return; } try { setConnected(JSON.parse(localStorage.getItem(connectionKey) || '{}')); } catch { setConnected({}); } }, [userId, connectionKey]);
   useEffect(() => { if (userId) localStorage.setItem(connectionKey, JSON.stringify(connected)); }, [connected, userId, connectionKey]);
-  useEffect(() => { if (!userId) { setActiveGoals([]); return; } let cancelled = false; setLoadingGoals(true); supabase.from('goals').select('id,title,outcome,status,armadillo').eq('user_id', userId).eq('status', 'active').then(({ data, error }) => { if (!cancelled) { setActiveGoals(error ? [] : (data || [])); setLoadingGoals(false); } }); return () => { cancelled = true; }; }, [userId]);
+  useEffect(() => { if (!userId) { setActiveGoals([]); return; } let cancelled = false; setLoadingGoals(true); supabase.from('goals').select('id,title,outcome,status,armadillo').eq('user_id', userId).eq('status', 'active').then(({ data, error }) => { if (!cancelled) { setActiveGoals(error ? [] : ((data || []) as ActiveGoal[])); setLoadingGoals(false); } }); return () => { cancelled = true; }; }, [userId]);
   useEffect(() => { if (!session) return; let cancelled = false; supabase.functions.invoke('google-calendar-auth', { body: { action: 'status' } }).then(({ data, error }) => { if (cancelled) return; const available = !error && data?.available === true && data?.configured === true; setGoogleCalendarAvailable(available); setGoogleCalendarConnected(available && Boolean(data?.connected)); if (available && data?.connected) setConnected((current) => ({ ...current, 'google-calendar': 'connected' })); }).catch(() => { if (!cancelled) { setGoogleCalendarAvailable(false); setGoogleCalendarConnected(false); } }); return () => { cancelled = true; }; }, [session]);
   const goalRelevantIntegrations = useMemo(() => INTEGRATIONS.filter((integration) => activeGoals.some((goal) => integrationMatchesGoal(integration, goal))), [activeGoals]);
   const integrations = useMemo(() => { const q = query.trim().toLowerCase(); return goalRelevantIntegrations.filter((integration) => { const categoryMatch = category === 'all' || integration.category === category; const queryMatch = !q || `${integration.name} ${integration.description} ${integration.category}`.toLowerCase().includes(q); return categoryMatch && queryMatch; }); }, [category, query, goalRelevantIntegrations]);
