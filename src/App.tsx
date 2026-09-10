@@ -14,6 +14,7 @@ import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
+import { OAuthConnectionCallback } from '@/components/OAuthConnectionCallback';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 
@@ -33,6 +34,9 @@ function AppContent() {
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
   const view = viewHistory[viewHistory.length - 1];
 
+  const pathname = window.location.pathname;
+  const oauthPath = pathname === '/calendar/oauth/callback' ? '/calendar/oauth/callback' : pathname === '/strava/oauth/callback' ? '/strava/oauth/callback' : null;
+
   const navigate = useCallback((next: View) => {
     setViewHistory((current) => {
       if (current[current.length - 1] === next) return current;
@@ -41,7 +45,6 @@ function AppContent() {
       return nextHistory;
     });
   }, []);
-
   const goBack = useCallback(() => {
     setViewHistory((current) => {
       if (current.length <= 1) { viewHistoryRef.current = current; return current; }
@@ -50,15 +53,8 @@ function AppContent() {
       return nextHistory;
     });
   }, []);
-
   useEffect(() => { viewHistoryRef.current = viewHistory; }, [viewHistory]);
-  useEffect(() => {
-    const listener = CapacitorApp.addListener('backButton', () => {
-      if (viewHistoryRef.current.length > 1) goBack();
-      else CapacitorApp.exitApp();
-    });
-    return () => { listener.then((handle) => handle.remove()); };
-  }, [goBack]);
+  useEffect(() => { const listener = CapacitorApp.addListener('backButton', () => { if (viewHistoryRef.current.length > 1) goBack(); else CapacitorApp.exitApp(); }); return () => { listener.then((handle) => handle.remove()); }; }, [goBack]);
   useEffect(() => { const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS); return () => window.clearTimeout(timer); }, []);
   useEffect(() => {
     let cancelled = false;
@@ -78,7 +74,8 @@ function AppContent() {
   useEffect(() => { if (splashMinElapsed && contentReady && !splashFadingOut) { setSplashFadingOut(true); const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS); return () => window.clearTimeout(timer); } }, [splashMinElapsed, contentReady, splashFadingOut]);
 
   let content: React.ReactNode;
-  if (loading || (session && settingsLoading)) content = <AppLoading />;
+  if (oauthPath) content = <OAuthConnectionCallback path={oauthPath} />;
+  else if (loading || (session && settingsLoading)) content = <AppLoading />;
   else if (!session) content = <AuthPage />;
   else if (!settings || !settings.onboarding_complete) content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
   else if (view === 'legal') content = <LegalPage onBack={goBack} />;
@@ -91,6 +88,5 @@ function AppContent() {
   </AppShell>;
   return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
 }
-
 function AppLoading() { return <div className="min-h-screen bg-vow-bg flex items-center justify-center" aria-label="Loading"><div className="vow-loading-dots"><span /><span /><span /></div></div>; }
 export default function App() { return <ThemeProvider><AuthProvider><AppContent /></AuthProvider></ThemeProvider>; }
