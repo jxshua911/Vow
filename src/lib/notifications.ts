@@ -1,7 +1,9 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type PermissionStatus } from '@capacitor/local-notifications';
-import type { Session } from '@/types/database';
 import type { GoalContext } from '@/lib/goalContext';
+import type { Goal, GoalClarificationAnswer, Session } from '@/types/database';
+import { supabase } from '@/lib/supabase';
+import { buildGoalContext } from '@/lib/goalContext';
 
 export type NotificationPermission = PermissionStatus['display'];
 export type NotificationPreferences = { sound: true; vibration: true };
@@ -59,9 +61,25 @@ export async function cancelReminder(id: number): Promise<void> {
   await LocalNotifications.cancel({ notifications: [{ id }] });
 }
 
-export async function syncUpcomingSessionNotifications(sessions: Session[], contexts: Record<string, GoalContext> = {}): Promise<void> {
+async function loadContexts(sessions: Session[]): Promise<Record<string, GoalContext>> {
+  const goalIds = [...new Set(sessions.map((session) => session.goal_id))];
+  if (!goalIds.length) return {};
+  const [{ data: goals }, { data: answers }] = await Promise.all([
+    supabase.from('goals').select('*').in('id', goalIds),
+    supabase.from('goal_clarification_answers').select('*').in('goal_id', goalIds).order('question_order', { ascending: true }),
+  ]);
+  const answerRows = (answers || []) as GoalClarificationAnswer[];
+  return Object.fromEntries(((goals || []) as Goal[]).map((goal) => [goal.id, buildGoalContext(goal, answerRows.filter((answer) => answer.goal_id === goal.id))]));
+}
+
+export async function syncUpcomingSessionNotifications(sessions: Session[], providedContexts: Record<string, GoalContext> = {}): Promise<void> {
   if (!Capacitor.isNativePlatform() || await getNotificationPermission() !== 'granted') return;
   const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now());
+  if (!upcoming.length) return;
+  let contexts = providedContexts;
+  if (Object.keys(contexts).length === 0) {
+    try { contexts = await loadContexts(upcoming); } catch { contexts = {}; }
+  }
   await Promise.all(upcoming.map(async (session) => {
     const context = contexts[session.goal_id];
     const step = context?.activeStep ? ` Step: ${context.activeStep}.` : '';
