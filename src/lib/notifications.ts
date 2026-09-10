@@ -15,6 +15,7 @@ const CHANNELS: Record<NotificationChannel, string> = {
 };
 const DEFAULT_PREFERENCES: NotificationPreferences = { sound: true, vibration: true };
 const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
+const NOTIFICATION_GROUP = 'vow-reminders';
 
 export function getNotificationPreferences(): NotificationPreferences {
   try {
@@ -64,11 +65,11 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   return result.display;
 }
 
-export async function scheduleReminder(id: number, title: string, body: string, at: Date): Promise<void> {
+export async function scheduleReminder(id: number, title: string, body: string, at: Date, group = NOTIFICATION_GROUP, groupSummary = false): Promise<void> {
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
   if (await getNotificationPermission() !== 'granted') return;
   await setupNotifications();
-  await LocalNotifications.schedule({ notifications: [{ id, title, body, channelId: CHANNELS['sound-vibration'], smallIcon: VOW_NOTIFICATION_ICON, schedule: { at, allowWhileIdle: true } }] });
+  await LocalNotifications.schedule({ notifications: [{ id, title, body, channelId: CHANNELS['sound-vibration'], smallIcon: VOW_NOTIFICATION_ICON, group, groupSummary, schedule: { at, allowWhileIdle: true } }] });
 }
 
 export async function cancelReminder(id: number): Promise<void> {
@@ -82,8 +83,36 @@ function notificationId(sessionId: string): number {
   return Math.abs(hash || 1);
 }
 
+function notificationGroupKey(at: Date): string {
+  return `${NOTIFICATION_GROUP}-${at.getFullYear()}-${at.getMonth()}-${at.getDate()}-${at.getHours()}-${at.getMinutes()}`;
+}
+
+function groupNotificationId(key: string): number {
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+  return Math.abs(hash || 1);
+}
+
 export async function syncUpcomingSessionNotifications(sessions: Session[]): Promise<void> {
   if (!Capacitor.isNativePlatform() || await getNotificationPermission() !== 'granted') return;
   const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now());
-  await Promise.all(upcoming.map((session) => scheduleReminder(notificationId(session.id), `VOW · ${session.title}`, `${session.duration_minutes} min commitment. This is the time you set aside for it.`, new Date(session.scheduled_at))));
+  const groups = new Map<string, Session[]>();
+  for (const session of upcoming) {
+    const at = new Date(session.scheduled_at);
+    const key = notificationGroupKey(at);
+    const bucket = groups.get(key) || [];
+    bucket.push(session);
+    groups.set(key, bucket);
+  }
+  await Promise.all([...groups.entries()].map(async ([key, bucket]) => {
+    const at = new Date(bucket[0].scheduled_at);
+    if (bucket.length === 1) {
+      const session = bucket[0];
+      await scheduleReminder(notificationId(session.id), `VOW · ${session.title}`, `${session.duration_minutes} min commitment. This is the time you set aside for it.`, at, NOTIFICATION_GROUP, false);
+      return;
+    }
+    const detail = bucket.slice(0, 3).map((session) => session.title).join(' · ');
+    const suffix = bucket.length > 3 ? ` +${bucket.length - 3} more` : '';
+    await scheduleReminder(groupNotificationId(key), `VOW · ${bucket.length} commitments`, `${detail}${suffix}`, at, key, true);
+  }));
 }
