@@ -8,24 +8,26 @@ export interface ContentSafetyResult {
   category?: string;
 }
 
+const SAFETY_TIMEOUT_MS = 8000;
+
 export async function checkContentSafety(text: string): Promise<ContentSafetyResult> {
   const value = text.trim();
   if (!value) return { status: 'review', message: 'Please enter something for VOW to review.' };
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 8000);
+  const timeout = new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('SAFETY_TIMEOUT')), SAFETY_TIMEOUT_MS));
   try {
-    const { data, error } = await supabase.functions.invoke('vow-content-safety', { body: { text: value } });
-    if (error || !data || typeof data !== 'object') return { status: 'safe' };
-    const result = data as Record<string, unknown>;
-    const status = result.status;
+    const result = await Promise.race([
+      supabase.functions.invoke('vow-content-safety', { body: { text: value } }),
+      timeout,
+    ]);
+    const { data, error } = result;
+    if (error || !data || typeof data !== 'object') return { status: 'review', message: 'VOW could not verify that request right now. Please try again.' };
+    const payload = data as Record<string, unknown>;
+    const status = payload.status;
     if (status === 'safe' || status === 'review' || status === 'blocked' || status === 'suspended') {
-      return { status, message: typeof result.message === 'string' ? result.message : undefined, category: typeof result.category === 'string' ? result.category : undefined };
+      return { status, message: typeof payload.message === 'string' ? payload.message : undefined, category: typeof payload.category === 'string' ? payload.category : undefined };
     }
-    return { status: 'safe' };
+    return { status: 'review', message: 'VOW could not verify that request right now. Please try again.' };
   } catch {
-    if (controller.signal.aborted) return { status: 'review', message: 'VOW could not verify that request right now. Please try again.' };
-    return { status: 'safe' };
-  } finally {
-    window.clearTimeout(timeout);
+    return { status: 'review', message: 'VOW could not verify that request right now. Please try again.' };
   }
 }
