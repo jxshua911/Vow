@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -15,10 +15,10 @@ type GoalResource = {
 
 function inferType(url: string): GoalResource['resource_type'] {
   const value = url.toLowerCase();
-  if (/youtube\\.com|youtu\\.be/.test(value)) return 'youtube';
-  if (/instagram\\.com/.test(value)) return 'instagram';
-  if (/\\.(mp4|webm|mov|m4v)(\\?.*)?$/.test(value)) return 'video';
-  if (/\\.(png|jpe?g|webp|gif)(\\?.*)?$/.test(value)) return 'image';
+  if (/youtube\.com|youtu\.be/.test(value)) return 'youtube';
+  if (/instagram\.com/.test(value)) return 'instagram';
+  if (/\.(mp4|webm|mov|m4v)(\?.*)?$/.test(value)) return 'video';
+  if (/\.(png|jpe?g|webp|gif)(\?.*)?$/.test(value)) return 'image';
   return 'link';
 }
 
@@ -43,15 +43,15 @@ export function GoalResources({ goalId }: { goalId: string }) {
     return data?.signedUrl || '';
   }
 
-  async function loadResources() {
+  const loadResources = useCallback(async () => {
     if (!goalId) return;
     const { data, error: resourceError } = await supabase.from('goal_resources').select('*').eq('goal_id', goalId).order('created_at', { ascending: false });
     if (resourceError) { setError('Could not load goal references.'); return; }
     const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await signedDisplayUrl(resource.url) })));
     setResources(next);
-  }
+  }, [goalId]);
 
-  useEffect(() => { loadResources().finally(() => setLoading(false)); }, [goalId]);
+  useEffect(() => { let cancelled = false; loadResources().catch(() => { if (!cancelled) setError('Could not load goal references.'); }).finally(() => { if (!cancelled) setLoading(false); }); return () => { cancelled = true; }; }, [loadResources]);
 
   async function addResource() {
     if (saving || !goalId || (!url.trim() && !file)) return;
@@ -88,9 +88,12 @@ export function GoalResources({ goalId }: { goalId: string }) {
 
   async function removeResource(id: string) {
     const resource = resources.find((item) => item.id === id);
-    if (resource?.url.startsWith('storage://')) await supabase.storage.from('goal-resources').remove([resource.url.slice('storage://'.length)]);
+    if (resource?.url.startsWith('storage://')) {
+      const { error: storageError } = await supabase.storage.from('goal-resources').remove([resource.url.slice('storage://'.length)]);
+      if (storageError) setError('Could not remove the attached file.');
+    }
     const { error: deleteError } = await supabase.from('goal_resources').delete().eq('id', id);
-    if (deleteError) setError('Could not remove that reference.');
+    if (deleteError) { setError('Could not remove that reference.'); return; }
     await loadResources();
   }
 
