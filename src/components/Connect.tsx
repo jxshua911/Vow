@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { NATIVE_CALENDAR_REDIRECT, NATIVE_STRAVA_REDIRECT, WEB_CALENDAR_REDIRECT, WEB_STRAVA_REDIRECT } from '@/lib/nativeAuth';
-import { ArrowLeft, RotateCcw, Unplug } from 'lucide-react';
+import { ArrowLeft, RotateCcw } from 'lucide-react';
 import type { Goal } from '@/types/database';
 import { buildGoalContext, integrationIdsForGoal } from '@/lib/goalContext';
 
@@ -42,6 +42,7 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
     ]).then(([goalResult, connectionResult, calendarResult]) => {
       if (cancelled) return;
       if (goalResult.error) throw goalResult.error;
+      if (connectionResult.error) throw connectionResult.error;
       const nextGoals = (goalResult.data || []) as Goal[];
       const nextRows = (connectionResult.data || []) as ConnectionRow[];
       const nextHistory = Object.fromEntries(nextRows.map((row) => [row.integration_id, row.status])) as ConnectionHistory;
@@ -120,8 +121,14 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
     if (!session || connecting) return;
     setConnecting(id); setError('');
     try {
-      if (id === 'strava') await supabase.functions.invoke('strava-oauth', { body: { action: 'disconnect' } }).catch(() => undefined);
-      if (id === 'google-calendar') await supabase.from('google_calendar_connections').delete().eq('user_id', session.user.id);
+      if (id === 'strava') {
+        const { error: disconnectError } = await supabase.functions.invoke('strava-oauth', { body: { action: 'disconnect' } });
+        if (disconnectError) throw disconnectError;
+      }
+      if (id === 'google-calendar') {
+        const { error: deleteError } = await supabase.from('google_calendar_connections').delete().eq('user_id', session.user.id);
+        if (deleteError) throw deleteError;
+      }
       await persistStatus(id, 'disconnected');
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not disconnect this service.'); }
     finally { setConnecting(null); }
@@ -134,7 +141,7 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
     return <div key={integration.id} className="border border-vow-border p-4 md:p-5 flex items-center gap-4">
       <div className="w-11 h-11 border border-vow-border flex items-center justify-center shrink-0 bg-white p-2"><img src={integration.iconUrl} alt="" className="w-full h-full object-contain" loading="lazy" /></div>
       <div className="min-w-0 flex-1"><div className="flex items-center gap-2 flex-wrap"><h3 className="text-sm font-medium text-vow-ink">{integration.name}</h3>{isConnected && <span className="text-[10px] text-vow-ink">Connected</span>}{!isConnected && wasConnected && <span className="text-[10px] text-vow-muted">Previously connected</span>}{!isConnected && !wasConnected && relevantIds.has(integration.id) && <span className="text-[10px] text-vow-muted">Relevant to your goals</span>}</div><p className="text-xs text-vow-muted mt-1 leading-relaxed">{integration.description}</p><p className="text-[10px] text-vow-muted mt-2">Evidence: {integration.evidence.join(' · ')}</p></div>
-      {isConnected ? <button disabled={connecting === integration.id} onClick={() => disconnectIntegration(integration.id)} className="shrink-0 px-3 py-2 text-xs border border-vow-border text-vow-muted hover:text-vow-ink flex items-center gap-1"><Unplug className="w-3 h-3" />{connecting === integration.id ? 'Updating...' : 'Disconnect'}</button> : <button disabled={unavailable || connecting === integration.id} onClick={() => openProvider(integration.id)} className="shrink-0 px-3 py-2 text-xs border border-vow-ink text-vow-ink hover:bg-vow-border/40 disabled:opacity-50 flex items-center gap-1">{wasConnected ? <RotateCcw className="w-3 h-3" /> : null}{connecting === integration.id ? 'Connecting...' : unavailable ? 'Setup required' : wasConnected ? 'Reconnect' : 'Connect'}</button>}
+      {isConnected ? <button disabled={connecting === integration.id} onClick={() => disconnectIntegration(integration.id)} className="shrink-0 px-3 py-2 text-xs border border-vow-border text-vow-muted hover:text-vow-ink flex items-center gap-1">{connecting === integration.id ? 'Updating...' : 'Disconnect'}</button> : <button disabled={unavailable || connecting === integration.id} onClick={() => openProvider(integration.id)} className="shrink-0 px-3 py-2 text-xs border border-vow-ink text-vow-ink hover:bg-vow-border/40 disabled:opacity-50 flex items-center gap-1">{wasConnected ? <RotateCcw className="w-3 h-3" /> : null}{connecting === integration.id ? 'Connecting...' : unavailable ? 'Setup required' : wasConnected ? 'Reconnect' : 'Connect'}</button>}
     </div>;
   }
 
