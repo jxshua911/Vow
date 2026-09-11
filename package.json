@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "android:build-apk": "node scripts/build-android-apk.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
