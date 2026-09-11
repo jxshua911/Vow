@@ -3,10 +3,12 @@ import { supabase } from '@/lib/supabase';
 import { PageHeader } from './AppShell';
 import { useAuth } from '@/lib/auth';
 
-const CALLBACKS = {
-  '/calendar/oauth/callback': { id: 'google-calendar', name: 'Google Calendar' },
-  '/strava/oauth/callback': { id: 'strava', name: 'Strava' },
-} as const;
+type Provider = { id: 'google-calendar' | 'strava'; name: string; table: 'google_calendar_connections' | 'strava_connections' };
+
+const CALLBACKS: Record<string, Provider> = {
+  '/calendar/oauth/callback': { id: 'google-calendar', name: 'Google Calendar', table: 'google_calendar_connections' },
+  '/strava/oauth/callback': { id: 'strava', name: 'Strava', table: 'strava_connections' },
+};
 
 export function OAuthConnectionCallback({ path }: { path: keyof typeof CALLBACKS }) {
   const { session } = useAuth();
@@ -18,28 +20,33 @@ export function OAuthConnectionCallback({ path }: { path: keyof typeof CALLBACKS
     if (!session?.user?.id) return;
     const provider = CALLBACKS[path];
     const params = new URLSearchParams(window.location.search);
+    const callbackError = params.get('error');
+
     if (params.get('success') !== 'true') {
       setFailed(true);
-      setMessage(params.get('error') || `${provider.name} connection was not completed.`);
+      setMessage(callbackError || `${provider.name} connection was not completed.`);
       return;
     }
-    supabase.from('integration_connections').upsert({
-      user_id: session.user.id,
-      integration_id: provider.id,
-      status: 'connected',
-      connected_at: new Date().toISOString(),
-      disconnected_at: null,
-      last_goal_ids: [],
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,integration_id' }).then(({ error }) => {
+
+    Promise.all([
+      supabase.from('integration_connections').select('status').eq('user_id', session.user.id).eq('integration_id', provider.id).maybeSingle(),
+      supabase.from(provider.table).select('id').eq('user_id', session.user.id).maybeSingle(),
+    ]).then(([historyResult, providerResult]) => {
       if (cancelled) return;
-      if (error) {
+      if (historyResult.error) throw historyResult.error;
+      if (providerResult.error) throw providerResult.error;
+      const connected = historyResult.data?.status === 'connected' && Boolean(providerResult.data?.id);
+      if (!connected) {
         setFailed(true);
-        setMessage(`The provider connected, but VOW could not save the connection state: ${error.message}`);
+        setMessage(`${provider.name} did not complete a verified connection. Please try again.`);
         return;
       }
       setMessage(`${provider.name} is now connected to VOW.`);
       window.setTimeout(() => { window.location.href = '/'; }, 900);
+    }).catch((error) => {
+      if (cancelled) return;
+      setFailed(true);
+      setMessage(error instanceof Error ? error.message : `Could not verify the ${provider.name} connection.`);
     });
     return () => { cancelled = true; };
   }, [path, session]);
