@@ -91,7 +91,7 @@ serve(async (req) => {
       if (stateError) throw stateError;
       if (!stateRow || stateRow.user_id !== userId || Date.now() - new Date(stateRow.created_at).getTime() > 10 * 60 * 1000) return json({ error: "Invalid or expired OAuth state." }, 400);
       await admin.from("strava_oauth_states").delete().eq("state", body.state);
-      return finishCallback(admin, stateRow.user_id, body.code, redirectUri, clientId, clientSecret, stateRow.return_uri || defaultReturnUri);
+      return finishCallback(admin, stateRow.user_id, body.code, clientId, clientSecret, stateRow.return_uri || defaultReturnUri);
     }
 
     if (incomingError) {
@@ -109,14 +109,14 @@ serve(async (req) => {
     if (stateError) throw stateError;
     if (!stateRow || Date.now() - new Date(stateRow.created_at).getTime() > 10 * 60 * 1000) return new Response("Invalid or expired OAuth state.", { status: 400, headers: { "Content-Type": "text/plain" } });
     await admin.from("strava_oauth_states").delete().eq("state", incomingState);
-    return finishCallback(admin, stateRow.user_id, incomingCode, redirectUri, clientId, clientSecret, stateRow.return_uri || defaultReturnUri);
+    return finishCallback(admin, stateRow.user_id, incomingCode, clientId, clientSecret, stateRow.return_uri || defaultReturnUri);
   } catch (error) {
     console.error(error);
     return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
   }
 });
 
-async function finishCallback(admin: ReturnType<typeof createClient>, userId: string, code: string, redirectUri: string, clientId: string, clientSecret: string, returnUri: string) {
+async function finishCallback(admin: ReturnType<typeof createClient>, userId: string, code: string, clientId: string, clientSecret: string, returnUri: string) {
   const tokenResponse = await fetch("https://www.strava.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
