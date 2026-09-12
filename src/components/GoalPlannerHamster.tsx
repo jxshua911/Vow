@@ -6,17 +6,15 @@ import { inferHamsterMode, buildHamsterContext, HAMSTER_WORKFLOWS, type HamsterM
 import { specialistFor } from '@/lib/domainRouter';
 import { PageHeader } from './AppShell';
 
-type Answer={question:string;answer:string};
 type DraftGoal={id:string;title?:string|null;outcome?:string|null;why_it_matters?:string|null;plan_json?:unknown};
 type HamsterPlan={mode:HamsterMode;domain:string;completion_definition:string;overview:string;success_metric:string;horizon:string;cadence:string;deadline:string;steps:Array<{order:number;title:string;purpose:string;target:string;evidence:string;estimated_minutes:number}>;milestones:Array<{title:string;description:string}>;adaptation_rules:string[];next_action:string;workflow?:Record<string,unknown>;knowledge_count?:number};
-
 type ClarificationRow={question?:unknown;answer?:unknown;question_order?:unknown};
 
 export function GoalPlanner({userId,onCreated,onCancel,draftGoal}:{userId:string;onCreated:()=>void;onCancel?:()=>void|Promise<void>;draftGoal?:DraftGoal|null}){
  const [goal,setGoal]=useState(draftGoal?.title||draftGoal?.outcome||''); const [why,setWhy]=useState(draftGoal?.why_it_matters||''); const [armadillo,setArmadillo]=useState<ArmadilloResult|null>(null); const [specialist,setSpecialist]=useState<ReturnType<typeof specialistFor>>(null);
  const [mode,setMode]=useState<HamsterMode|null>(null); const [questions,setQuestions]=useState<string[]>([]); const [answers,setAnswers]=useState<string[]>([]); const [plan,setPlan]=useState<HamsterPlan|null>(null); const [draftId,setDraftId]=useState<string|null>(draftGoal?.id||null); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
  const workflow=useMemo(()=>mode?HAMSTER_WORKFLOWS[mode]:null,[mode]);
- useEffect(()=>{if(!draftGoal?.id)return;setGoal(draftGoal.title||draftGoal.outcome||'');setWhy(draftGoal.why_it_matters||'');setDraftId(draftGoal.id);},[draftGoal?.id]);
+ useEffect(()=>{if(!draftGoal?.id)return;setGoal(draftGoal.title||draftGoal.outcome||'');setWhy(draftGoal.why_it_matters||'');setDraftId(draftGoal.id);},[draftGoal?.id,draftGoal?.title,draftGoal?.outcome,draftGoal?.why_it_matters]);
  useEffect(()=>{if(!draftGoal?.id)return;let cancelled=false;(async()=>{const {data}=await supabase.from('goal_clarification_answers').select('question,answer,question_order').eq('goal_id',draftGoal.id).eq('user_id',userId).order('question_order',{ascending:true});if(cancelled||!data?.length)return;const rows=data as ClarificationRow[];const restoredQuestions:string[]=[];for(const row of rows.slice(0,4)){if(typeof row.question==='string'&&row.question.trim())restoredQuestions.push(row.question);}if(!restoredQuestions.length)return;const restoredAnswers:string[]=[];for(const row of rows.slice(0,restoredQuestions.length)){restoredAnswers.push(typeof row.answer==='string'?row.answer:'');}setQuestions(restoredQuestions);setAnswers(restoredAnswers);})();return()=>{cancelled=true;};},[draftGoal?.id,userId]);
  async function safe(text:string){if(!text.trim())return;const r=await checkContentSafety(text);if(r.status!=='safe')throw new Error(r.message||'Please reword the text and try again.');}
  async function draft(){if(draftId)return draftId;const {data,error:e}=await supabase.from('goals').insert({user_id:userId,title:goal.trim(),outcome:goal.trim(),why_it_matters:why.trim()||null,status:'draft',weekly_commitment_target:0}).select('id').single();if(e||!data)throw e||new Error('Could not start this goal.');setDraftId(data.id);return data.id;}
