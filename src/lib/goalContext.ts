@@ -1,9 +1,9 @@
-import type { Goal, GoalClarificationAnswer } from '../types/database';
-import { analyseGoalForEvidence, type ArmadilloResult } from './armadillo';
-import { buildAnteaterContract, type AnteaterExecutionContract } from './anteater';
-import { rankHedgehogIntegrations, type HedgehogCandidate } from './hedgehog';
-import { INTEGRATIONS } from './integrations/catalog';
-import { inferGoalDifficulty, normaliseAnswers, unansweredQuestions } from './goalContextCore';
+import type { Goal, GoalClarificationAnswer } from '../types/database.ts';
+import { analyseGoalForEvidence, type ArmadilloResult } from './armadillo.ts';
+import { buildAnteaterContract, type AnteaterExecutionContract } from './anteater.ts';
+import { rankHedgehogIntegrations, type HedgehogCandidate } from './hedgehog.ts';
+import { INTEGRATIONS } from './integrations/catalog.ts';
+import { inferGoalDifficulty, normaliseAnswers, unansweredQuestions } from './goalContextCore.ts';
 
 export type GoalDifficulty = 'beginner' | 'intermediate' | 'advanced';
 export type GoalResourceType = 'youtube' | 'web' | 'app';
