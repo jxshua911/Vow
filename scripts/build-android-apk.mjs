@@ -31,7 +31,11 @@ function run(command, args, cwd = root) {
 }
 
 run(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['cap', 'sync', 'android']);
-run(gradlePath, ['assembleDebug', '--no-daemon', '--stacktrace'], resolve(root, 'android'));
+if (isWindows) {
+  run(gradlePath, ['assembleDebug', '--no-daemon', '--stacktrace'], resolve(root, 'android'));
+} else {
+  run('bash', [gradlePath, 'assembleDebug', '--no-daemon', '--stacktrace'], resolve(root, 'android'));
+}
 
 const apk = resolve(root, 'android/app/build/outputs/apk/debug/app-debug.apk');
 if (!existsSync(apk)) {
