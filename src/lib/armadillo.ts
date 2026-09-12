@@ -61,10 +61,12 @@ export function resolveFaithReadingRecommendation(answers: Array<{ question?:str
 
 export function analyseGoalForEvidence(input:{title?:string|null;outcome?:string|null;why_it_matters?:string|null}):ArmadilloResult {
   const text=[input.title,input.outcome,input.why_it_matters].filter(Boolean).join(' ').toLowerCase();
-  const scored = rules.map((rule) => ({ rule, score: rule.keywords.reduce((score, keyword) => score + (text.includes(keyword.toLowerCase()) ? 1 : 0), 0) })).filter(({ score }) => score > 0).sort((a,b) => b.score - a.score);
+  const faithRule = rules.find((rule) => rule.goal_type === 'Bible Reading');
+  const forceFaith = faithRule && faithRule.keywords.some((keyword) => text.includes(keyword.toLowerCase()));
+  const scored = forceFaith ? [{ rule: faithRule, score: faithRule.keywords.filter((keyword) => text.includes(keyword.toLowerCase())).length }] : rules.map((rule) => ({ rule, score: rule.keywords.reduce((score, keyword) => score + (text.includes(keyword.toLowerCase()) ? 1 : 0), 0) })).filter(({ score }) => score > 0).sort((a,b) => b.score - a.score);
   const match = scored[0]?.rule;
   if (!match) return {category:'General',goal_type:'Goal',metric:'measurable progress toward the stated outcome',evidence:['manual progress updates','goal milestones','completed sessions or actions'],integration:null,fallback:'Manual tracking remains the source of truth until a relevant evidence source is connected.',confidence:.55,needs_clarification:false,clarification_reasons:[]};
   const faith = match.goal_type === 'Bible Reading';
-  const confidence = Math.min(.98, .65 + scored[0].score * .08 + (scored[1] && scored[0].score > scored[1].score ? .06 : 0));
+  const confidence = Math.min(.98, .65 + scored[0].score * .08 + (!forceFaith && scored[1] && scored[0].score > scored[1].score ? .06 : 0));
   return {category:match.category,goal_type:match.goal_type,metric:match.metric,evidence:match.evidence,integration:match.integration,fallback:'Manual tracking remains fully usable if the suggested integration is not connected.',confidence,needs_clarification:faith,clarification_reasons:faith ? (match.clarificationReasons || []) : []};
 }
