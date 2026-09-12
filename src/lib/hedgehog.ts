@@ -1,4 +1,4 @@
-import type { GoalContext } from '@/lib/goalContext';
+import type { GoalContext } from './goalContext';
 
 export interface HedgehogCandidate {
   id: string;
