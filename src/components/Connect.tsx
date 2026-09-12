@@ -97,7 +97,7 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
 
   async function persistStatus(id: string, status: ConnectionStatus) {
     if (!session?.user?.id) return;
-    const goalIds = goals.filter((goal) => relevantIds.has(id)).map((goal) => goal.id);
+    const goalIds = goalContexts.filter((context) => integrationIdsForGoal(context, INTEGRATIONS).includes(id)).map((context) => context.goal.id);
     const existing = rows.find((row) => row.integration_id === id);
     const now = new Date().toISOString();
     const payload = { user_id: session.user.id, integration_id: id, status, connected_at: status === 'connected' ? now : (existing?.connected_at || null), disconnected_at: status === 'disconnected' ? now : null, last_goal_ids: goalIds, updated_at: now };
