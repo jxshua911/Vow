@@ -1,9 +1,9 @@
-import type { Goal, GoalClarificationAnswer } from '@/types/database';
-import { analyseGoalForEvidence, type ArmadilloResult } from '@/lib/armadillo';
-import { buildAnteaterContract, type AnteaterExecutionContract } from '@/lib/anteater';
-import { rankHedgehogIntegrations, type HedgehogCandidate } from '@/lib/hedgehog';
-import { INTEGRATIONS } from '@/lib/integrations/catalog';
-import { inferGoalDifficulty, normaliseAnswers, unansweredQuestions } from '@/lib/goalContextCore';
+import type { Goal, GoalClarificationAnswer } from '../types/database';
+import { analyseGoalForEvidence, type ArmadilloResult } from './armadillo';
+import { buildAnteaterContract, type AnteaterExecutionContract } from './anteater';
+import { rankHedgehogIntegrations, type HedgehogCandidate } from './hedgehog';
+import { INTEGRATIONS } from './integrations/catalog';
+import { inferGoalDifficulty, normaliseAnswers, unansweredQuestions } from './goalContextCore';
 
 export type GoalDifficulty = 'beginner' | 'intermediate' | 'advanced';
 export type GoalResourceType = 'youtube' | 'web' | 'app';
@@ -38,7 +38,7 @@ function persistedArmadillo(goal: Goal): ArmadilloResult | null {
   if (!stored || typeof stored !== 'object') return null;
   const candidate = stored as Partial<ArmadilloResult>;
   if (typeof candidate.category !== 'string' || typeof candidate.goal_type !== 'string' || typeof candidate.metric !== 'string' || !Array.isArray(candidate.evidence)) return null;
-  return { category: candidate.category, goal_type: candidate.goal_type, metric: candidate.metric, evidence: candidate.evidence.filter((item): item is string => typeof item === 'string'), integration: typeof candidate.integration === 'string' ? candidate.integration : null, fallback: typeof candidate.fallback === 'string' ? candidate.fallback : 'Manual tracking remains available.', confidence: Number.isFinite(Number(candidate.confidence)) ? Number(candidate.confidence) : 0.5 };
+  return { category: candidate.category, goal_type: candidate.goal_type, metric: candidate.metric, evidence: candidate.evidence.filter((item): item is string => typeof item === 'string'), integration: typeof candidate.integration === 'string' ? candidate.integration : null, fallback: typeof candidate.fallback === 'string' ? candidate.fallback : 'Manual tracking remains available.', confidence: Number.isFinite(Number(candidate.confidence)) ? Number(candidate.confidence) : 0.5, needs_clarification: Boolean((candidate as { needs_clarification?: unknown }).needs_clarification), clarification_reasons: Array.isArray((candidate as { clarification_reasons?: unknown }).clarification_reasons) ? ((candidate as { clarification_reasons: unknown[] }).clarification_reasons.filter((item): item is string => typeof item === 'string')) : [] };
 }
 
 export function buildGoalContext(goal: Goal, answers: GoalClarificationAnswer[] = [], activeStep?: string | null): GoalContext {
@@ -51,7 +51,6 @@ export function buildGoalContext(goal: Goal, answers: GoalClarificationAnswer[] 
   const storedConstraints = Array.isArray(learning.constraints) ? learning.constraints.filter((item): item is string => typeof item === 'string') : [];
   const preferences = [...storedPreferences, ...extractAnswerSignal(answers, [/prefer|like|enjoy|want|rather/i])].filter((value, index, all) => all.indexOf(value) === index).slice(0, 8);
   const constraints = [...storedConstraints, ...extractAnswerSignal(answers, [/constraint|limit|can't|cannot|busy|equipment|injur|budget|school|work/i])].filter((value, index, all) => all.indexOf(value) === index).slice(0, 8);
-
   const partialContext = {
     goal: { id: goal.id, title: goal.title, outcome: goal.outcome, why_it_matters: goal.why_it_matters, start_date: goal.start_date, deadline: goal.deadline, duration: goal.duration, status: goal.status, weekly_commitment_target: goal.weekly_commitment_target, planning_horizon_weeks: goal.planning_horizon_weeks, planning_timezone: goal.planning_timezone },
     answers: normalised,
@@ -66,7 +65,6 @@ export function buildGoalContext(goal: Goal, answers: GoalClarificationAnswer[] 
     activeStep: activeStep ?? (typeof learning.current_plan_step === 'string' ? learning.current_plan_step : null),
     learning,
   };
-
   const anteater = buildAnteaterContract(partialContext as GoalContext);
   const hedgehog = rankHedgehogIntegrations(partialContext as GoalContext, INTEGRATIONS);
   return { ...partialContext, anteater, hedgehog };
@@ -77,6 +75,7 @@ export function goalContextPrompt(context: GoalContext): string {
     `Goal: ${context.goal.title}`, `Outcome: ${context.goal.outcome}`, `Why: ${context.goal.why_it_matters || 'Not supplied'}`,
     `Category: ${context.armadillo.category}`, `Goal type: ${context.armadillo.goal_type}`, `Evidence: ${context.armadillo.evidence.join(', ')}`,
     `Evidence metric: ${context.armadillo.metric}`, `Suggested integration: ${context.armadillo.integration || 'none'}`, `Difficulty: ${context.difficulty}`,
+    `Armadillo clarification required: ${context.armadillo.needs_clarification ? 'yes' : 'no'}`, `Armadillo clarification reasons: ${context.armadillo.clarification_reasons.join(' | ') || 'none'}`,
     `Anteater execution mode: ${context.anteater.execution_mode}`, `Anteater primary metric: ${context.anteater.primary_metric}`, `Anteater next action: ${context.anteater.next_action}`, `Anteater checkpoint: ${context.anteater.checkpoint}`,
     `Hedgehog candidates: ${context.hedgehog.length ? context.hedgehog.slice(0, 5).map((item) => `${item.name} (${item.score})`).join(' | ') : 'none'}`,
     `Personalisation complete: ${context.personalisationComplete ? 'yes' : 'no'}`, `Unanswered questions: ${context.unansweredQuestions.length ? context.unansweredQuestions.join(' | ') : 'none'}`,
