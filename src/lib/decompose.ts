@@ -15,10 +15,10 @@ export function decomposeGoal(rawInput: string): DecomposedGoal {
   const input = rawInput.trim().toLowerCase();
 
   // Detect domain and produce concrete outcome + sequenced milestones
-  let outcome = rawInput.trim();
-  let milestones: { title: string; description: string; weeksOut: number }[] = [];
-  let weeklyCommitment = 3;
-  let suggestedSessionDuration = 45;
+  let outcome: string;
+  let milestones: { title: string; description: string; weeksOut: number }[];
+  let weeklyCommitment: number;
+  let suggestedSessionDuration: number;
 
   if (/run|running|5k|10k|marathon|couch/.test(input)) {
     outcome = 'Run a 5K without stopping';
@@ -93,13 +93,12 @@ export function decomposeGoal(rawInput: string): DecomposedGoal {
     weeklyCommitment = 5;
     suggestedSessionDuration = 30;
   } else {
-    // Generic decomposition
     const title = rawInput.trim();
     outcome = title.charAt(0).toUpperCase() + title.slice(1);
     milestones = [
-      { title: 'Define what "better" looks like', description: 'Write a specific, measurable outcome for this goal.', weeksOut: 1 },
-      { title: 'Take first concrete action', description: 'Complete your first real step toward the outcome.', weeksOut: 3 },
-      { title: 'Reach your outcome', description: 'Achieve the specific result you defined.', weeksOut: 8 },
+      { title: 'Define a measurable outcome', description: 'Write a specific result that will show the goal is complete.', weeksOut: 1 },
+      { title: 'Take the first concrete action', description: 'Complete the first real step toward the outcome.', weeksOut: 3 },
+      { title: 'Reach the intended outcome', description: 'Achieve the specific result defined for this goal.', weeksOut: 8 },
     ];
     weeklyCommitment = 3;
     suggestedSessionDuration = 45;
