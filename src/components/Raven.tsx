@@ -75,6 +75,8 @@ export function RavenPage() {
             observed_at: new Date().toISOString(),
           },
           armadillo: context.armadillo,
+          anteater: context.anteater,
+          hedgehog: context.hedgehog.slice(0, 8),
           difficulty: context.difficulty,
           preferences: context.preferences,
           constraints: context.constraints,
