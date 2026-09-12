@@ -7,7 +7,7 @@ import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { NATIVE_CALENDAR_REDIRECT, NATIVE_STRAVA_REDIRECT, WEB_CALENDAR_REDIRECT, WEB_STRAVA_REDIRECT } from '@/lib/nativeAuth';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
-import type { Goal } from '@/types/database';
+import type { Goal, GoalClarificationAnswer } from '@/types/database';
 import { buildGoalContext, integrationIdsForGoal } from '@/lib/goalContext';
 
 type ConnectionStatus = 'connected' | 'disconnected';
@@ -24,6 +24,7 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
   const [category, setCategory] = useState<IntegrationCategory | 'all'>('all');
   const [query, setQuery] = useState('');
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [goalContexts, setGoalContexts] = useState<ReturnType<typeof buildGoalContext>[]>([]);
   const [history, setHistory] = useState<ConnectionHistory>({});
   const [rows, setRows] = useState<ConnectionRow[]>([]);
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -35,34 +36,52 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
     if (!session?.user?.id) return;
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      supabase.from('goals').select('*').eq('user_id', session.user.id).in('status', ['draft', 'locked', 'active']),
-      supabase.from('integration_connections').select('integration_id,status,connected_at,disconnected_at,last_goal_ids').eq('user_id', session.user.id),
-      supabase.functions.invoke('google-calendar-auth', { body: { action: 'status' } }),
-    ]).then(([goalResult, connectionResult, calendarResult]) => {
-      if (cancelled) return;
-      if (goalResult.error) throw goalResult.error;
-      if (connectionResult.error) throw connectionResult.error;
-      const nextGoals = (goalResult.data || []) as Goal[];
-      const nextRows = (connectionResult.data || []) as ConnectionRow[];
-      const nextHistory = Object.fromEntries(nextRows.map((row) => [row.integration_id, row.status])) as ConnectionHistory;
-      setGoals(nextGoals);
-      setRows(nextRows);
-      setHistory(nextHistory);
-      setGoogleCalendarAvailable(!calendarResult.error && calendarResult.data?.available === true && calendarResult.data?.configured === true);
-      setError('');
-    }).catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load your connections.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    (async () => {
+      try {
+        const [goalResult, connectionResult, calendarResult] = await Promise.all([
+          supabase.from('goals').select('*').eq('user_id', session.user.id).in('status', ['draft', 'locked', 'active']),
+          supabase.from('integration_connections').select('integration_id,status,connected_at,disconnected_at,last_goal_ids').eq('user_id', session.user.id),
+          supabase.functions.invoke('google-calendar-auth', { body: { action: 'status' } }),
+        ]);
+        if (goalResult.error) throw goalResult.error;
+        if (connectionResult.error) throw connectionResult.error;
+
+        const nextGoals = (goalResult.data || []) as Goal[];
+        const contexts = await Promise.all(nextGoals.map(async (goal) => {
+          const { data: answers, error: answerError } = await supabase
+            .from('goal_clarification_answers')
+            .select('*')
+            .eq('goal_id', goal.id)
+            .eq('user_id', session.user.id)
+            .order('question_order', { ascending: true });
+          if (answerError) throw answerError;
+          return buildGoalContext(goal, (answers || []) as GoalClarificationAnswer[]);
+        }));
+
+        if (cancelled) return;
+        const nextRows = (connectionResult.data || []) as ConnectionRow[];
+        const nextHistory = Object.fromEntries(nextRows.map((row) => [row.integration_id, row.status])) as ConnectionHistory;
+        setGoals(nextGoals);
+        setGoalContexts(contexts);
+        setRows(nextRows);
+        setHistory(nextHistory);
+        setGoogleCalendarAvailable(!calendarResult.error && calendarResult.data?.available === true && calendarResult.data?.configured === true);
+        setError('');
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load your connections.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [session?.user?.id]);
 
   const relevantIds = useMemo(() => {
-    const contexts = goals.map((goal) => buildGoalContext(goal));
     const ids = new Set<string>();
-    contexts.forEach((context) => integrationIdsForGoal(context, INTEGRATIONS).forEach((id) => ids.add(id)));
+    goalContexts.forEach((context) => integrationIdsForGoal(context, INTEGRATIONS).forEach((id) => ids.add(id)));
     recommendIntegrations(goals.map((goal) => `${goal.title} ${goal.outcome}`)).forEach((integration) => ids.add(integration.id));
     return ids;
-  }, [goals]);
+  }, [goalContexts, goals]);
   const connectedIds = useMemo(() => new Set(Object.entries(history).filter(([, status]) => status === 'connected').map(([id]) => id)), [history]);
   const previouslyConnectedIds = useMemo(() => new Set(Object.entries(history).filter(([, status]) => status === 'disconnected').map(([id]) => id)), [history]);
   const relevantIntegrations = useMemo(() => {
