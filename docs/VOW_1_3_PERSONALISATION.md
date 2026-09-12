@@ -1,0 +1,1 @@
+VOW 1.3 planning rule: plans require meaningful user context and must not fall back to generic templates.
