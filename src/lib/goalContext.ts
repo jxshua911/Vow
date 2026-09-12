@@ -2,6 +2,7 @@ import type { Goal, GoalClarificationAnswer } from '@/types/database';
 import { analyseGoalForEvidence, type ArmadilloResult } from '@/lib/armadillo';
 import { buildAnteaterContract, type AnteaterExecutionContract } from '@/lib/anteater';
 import { rankHedgehogIntegrations, type HedgehogCandidate } from '@/lib/hedgehog';
+import { INTEGRATIONS } from '@/lib/integrations/catalog';
 import { inferGoalDifficulty, normaliseAnswers, unansweredQuestions } from '@/lib/goalContextCore';
 
 export type GoalDifficulty = 'beginner' | 'intermediate' | 'advanced';
@@ -64,10 +65,11 @@ export function buildGoalContext(goal: Goal, answers: GoalClarificationAnswer[] 
     constraints,
     activeStep: activeStep ?? (typeof learning.current_plan_step === 'string' ? learning.current_plan_step : null),
     learning,
-  } as Omit<GoalContext, 'anteater' | 'hedgehog'>;
+  };
 
   const anteater = buildAnteaterContract(partialContext as GoalContext);
-  return { ...partialContext, anteater, hedgehog: [] };
+  const hedgehog = rankHedgehogIntegrations(partialContext as GoalContext, INTEGRATIONS);
+  return { ...partialContext, anteater, hedgehog };
 }
 
 export function goalContextPrompt(context: GoalContext): string {
@@ -76,7 +78,7 @@ export function goalContextPrompt(context: GoalContext): string {
     `Category: ${context.armadillo.category}`, `Goal type: ${context.armadillo.goal_type}`, `Evidence: ${context.armadillo.evidence.join(', ')}`,
     `Evidence metric: ${context.armadillo.metric}`, `Suggested integration: ${context.armadillo.integration || 'none'}`, `Difficulty: ${context.difficulty}`,
     `Anteater execution mode: ${context.anteater.execution_mode}`, `Anteater primary metric: ${context.anteater.primary_metric}`, `Anteater next action: ${context.anteater.next_action}`, `Anteater checkpoint: ${context.anteater.checkpoint}`,
-    `Hedgehog candidates: ${context.hedgehog.length ? context.hedgehog.map((item) => `${item.name} (${item.score})`).join(' | ') : 'not ranked yet'}`,
+    `Hedgehog candidates: ${context.hedgehog.length ? context.hedgehog.slice(0, 5).map((item) => `${item.name} (${item.score})`).join(' | ') : 'none'}`,
     `Personalisation complete: ${context.personalisationComplete ? 'yes' : 'no'}`, `Unanswered questions: ${context.unansweredQuestions.length ? context.unansweredQuestions.join(' | ') : 'none'}`,
     `Available time: ${context.availableTime}`, `Preferences: ${context.preferences.length ? context.preferences.join(' | ') : 'none supplied'}`,
     `Constraints: ${context.constraints.length ? context.constraints.join(' | ') : 'none supplied'}`, `Planning horizon: ${context.goal.planning_horizon_weeks || context.goal.duration || 'not specified'}`,
@@ -95,6 +97,5 @@ export function buildResourceSearchPlan(context: GoalContext): { youtube: string
 }
 
 export function integrationIdsForGoal(context: GoalContext, integrationCatalog: Array<{ id: string; recommendedGoalKeywords: string[]; name: string; evidence?: string[] }>): string[] {
-  const ranked = rankHedgehogIntegrations(context, integrationCatalog.map((item) => ({ id: item.id, name: item.name, evidence: item.evidence || [], recommendedGoalKeywords: item.recommendedGoalKeywords })));
-  return ranked.map((item) => item.id);
+  return rankHedgehogIntegrations(context, integrationCatalog.map((item) => ({ id: item.id, name: item.name, evidence: item.evidence || [], recommendedGoalKeywords: item.recommendedGoalKeywords }))).map((item) => item.id);
 }
