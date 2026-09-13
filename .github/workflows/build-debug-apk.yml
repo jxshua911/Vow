@@ -2,6 +2,7 @@ name: Build Android APK
 
 # Release verification build for the current VOW mobile state.
 # Hedgehog + grouped notifications + resilient AI planning verification build.
+# Capacitor Android build trigger for the current mobile branch.
 
 on:
   push:
