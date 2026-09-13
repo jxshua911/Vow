@@ -1,4 +1,5 @@
 import { SPECIALIST_FLOWS } from './specialistRegistry';
+import type { SpecialistFlow } from './specialistRegistry';
 
 export type { SpecialistFlow } from './specialistRegistry';
 export { SPECIALIST_FLOWS } from './specialistRegistry';
