@@ -34,7 +34,7 @@ export class VowErrorBoundary extends Component<Props, State> {
               VOW hit an unexpected problem while loading this screen. Your device is okay — this is an app error, and we have a recovery screen here so you are not left with a blank page.
             </p>
           </div>
-          <button type="button" onClick={this.handleReload} className="vow-button-primary w-full">
+          <button type="button" onClick={this.handleReload} className="vow-btn-primary w-full">
             Restart VOW
           </button>
           <p className="text-xs text-vow-muted">Error reference: {this.state.errorId}</p>
