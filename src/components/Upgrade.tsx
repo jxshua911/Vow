@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, CreditCard, Sparkles } from 'lucide-react';
+import { Check, CreditCard, Loader2, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from './AppShell';
@@ -15,6 +15,8 @@ const benefits = [
 export function UpgradePage() {
   const { session } = useAuth();
   const [activePlan, setActivePlan] = useState<'free' | 'premium'>('free');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     if (!session) return;
@@ -22,6 +24,22 @@ export function UpgradePage() {
       if (data?.plan === 'premium' && ['active', 'trialing'].includes(data.status)) setActivePlan('premium');
     });
   }, [session]);
+
+  async function startCheckout() {
+    if (!session || loading) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      const { data, error } = await supabase.functions.invoke('vow-create-checkout', { body: {} });
+      if (error) throw error;
+      if (!data?.url) throw new Error(data?.error || 'Checkout is not configured yet.');
+      window.location.assign(data.url);
+    } catch (error) {
+      console.error('[VOW] Checkout failed:', error);
+      setMessage(error instanceof Error ? error.message : 'Checkout is not ready yet.');
+      setLoading(false);
+    }
+  }
 
   return <div>
     <PageHeader title="VOW Premium" subtitle="More depth. More capability. The same first-class standard for every goal." />
@@ -41,11 +59,12 @@ export function UpgradePage() {
       </div>
 
       {activePlan === 'premium' ? <div className="border border-vow-border rounded-xl px-4 py-3 text-sm text-vow-ink">Premium is active on this account.</div> : <div className="space-y-3">
-        <button disabled className="w-full vow-btn-primary justify-center opacity-60 cursor-not-allowed">Continue to secure checkout</button>
-        <p className="text-center text-xs text-vow-muted">Google Pay and major cards such as Visa and Mastercard will be available through the secure checkout.</p>
+        <button onClick={startCheckout} disabled={loading} className="w-full vow-btn-primary justify-center disabled:opacity-60 disabled:cursor-not-allowed">{loading ? <><Loader2 className="w-4 h-4 animate-spin" />Opening secure checkout…</> : 'Continue to secure checkout'}</button>
+        <p className="text-center text-xs text-vow-muted">Google Pay and major cards such as Visa and Mastercard will be available through the secure checkout when enabled for the account.</p>
+        {message && <p className="text-center text-xs text-vow-muted" role="status">{message}</p>}
       </div>}
     </section>
 
-    <div className="text-xs text-vow-muted leading-relaxed">Payment processing is being wired into the production checkout separately. No card details are collected by this page.</div>
+    <div className="text-xs text-vow-muted leading-relaxed">VOW does not collect card details on this page. Checkout is handled by the payment provider.</div>
   </div>;
 }
