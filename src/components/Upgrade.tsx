@@ -12,9 +12,12 @@ const benefits = [
   'Advanced weekly review insights',
 ];
 
+type Billing = 'monthly' | 'yearly';
+
 export function UpgradePage() {
   const { session } = useAuth();
   const [activePlan, setActivePlan] = useState<'free' | 'premium'>('free');
+  const [billing, setBilling] = useState<Billing>('monthly');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -30,7 +33,7 @@ export function UpgradePage() {
     setLoading(true);
     setMessage('');
     try {
-      const { data, error } = await supabase.functions.invoke('vow-create-checkout', { body: {} });
+      const { data, error } = await supabase.functions.invoke('vow-create-checkout', { body: { billing } });
       if (error) throw error;
       if (!data?.url) throw new Error(data?.error || 'Checkout is not configured yet.');
       window.location.assign(data.url);
@@ -40,6 +43,8 @@ export function UpgradePage() {
       setLoading(false);
     }
   }
+
+  const isYearly = billing === 'yearly';
 
   return <div>
     <PageHeader title="VOW Premium" subtitle="More depth. More capability. The same first-class standard for every goal." />
@@ -54,13 +59,25 @@ export function UpgradePage() {
         <div className="hidden sm:flex items-center justify-center w-12 h-12 border border-vow-border rounded-full text-vow-ink"><CreditCard className="w-5 h-5" /></div>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl mb-7" role="group" aria-label="Billing interval">
+        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}>
+          <span className="block font-medium">Monthly</span>
+          <span className={`block text-xs mt-0.5 ${billing === 'monthly' ? 'opacity-80' : 'text-vow-muted'}`}>$5 / month</span>
+        </button>
+        <button type="button" onClick={() => setBilling('yearly')} className={`relative rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}>
+          <span className="block font-medium">Yearly</span>
+          <span className={`block text-xs mt-0.5 ${billing === 'yearly' ? 'opacity-80' : 'text-vow-muted'}`}>$48 / year</span>
+          <span className="absolute -top-2 right-2 rounded-full border border-vow-border bg-vow-bg px-2 py-0.5 text-[10px] tracking-wide text-vow-muted">Save 20%</span>
+        </button>
+      </div>
+
       <div className="space-y-3 mb-8">
         {benefits.map((benefit) => <div key={benefit} className="flex items-start gap-3 text-sm text-vow-ink"><Check className="w-4 h-4 mt-0.5 shrink-0" /><span>{benefit}</span></div>)}
       </div>
 
       {activePlan === 'premium' ? <div className="border border-vow-border rounded-xl px-4 py-3 text-sm text-vow-ink">Premium is active on this account.</div> : <div className="space-y-3">
-        <button onClick={startCheckout} disabled={loading} className="w-full vow-btn-primary justify-center disabled:opacity-60 disabled:cursor-not-allowed">{loading ? <><Loader2 className="w-4 h-4 animate-spin" />Opening secure checkout…</> : 'Continue to secure checkout'}</button>
-        <p className="text-center text-xs text-vow-muted">Google Pay and major cards such as Visa and Mastercard will be available through the secure checkout when enabled for the account.</p>
+        <button onClick={startCheckout} disabled={loading} className="w-full vow-btn-primary justify-center disabled:opacity-60 disabled:cursor-not-allowed">{loading ? <><Loader2 className="w-4 h-4 animate-spin" />Opening secure checkout…</> : `Continue with Premium ${isYearly ? 'Yearly' : 'Monthly'}`}</button>
+        <p className="text-center text-xs text-vow-muted">Secure checkout supports major cards such as Visa and Mastercard, plus Google Pay when enabled and available for the customer.</p>
         {message && <p className="text-center text-xs text-vow-muted" role="status">{message}</p>}
       </div>}
     </section>
