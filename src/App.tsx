@@ -13,6 +13,7 @@ import { ReviewPage } from '@/components/WeeklyReview';
 import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
+import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -88,6 +89,7 @@ function AppContent() {
     {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
     {view === 'review' && <ReviewPage />}
     {view === 'profile' && <ProfilePage onLegal={() => navigate('legal')} />}
+    {view === 'upgrade' && <UpgradePage />}
   </AppShell>;
   return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
 }
