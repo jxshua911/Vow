@@ -12,21 +12,23 @@ type ClarificationRow={question?:unknown;answer?:unknown;question_order?:unknown
 
 function normalisePlan(value: unknown, expectedMode: HamsterMode): HamsterPlan {
  const source=value&&typeof value==='object'?value as Record<string,unknown>:{};
- const mode=source.mode===expectedMode?expectedMode:expectedMode;
+ const mode=expectedMode;
  const text=(key:string,fallback:string)=>typeof source[key]==='string'&&String(source[key]).trim()?String(source[key]):fallback;
  const steps=Array.isArray(source.steps)?source.steps.map((item,index)=>{
   const step=item&&typeof item==='object'?item as Record<string,unknown>:{};
+  const hasNumericOrder=typeof step.order==='number'&&Number.isFinite(step.order);
+  const hasNumericMinutes=typeof step.estimated_minutes==='number'&&Number.isFinite(step.estimated_minutes);
   return {
-   order:typeof step.order==='number'&&Number.isFinite(step.order)?step.order:index+1,
+   order:hasNumericOrder?Number(step.order):index+1,
    title:textFrom(step.title,`Step ${index+1}`),
    purpose:textFrom(step.purpose,'Complete the next action required for this goal.'),
    target:textFrom(step.target,'Complete the action.'),
    evidence:textFrom(step.evidence,'Record what was completed.'),
-   estimated_minutes:typeof step.estimated_minutes==='number'&&Number.isFinite(step.estimated_minutes)?Math.max(0,Math.round(step.estimated_minutes)):0,
+   estimated_minutes:hasNumericMinutes?Math.max(0,Math.round(Number(step.estimated_minutes))):0,
   };
  }):[];
  const milestones=Array.isArray(source.milestones)?source.milestones.map((item)=>{const milestone=item&&typeof item==='object'?item as Record<string,unknown>:{};return {title:textFrom(milestone.title,'Milestone'),description:textFrom(milestone.description,'Complete this milestone.')}}):[];
- const adaptation_rules=Array.isArray(source.adaptation_rules)?source.adaptation_rules.filter((item):item is string=>typeof item==='string'&&item.trim()):[];
+ const adaptation_rules=Array.isArray(source.adaptation_rules)?source.adaptation_rules.filter((item):item is string=>typeof item==='string'&&Boolean(item.trim())):[];
  return {
   mode,
   domain:text('domain','Your domain'),
@@ -45,7 +47,7 @@ function normalisePlan(value: unknown, expectedMode: HamsterMode): HamsterPlan {
  };
 }
 
-function textFrom(value: unknown, fallback: string) { return typeof value==='string'&&value.trim()?value.trim():fallback; }
+function textFrom(value: unknown, fallback: string) { return typeof value==='string'&&Boolean(value.trim())?value.trim():fallback; }
 
 export function GoalPlanner({userId,onCreated,onCancel,draftGoal}:{userId:string;onCreated:()=>void;onCancel?:()=>void|Promise<void>;draftGoal?:DraftGoal|null}){
  const [goal,setGoal]=useState(draftGoal?.title||draftGoal?.outcome||''); const [why,setWhy]=useState(draftGoal?.why_it_matters||''); const [armadillo,setArmadillo]=useState<ArmadilloResult|null>(null); const [specialist,setSpecialist]=useState<ReturnType<typeof specialistFor>>(null);
