@@ -22,3 +22,8 @@ export interface GoalDependency { id: string; user_id: string; goal_id: string; 
 export interface PlanAdjustment { id: string; user_id: string; goal_id: string; reason: string; proposed_change: string; status: string; created_at: string; applied_at: string | null; }
 export interface UserEntitlement { user_id: string; plan: string; status: string; source: string; expires_at: string | null; updated_at: string; }
 export interface DataRequest { id: string; user_id: string; request_type: 'export' | 'delete'; status: string; created_at: string; completed_at: string | null; }
+export interface ReminderPreference { user_id: string; enabled: boolean; preferred_time: string | null; timezone: string; quiet_start: string | null; quiet_end: string | null; updated_at: string; }
+export interface GoalReminder { id: string; user_id: string; goal_id: string; scheduled_at: string; kind: string; status: string; delivered_at: string | null; created_at: string; }
+export interface GoalMilestone { id: string; user_id: string; goal_id: string; key: string; title: string; description: string | null; threshold: number | null; achieved_at: string | null; created_at: string; }
+export interface JournalInsight { id: string; user_id: string; period_start: string; period_end: string; insight_type: string; summary: string; evidence_count: number; created_at: string; }
+export interface ModerationAppeal { id: string; user_id: string; moderation_event_id: string | null; reason: string; status: string; created_at: string; reviewed_at: string | null; }
