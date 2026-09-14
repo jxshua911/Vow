@@ -19,7 +19,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.98.2
 
       - name: Deploy Google Calendar auth function
         run: supabase functions deploy google-calendar-auth --project-ref vqsrdausvmfjayffxiuh

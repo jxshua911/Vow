@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+// Production recovery path: primary AI, simplified retry, deterministic fallback.
 const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS","Content-Type":"application/json"};
 const MODES=["one_time","project","recurring","mastery","performance","event","adaptive"] as const;type Mode=typeof MODES[number];type RequiredInput={key:string;question:string;why?:string};
 const USER_MESSAGES={retryable_ai:'VOW saved your goal and is ready to try the planning step again.',clarification_unavailable:'VOW could not finish the questions yet, but your goal is saved.',plan_unavailable:'VOW saved your goal. You can retry the plan when the planning service is available.',invalid_request:'VOW needs a little more information to continue.',unsafe:'That goal cannot be processed by VOW.'};
