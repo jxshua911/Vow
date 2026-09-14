@@ -32,8 +32,8 @@ begin
     if v_task is null then continue; end if;
     if v_seconds > 0 and v_count > 1 then v_scheduled_at := now() + make_interval(secs => (v_seconds * (v_idx - 1) / (v_count - 1))::double precision); else v_scheduled_at := now(); end if;
     v_duration_minutes := greatest(1, least(1440, coalesce((v_step->>'estimated_minutes')::integer, 30)));
-    insert into public.goal_plan_items(goal_id, plan_version, week_number, day_of_week, scheduled_at, task, purpose, target_metric, duration_minutes, status)
-    values (new.id, coalesce(new.plan_version, 1), greatest(1, floor(extract(epoch from (v_scheduled_at - now())) / 604800)::integer + 1), to_char(v_scheduled_at at time zone coalesce(nullif(new.planning_timezone, ''), 'UTC'), 'FMDay'), v_scheduled_at, v_task, nullif(trim(coalesce(v_step->>'purpose', '')), ''), nullif(trim(coalesce(v_step->>'target', '')), ''), v_duration_minutes, 'scheduled') on conflict do nothing;
+    insert into public.goal_plan_items(goal_id, user_id, plan_version, week_number, day_of_week, scheduled_at, task, purpose, target_metric, duration_minutes, status)
+    values (new.id, new.user_id, coalesce(new.plan_version, 1), greatest(1, floor(extract(epoch from (v_scheduled_at - now())) / 604800)::integer + 1), to_char(v_scheduled_at at time zone coalesce(nullif(new.planning_timezone, ''), 'UTC'), 'FMDay'), v_scheduled_at, v_task, nullif(trim(coalesce(v_step->>'purpose', '')), ''), nullif(trim(coalesce(v_step->>'target', '')), ''), v_duration_minutes, 'scheduled') on conflict do nothing;
     insert into public.sessions(goal_id, user_id, title, scheduled_at, duration_minutes, status, moved_count, notes, external_event_id)
     values (new.id, new.user_id, v_task, v_scheduled_at, v_duration_minutes, 'scheduled', 0, nullif(trim(coalesce(v_step->>'purpose', '')), ''), null) on conflict do nothing;
   end loop;
