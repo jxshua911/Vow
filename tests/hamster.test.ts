@@ -23,9 +23,20 @@ test('event and performance goals get their own flows', () => {
 });
 
 test('mastery, project and recurring remain distinct', () => {
-  assert.equal(inferHamsterMode({ title: 'Learn to play guitar' }), 'mastery');
+  assert.equal(inferHamsterMode({ title: 'Master guitar improvisation' }), 'mastery');
   assert.equal(inferHamsterMode({ title: 'Build my portfolio website' }), 'project');
   assert.equal(inferHamsterMode({ title: 'Meditate every day' }), 'recurring');
+});
+
+test('generic learn wording remains a valid adaptive goal', () => {
+  assert.equal(inferHamsterMode({ title: 'Learn about the history of my family' }), 'adaptive');
+  assert.equal(inferHamsterMode({ title: 'Hamster' }), 'adaptive');
+});
+
+test('user timeframe is preserved in planning context', () => {
+  const context = buildHamsterContext({ title: 'Make ravioli', time_target: 'before my birthday' });
+  assert.equal(context.mode, 'one_time');
+  assert.equal(context.time_target, 'before my birthday');
 });
 
 test('culinary goals resolve to a domain flow instead of General', () => {

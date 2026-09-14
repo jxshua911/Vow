@@ -35,7 +35,7 @@ const ICON_STYLES: IconStyle[] = [
   { id: 'black-pink', label: 'Black · Pink', background: '#111111', foreground: '#F472B6' },
 ];
 
-export function ProfilePage({ onLegal, onSecurity }: { onLegal?: () => void; onSecurity?: () => void }) {
+export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const { session, displayName, updateDisplayName } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [subpage, setSubpage] = useState<ProfileSubpage>('main');

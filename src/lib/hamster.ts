@@ -88,7 +88,7 @@ const ONE_TIME_PATTERNS = [ /\b(?:once|one[- ]time|just once|single time|one thi
 const EVENT_PATTERNS = [ /\b(?:by|before|for)\s+(?:the\s+)?(?:event|exam|competition|race|match|wedding|trip|flight|deadline)\b/i, /\bon\s+\w+\s+\d{1,2}\b/i, /\bdeadline\b/i ];
 const RECURRING_PATTERNS = [ /\b(?:daily|every day|weekly|every week|each week|every month|monthly|routine|habit|regularly)\b/i, /\b\d+\s*(?:times?|days?)\s+(?:a|per)\s+week\b/i ];
 const PERFORMANCE_PATTERNS = [ /\b(?:under|sub)\s+\d+/i, /\b(?:faster|slower|higher|lower|stronger|longer|score|pace|time|weight)\b/i, /\b(?:PB|PR|personal best|personal record)\b/i ];
-const MASTERY_PATTERNS = [ /\b(?:learn|master|become good|improve|develop|skill|competent|fluent|understand)\b/i ];
+const MASTERY_PATTERNS = [ /\b(?:master|become good|improve|develop|skill|competent|fluent|understand)\b/i ];
 const PROJECT_PATTERNS = [ /\b(?:project|prototype|app|website|portfolio|launch|build out|deliverable|MVP)\b/i ];
 
 export function findDomainFlow(category: string, goalType: string): DomainFlow | null {
@@ -115,6 +115,7 @@ export function buildHamsterContext(input: Parameters<typeof inferHamsterMode>[0
   const answered = (input.answers || []).filter(x => Boolean(x.answer?.trim()));
   return {
     mode,
+    time_target: input.time_target?.trim() || null,
     workflow,
     domain,
     answered_count: answered.length,
