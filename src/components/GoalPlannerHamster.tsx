@@ -111,8 +111,8 @@ export function GoalPlanner({userId,onCreated,onCancel,draftGoal}:{userId:string
    const context={planning:{mode:plan.mode,workflow:HAMSTER_WORKFLOWS[plan.mode],specialist,plan},analysis:armadillo||{},personalisation:{questions,answers,completed:answers.length>0&&answers.every(Boolean),duration},original_goal:goal.trim(),planner_completion_definition:plan.completion_definition};
    const {error:e}=await supabase.from('goals').update({title:goal,outcome:goal.trim(),why_it_matters:why.trim()||null,status:'active',plan_json:plan,goal_context_json:context,plan_version:2,plan_generated_at:new Date().toISOString(),planning_horizon_weeks:null,planning_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,deadline:null,duration}).eq('id',draftId).eq('user_id',userId);
    if(e)throw e;
-   const {error:milestoneDeleteError}=await supabase.from('milestones').delete().eq('goal_id',draftId).eq('user_id',userId);if(milestoneDeleteError)throw milestoneDeleteError;
-   if(plan.milestones?.length){const {error:milestoneInsertError}=await supabase.from('milestones').insert(plan.milestones.filter(m=>m.title.trim()).map((m,i)=>({goal_id:draftId,user_id:userId,title:m.title,description:m.description,sort_order:i,status:i===0?'in_progress':'pending',deadline:null})));if(milestoneInsertError)throw milestoneInsertError;}
+   const {error:milestoneDeleteError}=await supabase.from('milestones').delete().eq('goal_id',draftId);if(milestoneDeleteError)throw milestoneDeleteError;
+   if(plan.milestones?.length){const {error:milestoneInsertError}=await supabase.from('milestones').insert(plan.milestones.filter(m=>m.title.trim()).map((m,i)=>({goal_id:draftId,title:m.title,description:m.description,sort_order:i,status:i===0?'in_progress':'pending',deadline:null})));if(milestoneInsertError)throw milestoneInsertError;}
    onCreated();
   }catch(e){setError(e instanceof Error?e.message:'Could not lock this VOW.');}finally{setBusy(false);}
  }
