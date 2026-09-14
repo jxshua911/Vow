@@ -34,7 +34,7 @@ flow('personal-admin','Life Admin',['Personal Administration'],['documents','pap
 flow('academic-study','Education',['Academic Study'],['study','studying','revision','revise','exam','homework','physics','chemistry','biology','maths','mathematics','history','geography','economics','computer science','schoolwork'],noRequired,['What exact syllabus, topic or assessment are you preparing for?','What do you already know and where are the gaps?','What exam date, mark target or resource constraints matter?'],['diagnostic questions','practice accuracy','retrieval results','completed papers'],'the required academic standard is demonstrated','diagnosis, retrieval, worked practice, error correction and assessment simulation'),
 flow('research','Education',['Research'],['research','research paper','investigate a topic','literature review','dissertation','thesis','academic research'],noRequired,['What exact question are you trying to answer?','What evidence or sources have you already collected?','What citation, scope, method and deadline constraints apply?'],['research question','source set','notes','analysis','draft sections'],'the research question is answered to the stated evidence and scope standard','question refinement, source quality, evidence synthesis, analysis and writing'),
 flow('university-prep','Education',['University Preparation'],['university application','college application','ucas','personal statement','university prep','campus prep','foundation application'],noRequired,['What institution, course or application outcome are you targeting?','Which requirements have you already completed?','What deadlines, documents, tests or references are still outstanding?'],['requirements checklist','documents','applications','deadlines','confirmed submissions'],'the application or preparation checklist is fully completed','requirements mapping, dependency order, drafting and verification'),
-flow('language','Languages',['Language Learning'],['french','spanish','german','italian','portuguese','arabic','swahili','japanese','korean','mandarin','chinese','language','fluent','vocabulary','pronunciation'],[req('current_level','What is your current level in the language?','Starting level determines vocabulary, grammar, input difficulty and progression.'),req('target_use','What do you want to be able to use the language for?','Conversation, travel, school, work and fluency require different practice priorities.'),req('priority_skills','Which language skills matter most to you?','Speaking, listening, reading and writing require different training and practice.')],['What can you currently understand and say in the language?','What real-world use case do you want to reach?','Which skills matter most: speaking, listening, reading, writing or a balance?'],['comprehension','speaking samples','writing samples','vocabulary recall','real conversations'],'the stated communication capability is demonstrated in a realistic context','input-output balance, retrieval, communicative practice and increasing complexity'),
+flow('language','Languages',['Language Learning'],['french','spanish','german','italian','portuguese','arabic','swahili','japanese','korean','mandarin','chinese','language','fluent','vocabulary','pronunciation'],[req('current_level','What is your current level in the language?','Starting level determines vocabulary, grammar, input difficulty and progression.'),req('target_use','What do you want to be able to use the language for?','Conversation, travel, school, work and fluency require different practice priorities.'),req('priority_skills','Which language skills matter most to you?','Speaking, listening, reading and writing require different training and practice.')],['What can you currently understand and say in the language?','What real-world use case do you want to reach?','Which skills matter most: speaking, listening, reading or a balance?'],['comprehension','speaking samples','writing samples','vocabulary recall','real conversations'],'the stated communication capability is demonstrated in a realistic context','input-output balance, retrieval, communicative practice and increasing complexity'),
 flow('reading','Reading',['Reading'],['read','reading','book','books','novel','pages','chapter','non-fiction','fiction'],noRequired,['Why are you reading this material?','What material and difficulty are you choosing?','Do you care most about speed, comprehension, retention or finishing?'],['pages','chapters','reading sessions','notes','comprehension checks'],'the defined reading outcome is completed with the intended understanding','reading purpose, sustainable pace and comprehension feedback'),
 flow('skill-learning','Learning',['Skill Acquisition'],['learn','learning','master','mastery','get good at','become good at','practise','practice','improve my skills','develop a skill','learn how to'],noRequired,['What exact skill or capability are you trying to build?','What can you already do independently?','What tools, teacher/resources and real-world application opportunities do you have?'],['practice sessions','demonstrated techniques','projects','performance checks','real-world applications'],'the stated capability is demonstrated independently','baseline diagnosis, deliberate practice, feedback and progressively harder application'),
 
@@ -84,9 +84,27 @@ flow('collecting','Hobbies',['Collecting'],['collect','collecting','collection',
 flow('pet-care','Home & Life',['Pet Care'],['pet','dog','cat','puppy','kitten','fish tank','aquarium'],noRequired,['What pet-care outcome are you trying to establish?','What is the current routine and what does the animal already require?','What schedule, supplies, household and professional-care constraints matter?'],['care tasks','routine adherence','supplies','appointments'],'the required routine or preparation is consistently in place','routine design, preparation, environment and escalation to appropriate care'),
 ];
 
-export function specialistFor(input:{title?:string|null;category?:string|null;goal_type?:string|null}):SpecialistFlow|null{
+export const GENERAL_SPECIALIST_FLOW:SpecialistFlow={
+  id:'general',
+  domain:'General',
+  goal_types:['General Goal'],
+  keywords:[],
+  required_inputs:[],
+  questions:[],
+  evidence:[
+    'completed actions',
+    'milestones',
+    'progress evidence',
+    'goal outcome'
+  ],
+  completion:'the stated goal outcome is achieved',
+  planning_lens:'goal-aware planning based on the stated outcome, constraints, resources and available context'
+};
+
+export function specialistFor(input:{title?:string|null;category?:string|null;goal_type?:string|null}):SpecialistFlow{
  const text=[input.title,input.category,input.goal_type].filter(Boolean).join(' ').toLowerCase();
+
  return SPECIALIST_FLOWS.find(flow=>flow.keywords.some(k=>text.includes(k)))
    ||SPECIALIST_FLOWS.find(flow=>flow.goal_types.some(k=>k.toLowerCase()===(input.goal_type||'').toLowerCase()))
-   ||null;
+   ||GENERAL_SPECIALIST_FLOW;
 }
