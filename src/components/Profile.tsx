@@ -6,8 +6,9 @@ import { useTheme } from '@/lib/theme';
 import { PageHeader } from './AppShell';
 import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications } from '@/lib/notifications';
 import { ConnectPage } from './Connect';
+import { SecurityCenterPage } from './SecurityCenter';
 
-type ProfileSubpage = 'main' | 'connect' | 'shared' | 'customise';
+type ProfileSubpage = 'main' | 'connect' | 'shared' | 'customise' | 'security';
 type IconStyle = { id: string; label: string; background: string; foreground: string };
 type VowIconPlugin = { setVariant(options: { variant: string }): Promise<{ variant: string }> };
 const VowIcon = registerPlugin<VowIconPlugin>('VowIcon');
@@ -34,7 +35,7 @@ const ICON_STYLES: IconStyle[] = [
   { id: 'black-pink', label: 'Black · Pink', background: '#111111', foreground: '#F472B6' },
 ];
 
-export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
+export function ProfilePage({ onLegal, onSecurity }: { onLegal?: () => void; onSecurity?: () => void }) {
   const { session, displayName, updateDisplayName } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [subpage, setSubpage] = useState<ProfileSubpage>('main');
@@ -86,12 +87,14 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   if (subpage === 'connect') return <ConnectPage onBack={() => setSubpage('main')} />;
   if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
   if (subpage === 'customise') return <CustomisePage selectedStyle={selectedStyle} message={iconMessage} onIconChange={handleIconChange} onShuffle={shuffleIcon} onBack={() => setSubpage('main')} />;
+  if (subpage === 'security') return <div><button onClick={() => setSubpage('main')} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><SecurityCenterPage /></div>;
   return <div>
     <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle="Your account and preferences." />
     <div className="border border-vow-border divide-y divide-vow-border">
       <button onClick={() => setSubpage('connect')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Connect</p><p className="text-xs text-vow-muted mt-1">Manage calendars and other services connected to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       <button onClick={() => setSubpage('customise')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Customise</p><p className="text-xs text-vow-muted mt-1">Build a VOW icon with the restored greater-than mark and a colour treatment you choose.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
+      <button onClick={() => setSubpage('security')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Security & Privacy</p><p className="text-xs text-vow-muted mt-1">Review account security, privacy controls and data protection information.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">Privacy, connected services, security and service terms.</p></button>
       <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0">{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
       <div className="p-5"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">Turn on reminders for your scheduled VOW sessions. VOW reminders use sound and vibration.</p>{notificationStatus === 'denied' && <p className="text-xs text-vow-muted mt-2">Notifications are blocked. Enable them in your device settings, then return to VOW.</p>}{notificationStatus === 'unsupported' && <p className="text-xs text-vow-muted mt-2">Notifications are not available on this device.</p>}</div>{!notificationsEnabled && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft shrink-0 disabled:opacity-50">{requesting ? 'Enabling…' : 'Enable notifications'}</button>}</div>{notificationsEnabled && <p className="text-xs text-vow-muted mt-4 border-t border-vow-border pt-4">Sound and vibration are enabled for VOW reminders.</p>}</div>
