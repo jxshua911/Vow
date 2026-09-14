@@ -13,6 +13,7 @@ import { GoalsJournalWorkspace } from '@/components/GoalsJournalWorkspace';
 import { ReviewPage } from '@/components/WeeklyReview';
 import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
+import { PremiumPage } from '@/components/Premium';
 import { LegalPage } from '@/components/Legal';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import type { UserSettings } from '@/types/database';
@@ -107,6 +108,7 @@ function AppContent() {
     {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
     {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
     {view === 'review' && <ReviewPage />}
+    {view === 'premium' && <PremiumPage />}
     {view === 'profile' && <ProfilePage onLegal={() => navigate('legal')} />}
   </AppShell>;
   return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
