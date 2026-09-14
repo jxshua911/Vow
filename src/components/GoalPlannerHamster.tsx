@@ -88,7 +88,7 @@ export function GoalPlanner({userId,onCreated,onCancel,draftGoal}:{userId:string
    setQuestions(qs);setAnswers(qs.map(()=>''));setReadyToBuild(qs.length===0);
    await supabase.from('goal_clarification_answers').delete().eq('goal_id',id).eq('user_id',userId);
    if(qs.length){const {error:saveError}=await supabase.from('goal_clarification_answers').insert(qs.map((question,index)=>({goal_id:id,user_id:userId,key:question.key,question:question.question,answer:null,question_order:index})));if(saveError)throw saveError;}
-  }catch(e){setError(e instanceof Error&&e.message===USER_MESSAGES.unsafe?e.message:USER_MESSAGES.clarification_unavailable);}finally{setBusy(false);}
+  }catch(e){setError(e instanceof Error&&e.message===USER_MESSAGES.unsafe?e.message:safeHamsterMessage(e,USER_MESSAGES.clarification_unavailable));}finally{setBusy(false);}
  }
  async function build(){
   if(!draftId||busy)return;
