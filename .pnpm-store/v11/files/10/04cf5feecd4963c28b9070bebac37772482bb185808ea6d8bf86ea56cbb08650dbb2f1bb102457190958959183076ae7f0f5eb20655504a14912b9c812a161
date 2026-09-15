@@ -1,0 +1,128 @@
+import type { PermissionState } from '@capacitor/core';
+import { WebPlugin } from '@capacitor/core';
+import type { CapacitorCalendarPlugin } from './definitions';
+import type { Calendar } from './schemas/interfaces/calendar';
+import type { CalendarSource } from './schemas/interfaces/calendar-source';
+import type { CheckPermissionOptions } from './schemas/interfaces/check-permission-options';
+import type { CreateCalendarOptions } from './schemas/interfaces/create-calendar-options';
+import type { CreateCalendarResult } from './schemas/interfaces/create-calendar-result';
+import type { CreateEventOptions } from './schemas/interfaces/create-event-options';
+import type { CreateEventResult } from './schemas/interfaces/create-event-result';
+import type { CreateEventWithPromptOptions } from './schemas/interfaces/create-event-with-prompt-options';
+import type { CreateEventWithPromptResult } from './schemas/interfaces/create-event-with-prompt-result';
+import type { CreateReminderOptions } from './schemas/interfaces/create-reminder-options';
+import type { CreateRemindersListOptions } from './schemas/interfaces/create-reminders-list-options';
+import type { CreateRemindersListResult } from './schemas/interfaces/create-reminders-list-result';
+import type { DeleteCalendarOptions } from './schemas/interfaces/delete-calendar-options';
+import type { DeleteEventOptions } from './schemas/interfaces/delete-event-options';
+import type { DeleteEventWithPromptOptions } from './schemas/interfaces/delete-event-with-prompt-options';
+import type { DeleteEventsByIdOptions } from './schemas/interfaces/delete-events-by-id-options';
+import type { DeleteReminderOptions } from './schemas/interfaces/delete-reminder-options';
+import type { DeleteReminderWithPromptOptions } from './schemas/interfaces/delete-reminder-with-prompt-options';
+import type { DeleteRemindersByIdOptions } from './schemas/interfaces/delete-reminders-by-id-options';
+import type { DeleteRemindersListOptions } from './schemas/interfaces/delete-reminders-list-options';
+import type { FetchAllCalendarSourcesResult } from './schemas/interfaces/fetch-all-calendar-sources-result';
+import type { GetDefaultCalendarOptions } from './schemas/interfaces/get-default-calendar-options';
+import type { GetReminderByIdOptions } from './schemas/interfaces/get-reminder-by-id-options';
+import type { GetRemindersFromListsOptions } from './schemas/interfaces/get-reminders-from-lists-options';
+import type { ListCalendarsResult } from './schemas/interfaces/list-calendars-result';
+import type { ListEventsInRangeOptions } from './schemas/interfaces/list-events-in-range-options';
+import type { ListEventsInRangeResult } from './schemas/interfaces/list-events-in-range-result';
+import type { ModifyCalendarOptions } from './schemas/interfaces/modify-calendar-options';
+import type { ModifyEventOptions } from './schemas/interfaces/modify-event-options';
+import type { ModifyEventWithPromptOptions } from './schemas/interfaces/modify-event-with-prompt-options';
+import type { ModifyReminderOptions } from './schemas/interfaces/modify-reminder-options';
+import type { OpenCalendarOptions } from './schemas/interfaces/open-calendar-options';
+import type { Reminder } from './schemas/interfaces/reminder';
+import type { RemindersList } from './schemas/interfaces/reminders-list';
+import type { RequestPermissionOptions } from './schemas/interfaces/request-permission-options';
+import type { SelectCalendarsWithPromptOptions } from './schemas/interfaces/select-calendars-with-prompt-options';
+import type { SelectCalendarsWithPromptResult } from './schemas/interfaces/select-calendars-with-prompt-result';
+import type { UpdateRemindersListOptions } from './schemas/interfaces/update-reminders-list-options';
+import type { UpdateRemindersListResult } from './schemas/interfaces/update-reminders-list-result';
+import type { EventEditAction } from './schemas/types/event-edit-action';
+import type { CheckAllPermissionsResult, RequestAllPermissionsResult } from './sub-definitions/calendar-access';
+import type { DeleteEventsByIdResult } from './sub-definitions/event-operations';
+import type { DeleteRemindersByIdResult } from './sub-definitions/reminders-operations';
+export declare class CapacitorCalendarWeb extends WebPlugin implements CapacitorCalendarPlugin {
+    checkPermission(_options: CheckPermissionOptions): Promise<{
+        result: PermissionState;
+    }>;
+    checkAllPermissions(): Promise<{
+        result: CheckAllPermissionsResult;
+    }>;
+    requestPermission(_options: RequestPermissionOptions): Promise<{
+        result: PermissionState;
+    }>;
+    createRemindersList(_options: CreateRemindersListOptions): Promise<CreateRemindersListResult>;
+    deleteRemindersList(_options: DeleteRemindersListOptions): Promise<void>;
+    requestAllPermissions(): Promise<{
+        result: RequestAllPermissionsResult;
+    }>;
+    requestWriteOnlyCalendarAccess(): Promise<{
+        result: PermissionState;
+    }>;
+    requestReadOnlyCalendarAccess(): Promise<{
+        result: PermissionState;
+    }>;
+    requestFullCalendarAccess(): Promise<{
+        result: PermissionState;
+    }>;
+    requestFullRemindersAccess(): Promise<{
+        result: PermissionState;
+    }>;
+    createEventWithPrompt(_options: CreateEventWithPromptOptions): Promise<CreateEventWithPromptResult>;
+    modifyEventWithPrompt(_options: ModifyEventWithPromptOptions): Promise<{
+        result: EventEditAction | null;
+    }>;
+    createEvent(options: CreateEventOptions): Promise<CreateEventResult>;
+    commit(): Promise<void>;
+    modifyEvent(_options: ModifyEventOptions): Promise<void>;
+    selectCalendarsWithPrompt(_options?: SelectCalendarsWithPromptOptions): Promise<SelectCalendarsWithPromptResult>;
+    fetchAllCalendarSources(): Promise<FetchAllCalendarSourcesResult>;
+    listCalendars(): Promise<ListCalendarsResult>;
+    fetchAllRemindersSources(): Promise<{
+        result: CalendarSource[];
+    }>;
+    getDefaultCalendar(_options?: GetDefaultCalendarOptions): Promise<{
+        result: Calendar | null;
+    }>;
+    getDefaultRemindersList(): Promise<{
+        result: RemindersList | null;
+    }>;
+    openReminders(): Promise<void>;
+    getRemindersLists(): Promise<{
+        result: RemindersList[];
+    }>;
+    openCalendar(_options?: OpenCalendarOptions): Promise<void>;
+    createCalendar(_options: CreateCalendarOptions): Promise<CreateCalendarResult>;
+    deleteCalendar(_options: DeleteCalendarOptions): Promise<void>;
+    createReminder(_options: CreateReminderOptions): Promise<{
+        id: string;
+    }>;
+    deleteRemindersById(_options: DeleteRemindersByIdOptions): Promise<{
+        result: DeleteRemindersByIdResult;
+    }>;
+    deleteReminder(_options: DeleteReminderOptions): Promise<void>;
+    modifyReminder(_options: ModifyReminderOptions): Promise<void>;
+    getReminderById(_options: GetReminderByIdOptions): Promise<{
+        result: Reminder | null;
+    }>;
+    getRemindersFromLists(_options: GetRemindersFromListsOptions): Promise<{
+        result: Reminder[];
+    }>;
+    deleteEventsById(_options: DeleteEventsByIdOptions): Promise<{
+        result: DeleteEventsByIdResult;
+    }>;
+    deleteEvent(_options: DeleteEventOptions): Promise<void>;
+    deleteEventWithPrompt(_options: DeleteEventWithPromptOptions): Promise<{
+        deleted: boolean;
+    }>;
+    listEventsInRange(_options: ListEventsInRangeOptions): Promise<ListEventsInRangeResult>;
+    modifyCalendar(_options: ModifyCalendarOptions): Promise<void>;
+    deleteReminderWithPrompt(_options: DeleteReminderWithPromptOptions): Promise<{
+        deleted: boolean;
+    }>;
+    updateRemindersList(_options: UpdateRemindersListOptions): Promise<UpdateRemindersListResult>;
+    private throwUnimplemented;
+}
