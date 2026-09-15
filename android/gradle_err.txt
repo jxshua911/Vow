@@ -1,0 +1,17 @@
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Could not determine the dependencies of task ':app:compileDebugJavaWithJavac'.
+> Failed to install the following SDK components:
+      build-tools;35.0.0 Android SDK Build-Tools 35
+  Install the missing components using the SDK manager in Android Studio.
+
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 45m 23s

@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { NATIVE_CALENDAR_REDIRECT } from '@/lib/nativeAuth';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from '@/lib/ui-icons';
 
 type ConnectState = Record<string, 'connected' | 'setup'>;
 const categories: { id: IntegrationCategory | 'all'; label: string }[] = [

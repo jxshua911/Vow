@@ -36,16 +36,20 @@ export function RavenPage() {
 
       if (earned.length) {
         const { error: awardError } = await supabase.from('raven_awards').insert(earned.map((award) => ({ user_id: session.user.id, award_key: award.key, title: award.title, description: award.description, earned_at: award.earned_at })));
-        if (awardError && !awardError.message.toLowerCase().includes('duplicate')) throw awardError;
+        // Unique-constraint violations mean the award was already stored — that's success, not failure.
+        if (awardError && awardError.code !== '23505' && !/duplicate|unique/i.test(awardError.message)) throw awardError;
       }
 
       const currentWeek = next.recent_weeks[next.recent_weeks.length - 1];
       if (currentWeek) {
-        await supabase.from('raven_weekly_snapshots').upsert({ user_id: session.user.id, week_start: currentWeek.week_start, week_end: currentWeek.week_end, score: next.score, completion_pct: currentWeek.completion_pct, snapshot: next }, { onConflict: 'user_id,week_start' });
+        const { error: snapshotError } = await supabase.from('raven_weekly_snapshots').upsert({ user_id: session.user.id, week_start: currentWeek.week_start, week_end: currentWeek.week_end, score: next.score, completion_pct: currentWeek.completion_pct, snapshot: next }, { onConflict: 'user_id,week_start' });
+        if (snapshotError) throw snapshotError;
       }
 
+      const storedKeys = new Set(storedAwards.map((award) => award.key));
+      const newAwards = earned.filter((award) => !storedKeys.has(award.key));
       setSnapshot(next);
-      setAwards([...earned, ...storedAwards]);
+      setAwards([...newAwards, ...storedAwards]);
       setGoals(allGoals);
       setSessions(allSessions);
     } catch (err) {
@@ -93,7 +97,7 @@ export function RavenPage() {
 
     <section className="border-t border-vow-border pt-8 mb-10"><div className="flex items-center gap-2 mb-4"><span aria-hidden="true">◆</span><p className="vow-label">Personal bests</p></div><div className="grid grid-cols-2 gap-px bg-vow-border border border-vow-border"><Metric label="Longest streak" value={`${snapshot.best_streak} days`} /><Metric label="Best weekly completion" value={`${snapshot.best_weekly_completion_pct}%`} /><Metric label="Most completed in a week" value={snapshot.weekly_completed_best} /><Metric label="Total completed" value={snapshot.total_completed} /></div></section>
 
-    {awards.length > 0 && <section className="border-t border-vow-border pt-8"><div className="flex items-center gap-2 mb-4"><span aria-hidden="true">★</span><p className="vow-label">Awards</p></div><div className="border-t border-vow-border">{awards.slice(0, 12).map((award) => <div key={`${award.key}-${award.earned_at}`} className="border-b border-vow-border py-4 flex items-center gap-4"><div className="w-8 h-8 border border-vow-border flex items-center justify-center shrink-0">★</div><div><p className="text-sm text-vow-ink font-medium">{award.title}</p><p className="text-xs text-vow-muted mt-1">{award.description}</p></div></div>)}</div></section>}
+    {awards.length > 0 && <section className="border-t border-vow-border pt-8"><div className="flex items-center gap-2 mb-4"><span aria-hidden="true">★</span><p className="vow-label">Awards</p></div><div className="border-t border-vow-border">{awards.slice(0, 12).map((award, awardIndex) => <div key={`${award.key}-${awardIndex}`} className="border-b border-vow-border py-4 flex items-center gap-4"><div className="w-8 h-8 border border-vow-border flex items-center justify-center shrink-0">★</div><div><p className="text-sm text-vow-ink font-medium">{award.title}</p><p className="text-xs text-vow-muted mt-1">{award.description}</p></div></div>)}</div></section>}
   </div>;
 }
 

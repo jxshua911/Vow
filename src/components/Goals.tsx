@@ -5,9 +5,9 @@ import type { Goal, Milestone, Session, GoalStatus } from '@/types/database';
 import { addDays, formatTime, formatDate, formatRelative } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
 import { GoalPlanner } from './GoalPlanner';
+import { GoalResources } from './GoalResources';
 import { GoalReferenceList } from './GoalReferenceList';
-import { GoalResources } from '../../components/GoalResources';
-import { Plus, Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from 'lucide-react';
+import { Plus, Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from '@/lib/ui-icons';
 
 export function GoalsPage() {
   const { session } = useAuth();
@@ -23,7 +23,8 @@ export function GoalsPage() {
   useEffect(() => { loadGoals(); }, [loadGoals]);
 
   if (selectedGoalId) return <GoalDetail goalId={selectedGoalId} onBack={() => { setSelectedGoalId(null); loadGoals(); }} />;
-  if (showCreate) return <GoalPlanner userId={session!.user.id} onCreated={() => { setShowCreate(false); loadGoals(); }} onCancel={() => setShowCreate(false)} />;
+  if (showCreate) return <GoalPlanner userId={session?.user.id || ''} onCreated={() => { setShowCreate(false); loadGoals(); }} onCancel={() => setShowCreate(false)} />;
+  if (!session) return <div><PageHeader title="Goals" /><div className="text-vow-muted text-sm">Please sign in to view your goals.</div></div>;
 
   const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
   const draftGoals = goals.filter((g) => g.status === 'draft');

@@ -30,9 +30,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const thisWeekSessions = sessions.filter((s) => isThisWeek(s.scheduled_at));
   const completedThisWeek = thisWeekSessions.filter((s) => s.status === 'completed');
   const completionPct = thisWeekSessions.length > 0 ? Math.round((completedThisWeek.length / thisWeekSessions.length) * 100) : 0;
-  const sortedByDate = [...sessions].sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+  const completedDayKeys = new Set(sessions.filter((s) => s.status === 'completed').map((s) => new Date(s.scheduled_at).toDateString()));
   let streak = 0;
-  for (const s of sortedByDate) { if (s.status === 'completed') streak++; else break; }
+  for (let i = 0; i < 365; i++) {
+    const day = new Date();
+    day.setDate(day.getDate() - i);
+    if (completedDayKeys.has(day.toDateString())) streak++;
+    else if (i > 0 || !completedDayKeys.has(day.toDateString())) {
+      // today may have no completed session yet without breaking the streak
+      if (i === 0) continue;
+      break;
+    }
+  }
   const now = new Date();
   const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 5);
   if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;

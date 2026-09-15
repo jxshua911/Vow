@@ -75,7 +75,7 @@ serve(async (req) => {
     return json({ success: true });
   } catch (error) {
     console.error(error);
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    return json({ error: "Strava connection failed. Please try again." }, 500);
   }
 });
 

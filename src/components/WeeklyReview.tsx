@@ -6,7 +6,7 @@ import { weekRange, toDateString, formatDate, startOfWeek, endOfWeek, addDays } 
 import { detectPatterns } from '@/lib/patterns';
 import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
-import { Check, ArrowRight, RotateCcw } from 'lucide-react';
+import { Check, ArrowRight, RotateCcw } from '@/lib/ui-icons';
 
 export function ReviewPage() {
   const { session } = useAuth();
@@ -16,6 +16,7 @@ export function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { start, end } = weekRange();
 
@@ -41,13 +42,14 @@ export function ReviewPage() {
 
     if (existing) setReview(existing as Review);
     setLoading(false);
-  }, [session, start, end]);
+    }, [session, start]);
 
   useEffect(() => { load(); }, [load]);
 
   async function generateReview() {
     if (!session) return;
     setGenerating(true);
+    setActionError(null);
 
     try {
       const weekStart = toDateString(start);
@@ -133,6 +135,7 @@ export function ReviewPage() {
       }
     } catch (err) {
       console.error('Review generation failed:', err);
+      setActionError(err instanceof Error && err.message ? `We couldn't generate your review: ${err.message}` : "We couldn't generate your review. Please check your connection and try again.");
     } finally {
       setGenerating(false);
     }
@@ -141,9 +144,10 @@ export function ReviewPage() {
   async function confirmReview() {
     if (!review || !session) return;
     setConfirming(true);
+    setActionError(null);
 
     try {
-      await supabase.from('reviews').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', review.id);
+      await supabase.from('reviews').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', review.id).select().single().then(({ error }) => { if (error) throw error; });
       const nextWeekStart = toDateString(addDays(startOfWeek(), 7));
       const nextWeekEnd = toDateString(addDays(endOfWeek(), 7));
 
@@ -178,6 +182,7 @@ export function ReviewPage() {
       await load();
     } catch (err) {
       console.error('Confirm failed:', err);
+      setActionError(err instanceof Error && err.message ? `We couldn't lock in next week: ${err.message}` : "We couldn't lock in next week's commitments. Some may be missing — please try again.");
     } finally {
       setConfirming(false);
     }
@@ -194,6 +199,7 @@ export function ReviewPage() {
           <p className="vow-heading text-2xl text-vow-ink mb-3">No review generated yet</p>
           <p className="text-vow-muted text-sm mb-8 max-w-md mx-auto leading-relaxed">Generate your weekly accountability review. It reads your sessions, journal, and commitment history to give you honest, evidence-based feedback and propose next week's commitments.</p>
           <button onClick={generateReview} disabled={generating} className="vow-btn-primary">{generating ? 'Analyzing your week...' : 'Generate weekly review'}</button>
+          {actionError && <p className="text-sm text-vow-ink leading-relaxed mt-6 border-l-2 border-vow-ink pl-3 max-w-md mx-auto">{actionError}</p>}
         </div>
         {pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}
       </div>
@@ -206,6 +212,7 @@ export function ReviewPage() {
       <ReviewContent review={review!} />
       <div className="border-t border-vow-border pt-8 mt-10">
         <h3 className="vow-label mb-4">Confirm next week's commitments</h3>
+        {actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4">{actionError}</p>}
         <div className="space-y-px border border-vow-border mb-6">
           {(review!.proposed_commitments as unknown as ProposedCommitment[]).map((c, i) => (
             <div key={i} className="bg-vow-bg px-4 py-3 flex items-center justify-between">

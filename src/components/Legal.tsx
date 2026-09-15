@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from '@/lib/ui-icons';
 import { PageHeader } from './AppShell';
 
 const sections = [

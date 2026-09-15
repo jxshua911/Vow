@@ -17,7 +17,10 @@ const navItems: { view: Exclude<View, 'legal' | 'upgrade'>; label: string; icon:
 
 export function AppShell({ currentView, onNavigate, children }: AppShellProps) {
   const { session } = useAuth();
-  async function handleSignOut() { await supabase.auth.signOut(); }
+  async function handleSignOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) console.error('[VOW] Sign out failed:', error);
+  }
   return <div className="min-h-screen bg-vow-bg">
     <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-56 border-r border-vow-border bg-vow-bg">
       <div className="px-6 py-7 border-b border-vow-border"><BrandLogo className="w-28 h-auto" /></div>

@@ -4,10 +4,9 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
-  resolve: {
+    resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      'lucide-react': fileURLToPath(new URL('./src/lib/ui-icons.tsx', import.meta.url)),
     },
   },
 });

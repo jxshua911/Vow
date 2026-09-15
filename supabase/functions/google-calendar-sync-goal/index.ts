@@ -99,6 +99,6 @@ serve(async (req) => {
   } catch (error) {
     console.error("[VOW Calendar Goal Sync]", error);
     if (error instanceof Error && "code" in error) return json({ connected: false, needsReauth: true, error: error.message }, 401);
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    return json({ error: "Google Calendar sync could not be completed right now. Please try again." }, 500);
   }
 });

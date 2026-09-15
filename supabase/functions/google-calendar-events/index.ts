@@ -18,5 +18,5 @@ serve(async (req) => {
     }
     if (action === "create") { const event = body?.event; if (!event) return json({ error: "Missing event" }, 400); const response = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(event) }); const data = await response.json(); if (!response.ok) { if (response.status === 401) return json({ error: "Google Calendar authorization is no longer valid. Please reconnect Google Calendar.", code: "REAUTH_REQUIRED" }, 401); throw new Error(data.error?.message || "Failed to create Google Calendar event"); } return json({ event: data }); }
     return json({ error: "Unknown action" }, 400);
-  } catch (error) { console.error("[VOW Calendar API]", error); if (error instanceof Error && 'code' in error) return json({ error: error.message, code: (error as Error & { code: string }).code }, 401); return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500); }
+  } catch (error) { console.error("[VOW Calendar API]", error); if (error instanceof Error && 'code' in error) return json({ error: error.message, code: (error as Error & { code: string }).code }, 401); return json({ error: "Google Calendar could not be reached right now. Please try again." }, 500); }
 });

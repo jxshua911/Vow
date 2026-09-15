@@ -74,7 +74,20 @@ function AppContent() {
     let cancelled = false;
     if (!session) { setSettings(null); setSettingsLoading(false); return; }
     setSettingsLoading(true);
-    supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle().then(({ data, error }) => { if (cancelled) return; if (error) console.error('[VOW] Failed to load user settings:', error); setSettings(data as UserSettings | null); setSettingsLoading(false); });
+    void (async () => {
+      try {
+        const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle();
+        if (cancelled) return;
+        if (error) console.error('[VOW] Failed to load user settings:', error);
+        setSettings(data as UserSettings | null);
+      } catch (err) {
+        console.error('[VOW] Failed to load user settings:', err);
+        if (cancelled) return;
+        setSettings(null);
+      } finally {
+        if (!cancelled) setSettingsLoading(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [session]);
   async function handleOnboardingComplete() {
@@ -85,6 +98,7 @@ function AppContent() {
     setSettings(data as UserSettings | null); setSettingsLoading(false);
   }
   const contentReady = !loading && (!session || !settingsLoading);
+
   useEffect(() => { if (splashMinElapsed && contentReady && !splashFadingOut) { setSplashFadingOut(true); const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS); return () => window.clearTimeout(timer); } }, [splashMinElapsed, contentReady, splashFadingOut]);
 
   let content: React.ReactNode;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link2 } from 'lucide-react';
+import { Link2 } from '@/lib/ui-icons';
 import { supabase } from '@/lib/supabase';
 
 type GoalResource = { id: string; url: string; title: string | null; resource_type: string; created_at: string };

@@ -43,15 +43,15 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
     setUpgrade(null);
     try {
       if (!session) throw new Error('Please sign in to use VOW AI.');
-      const entitlement = await consumeEntitlement(featureForPrompt(question), { goal_id: goal?.id || null, prompt_type: featureForPrompt(question) });
-      if (!entitlement.allowed) {
-        setUpgrade(entitlement);
-        return;
-      }
       const safety = await checkContentSafety(question);
       if (safety.status !== 'safe') {
         setError(safety.message || 'Please reword that so the intended activity is clear.');
         if (safety.status === 'suspended' && session) await supabase.auth.signOut();
+        return;
+      }
+      const entitlement = await consumeEntitlement(featureForPrompt(question), { goal_id: goal?.id || null, prompt_type: featureForPrompt(question) });
+      if (!entitlement.allowed) {
+        setUpgrade(entitlement);
         return;
       }
 

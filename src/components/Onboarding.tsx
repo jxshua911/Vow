@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { decomposeGoal, type DecomposedGoal } from '@/lib/decompose';
 import { addDays, toDateString } from '@/lib/dates';
-import { ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check } from '@/lib/ui-icons';
 import type { UserSettings } from '@/types/database';
 
 interface OnboardingProps {
@@ -82,7 +82,8 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
         coaching_tone: 'honest_encouraging',
         onboarding_complete: true,
       };
-      await supabase.from('user_settings').upsert(settings);
+      const { error: settingsError } = await supabase.from('user_settings').upsert(settings);
+      if (settingsError) throw settingsError;
 
       const { data: goalData, error: goalErr } = await supabase
         .from('goals')
@@ -108,7 +109,8 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
         deadline: toDateString(addDays(new Date(), m.weeksOut * 7)),
         status: i === 0 ? 'in_progress' : 'pending',
       }));
-      await supabase.from('milestones').insert(milestoneRows);
+      const { error: milestoneErr } = await supabase.from('milestones').insert(milestoneRows);
+      if (milestoneErr) throw milestoneErr;
 
       const sessions = [];
       for (let i = 0; i < decomposed!.weeklyCommitment; i++) {
@@ -129,7 +131,8 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
           status: 'scheduled',
         });
       }
-      await supabase.from('sessions').insert(sessions);
+      const { error: sessionsErr } = await supabase.from('sessions').insert(sessions);
+      if (sessionsErr) throw sessionsErr;
 
       onComplete();
     } catch (err) {
