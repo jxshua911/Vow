@@ -1,0 +1,64 @@
+name: Build VOW Android APK
+
+on:
+  push:
+    branches:
+      - capacitor-mobile
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vow-android-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Build web app
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+      - name: Assemble universal debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Verify APK
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          echo "APK size: $(stat -c%s "$APK") bytes"
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.3.apk"
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VOW APK 1.3-debug
+          path: "VOW APK 1.3.apk"
+          if-no-files-found: error
+          retention-days: 14
