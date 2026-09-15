@@ -15,7 +15,9 @@ function secret() {
   try {
     const keys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
     if (keys.default) return keys.default;
-  } catch {}
+  } catch {
+    // Fall back to the service-role environment variable below.
+  }
   return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 }
 
@@ -24,7 +26,9 @@ function authClient(req: Request) {
   if (!key) {
     try {
       key = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}").default || "";
-    } catch {}
+    } catch {
+      // Fall back to an empty key; authentication will fail safely below.
+    }
   }
   return createClient(Deno.env.get("SUPABASE_URL")!, key, {
     global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
@@ -38,7 +42,7 @@ function adminClient() {
 }
 
 function normalise(value: string) {
-  return value.normalize("NFKC").toLowerCase().replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000);
+  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 4000);
 }
 
 type Classification = {
