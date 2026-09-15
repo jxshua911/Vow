@@ -4,12 +4,19 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from './AppShell';
 
-const benefits = [
+const premiumBenefits = [
   'Unlimited active goals',
-  'Deep first-class planning for every kind of goal',
-  'Adaptive re-planning as new evidence appears',
+  'Adaptive re-planning when your circumstances or evidence change',
+  'Deeper goal-specific planning across sport, study, skills, projects and everyday goals',
   'Deeper goal resources and supporting knowledge',
   'Advanced weekly review insights',
+];
+
+const freeBenefits = [
+  'Start with one active goal',
+  'Get a personalised plan with milestones',
+  'Track your progress and scheduled sessions',
+  'Experience VOW AI planning before upgrading',
 ];
 
 type Billing = 'monthly' | 'yearly';
@@ -47,16 +54,41 @@ export function UpgradePage() {
   const isYearly = billing === 'yearly';
 
   return <div>
-    <PageHeader title="VOW Premium" subtitle="More depth. More capability. The same first-class standard for every goal." />
+    <PageHeader title="VOW Premium" subtitle="Most apps help you track what you’re doing. VOW helps you figure out what to do next." />
 
     <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
-      <div className="flex items-start justify-between gap-4 mb-7">
-        <div>
-          <div className="inline-flex items-center gap-2 text-xs tracking-[0.18em] uppercase text-vow-muted mb-3"><Sparkles className="w-3.5 h-3.5" />Premium</div>
-          <h2 className="vow-heading text-2xl text-vow-ink">Unlock the full VOW system.</h2>
-          <p className="text-sm text-vow-muted mt-2 max-w-xl">Premium never changes which goals are considered important. Running, travel, cooking, study, business, hobbies and everything else receive the same first-class methodology. Premium adds more depth across the board.</p>
+      <div className="mb-8">
+        <div className="inline-flex items-center gap-2 text-xs tracking-[0.18em] uppercase text-vow-muted mb-3"><Sparkles className="w-3.5 h-3.5" />Premium</div>
+        <h2 className="vow-heading text-2xl md:text-3xl text-vow-ink">Don’t just track the goal. Know what to do next.</h2>
+        <p className="text-sm text-vow-muted mt-3 max-w-2xl leading-relaxed">VOW is built to turn an outcome into a practical route — then keep adjusting that route as real life happens. Premium gives you more room to use that planning intelligence across your goals.</p>
+      </div>
+
+      <div className="border border-vow-border rounded-xl p-4 md:p-5 mb-8">
+        <p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">See the difference</p>
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <p className="text-sm font-medium text-vow-ink mb-3">Free · Start planning</p>
+            <div className="space-y-2.5">
+              {freeBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><Check className="w-4 h-4 mt-0.5 shrink-0 text-vow-ink" /><span>{benefit}</span></div>)}
+            </div>
+          </div>
+          <div className="md:border-l md:border-vow-border md:pl-6">
+            <p className="text-sm font-medium text-vow-ink mb-3">Premium · Let VOW plan with you</p>
+            <div className="space-y-2.5">
+              {premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><Check className="w-4 h-4 mt-0.5 shrink-0" /><span>{benefit}</span></div>)}
+            </div>
+          </div>
         </div>
-        <div className="hidden sm:flex items-center justify-center w-12 h-12 border border-vow-border rounded-full text-vow-ink"><CreditCard className="w-5 h-5" /></div>
+      </div>
+
+      <div className="mb-8">
+        <p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Start with a goal like</p>
+        <div className="flex flex-wrap gap-2">
+          {['Run a sub-25 5K', 'Train for a football trial', 'Complete a 100 km ride', 'Learn to swim 1,500 m', 'Pass my exams', 'Build a portfolio'].map((example) => (
+            <span key={example} className="text-xs px-3 py-1.5 border border-vow-border text-vow-muted">{example}</span>
+          ))}
+        </div>
+        <p className="text-xs text-vow-muted mt-3">The wedge is sport. The system is not. The same planning engine should work wherever there is a meaningful outcome to reach.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl mb-7" role="group" aria-label="Billing interval">
@@ -69,10 +101,6 @@ export function UpgradePage() {
           <span className={`block text-xs mt-0.5 ${billing === 'yearly' ? 'opacity-80' : 'text-vow-muted'}`}>$48 / year</span>
           <span className="absolute -top-2 right-2 rounded-full border border-vow-border bg-vow-bg px-2 py-0.5 text-[10px] tracking-wide text-vow-muted">Save 20%</span>
         </button>
-      </div>
-
-      <div className="space-y-3 mb-8">
-        {benefits.map((benefit) => <div key={benefit} className="flex items-start gap-3 text-sm text-vow-ink"><Check className="w-4 h-4 mt-0.5 shrink-0" /><span>{benefit}</span></div>)}
       </div>
 
       {activePlan === 'premium' ? <div className="border border-vow-border rounded-xl px-4 py-3 text-sm text-vow-ink">Premium is active on this account.</div> : <div className="space-y-3">
