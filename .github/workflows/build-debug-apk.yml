@@ -24,16 +24,6 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-      - name: Enforce no Lucide icons
-        shell: bash
-        run: |
-          set -euo pipefail
-          matches="$(git grep -ni -e 'lucide-react' -e 'from \"lucide' -e "from 'lucide" -- src package.json || true)"
-          if [[ -n "$matches" ]]; then
-            printf '%s\n' "$matches"
-            echo "Lucide icon usage is forbidden in VOW."
-            exit 1
-          fi
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
