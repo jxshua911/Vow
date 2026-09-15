@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { App as CapacitorApp } from '@capacitor/app';
+import { CapacitorApp } from '@capacitor/app';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
@@ -61,6 +61,14 @@ function AppContent() {
     return () => { listener.then((handle) => handle.remove()); };
   }, [goBack]);
   useEffect(() => { const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS); return () => window.clearTimeout(timer); }, []);
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const next = (event as CustomEvent<View>).detail;
+      if (next) navigate(next);
+    };
+    window.addEventListener('vow:navigate', listener);
+    return () => window.removeEventListener('vow:navigate', listener);
+  }, [navigate]);
   useEffect(() => {
     let cancelled = false;
     if (!session) { setSettings(null); setSettingsLoading(false); return; }
