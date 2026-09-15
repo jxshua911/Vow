@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { checkContentSafety } from '@/lib/contentSafety';
+import { consumeEntitlement, type EntitlementResult } from '@/lib/entitlements';
+import { UpgradePrompt } from './UpgradePrompt';
 import type { Goal, Session } from '@/types/database';
 
 function readAIText(data: unknown): string {
@@ -19,12 +21,17 @@ const quickPrompts = [
   'Make this week more realistic.',
 ];
 
+function featureForPrompt(question: string) {
+  return /missed|rebuild|changed|realistic|adapt|schedule/i.test(question) ? 'adaptive_replan' as const : 'planning_action' as const;
+}
+
 export function GoalAI({ goal }: { goal?: Goal | null }) {
   const { session } = useAuth();
   const [message, setMessage] = useState('');
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
 
   async function ask(prompt = message) {
     const question = prompt.trim();
@@ -33,7 +40,14 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
     setLoading(true);
     setError('');
     setAnswer('');
+    setUpgrade(null);
     try {
+      if (!session) throw new Error('Please sign in to use VOW AI.');
+      const entitlement = await consumeEntitlement(featureForPrompt(question), { goal_id: goal?.id || null, prompt_type: featureForPrompt(question) });
+      if (!entitlement.allowed) {
+        setUpgrade(entitlement);
+        return;
+      }
       const safety = await checkContentSafety(question);
       if (safety.status !== 'safe') {
         setError(safety.message || 'Please reword that so the intended activity is clear.');
@@ -42,12 +56,10 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
       }
 
       let upcoming: Session[] = [];
-      if (session) {
-        const start = new Date();
-        const end = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000);
-        const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).gte('scheduled_at', start.toISOString()).lte('scheduled_at', end.toISOString()).order('scheduled_at', { ascending: true });
-        upcoming = (data || []) as Session[];
-      }
+      const start = new Date();
+      const end = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000);
+      const { data: sessionData } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).gte('scheduled_at', start.toISOString()).lte('scheduled_at', end.toISOString()).order('scheduled_at', { ascending: true });
+      upcoming = (sessionData || []) as Session[];
       const context = goal
         ? { title: goal.title, outcome: goal.outcome, status: goal.status, deadline: goal.deadline, weekly_commitment_target: goal.weekly_commitment_target, why_it_matters: goal.why_it_matters }
         : { title: 'General planning', outcome: 'No single goal selected' };
@@ -87,6 +99,7 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
         <h2 className="vow-heading text-lg text-vow-ink mt-1">Most apps help you track what you’re doing. VOW helps you figure out what to do next.</h2>
         <p className="text-xs text-vow-muted mt-2">Your goal, your calendar and relevant evidence — turned into the next concrete move. If your circumstances change, VOW can rethink the plan with you.</p>
       </div>
+      {upgrade && <div className="mb-4"><UpgradePrompt result={upgrade} title="You’ve reached the free planning limit" /></div>}
       <div className="flex flex-wrap gap-2 mb-4">
         {quickPrompts.map((prompt) => (
           <button key={prompt} type="button" onClick={() => ask(prompt)} disabled={loading} className="text-xs px-3 py-1.5 border border-vow-border text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors disabled:opacity-50">
