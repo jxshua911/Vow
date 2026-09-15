@@ -1,8 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
 
 :root,
-:root[data-theme='light'] { --vow-bg: 247 247 245; --vow-ink: 17 17 17; --vow-muted: 107 107 107; --vow-border: 226 226 223; --vow-surface: 232 232 228; --vow-success: 63 107 79; --vow-accent: 82 84 180; --vow-accent-soft: 235 235 250; color-scheme: light; }
-:root[data-theme='dark'] { --vow-bg: 17 17 17; --vow-ink: 247 247 245; --vow-muted: 173 173 173; --vow-border: 58 58 58; --vow-surface: 38 38 38; --vow-success: 128 174 145; --vow-accent: 145 147 235; --vow-accent-soft: 42 42 62; color-scheme: dark; }
+:root[data-theme='light'] { --vow-bg: 247 247 245; --vow-ink: 17 17 17; --vow-muted: 107 107 107; --vow-border: 226 226 223; --vow-surface: 232 232 228; --vow-success: 107 107 107; color-scheme: light; }
+:root[data-theme='dark'] { --vow-bg: 17 17 17; --vow-ink: 247 247 245; --vow-muted: 173 173 173; --vow-border: 58 58 58; --vow-surface: 38 38 38; --vow-success: 173 173 173; color-scheme: dark; }
 
 @tailwind base;
 @tailwind components;
@@ -11,7 +11,7 @@
 @layer base {
   html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: rgb(var(--vow-bg)); color-scheme: inherit; }
   body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'Inter', system-ui, sans-serif; font-weight: 400; margin: 0; transition: background-color 180ms ease, color 180ms ease; }
-  ::selection { background: rgb(var(--vow-accent)); color: rgb(var(--vow-bg)); }
+  ::selection { background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); }
   input, textarea, select, button { font-family: inherit; }
   input, textarea, select { color-scheme: inherit; }
 }
@@ -19,18 +19,18 @@
 @layer components {
   .vow-label { font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(var(--vow-muted)); }
   .vow-input { width: 100%; background: transparent; border: 1px solid rgb(var(--vow-border)); padding: 0.625rem 0.875rem; font-size: 0.875rem; color: rgb(var(--vow-ink)); transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease; }
-  .vow-input:focus { outline: none; border-color: rgb(var(--vow-accent)); box-shadow: 0 0 0 1px rgb(var(--vow-accent) / 0.45); }
+  .vow-input:focus { outline: none; border-color: rgb(var(--vow-ink)); box-shadow: 0 0 0 1px rgb(var(--vow-ink) / 0.45); }
   .vow-input::placeholder { color: rgb(var(--vow-muted)); }
 }
 
 @layer utilities {
   .vow-heading { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; letter-spacing: -0.02em; }
-  .vow-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgb(var(--vow-accent)); color: rgb(var(--vow-bg)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease; }
+  .vow-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease; }
   .vow-btn-primary:hover { opacity: 0.88; }
   .vow-btn-primary:active { transform: translateY(1px); }
   .vow-btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
   .vow-btn-ghost { display: inline-flex; align-items: center; gap: 0.5rem; background: rgb(var(--vow-surface) / 0.55); color: rgb(var(--vow-ink)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; border: 1px solid rgb(var(--vow-border)); transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease; }
-  .vow-btn-ghost:hover { border-color: rgb(var(--vow-accent) / 0.6); background: rgb(var(--vow-accent-soft)); }
+  .vow-btn-ghost:hover { border-color: rgb(var(--vow-ink)); background: rgb(var(--vow-surface)); }
   .vow-btn-ghost:active { transform: translateY(1px); }
   .vow-btn-soft { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgb(var(--vow-surface)); color: rgb(var(--vow-ink)); border: 1px solid rgb(var(--vow-border)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease; }
   .vow-btn-soft:hover { background: rgb(var(--vow-border)); border-color: rgb(var(--vow-muted)); }
@@ -44,7 +44,7 @@
   .vow-theme-splash { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; background: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); }
   .vow-theme-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; animation: vow-theme-splash-in 500ms cubic-bezier(.2,.7,.2,1) both; }
   .vow-loading-dots { display: flex; gap: 5px; align-items: center; }
-  .vow-loading-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--vow-accent)); animation: vow-dot 900ms ease-in-out infinite; opacity: 0.45; }
+  .vow-loading-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--vow-ink)); animation: vow-dot 900ms ease-in-out infinite; opacity: 0.25; }
   .vow-loading-dots span:nth-child(2) { animation-delay: 120ms; }
   .vow-loading-dots span:nth-child(3) { animation-delay: 240ms; }
   .vow-calendar-sync-panel { max-height: 300px; opacity: 1; transform: translateY(0); overflow: hidden; transition: max-height 460ms ease, opacity 380ms ease, transform 460ms ease, margin-bottom 460ms ease, padding-top 460ms ease, padding-bottom 460ms ease, border-color 460ms ease; }
@@ -53,7 +53,7 @@
 
 @keyframes vow-splash-in { from { opacity: 0; transform: scale(1.025) translateY(4px); } 60% { opacity: 1; } to { opacity: 1; transform: scale(1) translateY(0); } }
 @keyframes vow-theme-splash-in { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
-@keyframes vow-dot { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+@keyframes vow-dot { 0%, 100% { opacity: .2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .vow-splash-logo, .vow-theme-splash-logo, .vow-loading-dots span { animation: none; } .vow-splash-overlay { transition: none; } }
 .vow-calendar-editor-enter { animation: vow-calendar-editor-enter 320ms cubic-bezier(.2,.7,.2,1) both; }
 @keyframes vow-calendar-editor-enter { from { opacity: 0; transform: translateY(18px) scale(.995); } to { opacity: 1; transform: translateY(0) scale(1); } }
