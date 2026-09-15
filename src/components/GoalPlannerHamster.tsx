@@ -26,7 +26,7 @@ function safeHamsterMessage(value: unknown, fallback: string) {
 }
 
 const PLAN_PLACEHOLDERS=[/^step\s*\d+$/i,/^complete the action\.?$/i,/^complete the next action required for this goal\.?$/i,/^record what was completed\.?$/i,/^milestone$/i];
-function meaningfulGoalTokens(goal:string){return goal.toLowerCase().split(/[^a-z0-9+#.\-]+/i).map(token=>token.trim()).filter(token=>token.length>=4&&!['want','learn','how','what','with','from','into','this','that','make','become','need','goal','please','help'].includes(token));}
+function meaningfulGoalTokens(goal:string){return goal.toLowerCase().split(/[^a-z0-9+#.-]+/i).map(token=>token.trim()).filter(token=>token.length>=4&&!['want','learn','how','what','with','from','into','this','that','make','become','need','goal','please','help'].includes(token));}
 function planIntegrity(value:unknown, goal:string){
  if(!value||typeof value!=='object')return false;
  const source=value as Record<string,unknown>;
