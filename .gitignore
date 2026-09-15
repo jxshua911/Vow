@@ -10,12 +10,6 @@ node_modules
 dist
 dist-ssr
 *.local
-.pnpm-store/
-
-# Local Android/Gradle state and generated build output
-android/**/build/
-android/.gradle/
-android/local.properties
 
 .vscode/*
 !.vscode/extensions.json

@@ -5,7 +5,6 @@ import { supabase } from './supabase';
 interface AuthContextValue { session: Session | null; loading: boolean; displayName: string; updateDisplayName: (name: string) => Promise<{ error: Error | null }>; }
 const AuthContext = createContext<AuthContextValue>({ session: null, loading: true, displayName: 'there', updateDisplayName: async () => ({ error: null }) });
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function getDisplayName(session: Session | null) {
   const metadata = session?.user?.user_metadata as Record<string, unknown> | undefined;
   const fullName = typeof metadata?.full_name === 'string' ? metadata.full_name : typeof metadata?.name === 'string' ? metadata.name : '';
@@ -19,22 +18,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState('there');
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!active) return;
-      if (error) console.error('[VOW] Failed to restore session:', error);
-      setSession(data.session);
-      setDisplayName(getDisplayName(data.session));
-      setLoading(false);
-    }).catch((err) => {
-      console.error('[VOW] Session restore crashed:', err);
-      if (!active) return;
-      setSession(null);
-      setLoading(false);
-    });
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setDisplayName(getDisplayName(data.session)); setLoading(false); });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => { setSession(sess); setDisplayName(getDisplayName(sess)); setLoading(false); });
-    return () => { active = false; listener.subscription.unsubscribe(); };
+    return () => listener.subscription.unsubscribe();
   }, []);
   async function updateDisplayName(name: string) {
     const next = name.trim();

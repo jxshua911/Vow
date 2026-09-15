@@ -74,20 +74,7 @@ function AppContent() {
     let cancelled = false;
     if (!session) { setSettings(null); setSettingsLoading(false); return; }
     setSettingsLoading(true);
-    void (async () => {
-      try {
-        const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle();
-        if (cancelled) return;
-        if (error) console.error('[VOW] Failed to load user settings:', error);
-        setSettings(data as UserSettings | null);
-      } catch (err) {
-        console.error('[VOW] Failed to load user settings:', err);
-        if (cancelled) return;
-        setSettings(null);
-      } finally {
-        if (!cancelled) setSettingsLoading(false);
-      }
-    })();
+    supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle().then(({ data, error }) => { if (cancelled) return; if (error) console.error('[VOW] Failed to load user settings:', error); setSettings(data as UserSettings | null); setSettingsLoading(false); });
     return () => { cancelled = true; };
   }, [session]);
   async function handleOnboardingComplete() {

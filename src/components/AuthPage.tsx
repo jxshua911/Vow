@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabase';
@@ -16,16 +16,6 @@ export function AuthPage() {
   const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(false);
   const openEmail = (next: 'signin' | 'signup' = 'signin') => { setMode(next); setEmailMode(true); setError(null); };
   const closeEmail = () => { if (!loading) { setEmailMode(false); setError(null); setEmail(''); setPassword(''); } };
-
-  useEffect(() => {
-    function onOAuthError(event: Event) {
-      const detail = (event as CustomEvent<string>).detail;
-      setError(typeof detail === 'string' && detail ? detail : 'Sign-in failed. Please try again.');
-      setLoading(false);
-    }
-    window.addEventListener('vow:oauth-error', onOAuthError);
-    return () => window.removeEventListener('vow:oauth-error', onOAuthError);
-  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); if (loading) return;
@@ -48,7 +38,7 @@ export function AuthPage() {
       if (oauthError) throw oauthError; if (!data?.url) throw new Error('Unable to start sign-in. Please try again.');
       if (Capacitor.isNativePlatform()) {
         finished = await Browser.addListener('browserFinished', () => { setLoading(false); void finished?.remove(); finished = null; });
-        await Browser.open({ url: data.url, presentationStyle: 'fullscreen' });
+        await Browser.open({ url: data.url, presentationStyle: 'popover' });
       } else setLoading(false);
     } catch (err) { if (finished) await finished.remove(); finished = null; setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.'); setLoading(false); }
   }
