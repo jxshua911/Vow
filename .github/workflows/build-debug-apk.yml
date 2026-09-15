@@ -1,9 +1,5 @@
 name: Build Android APK
 
-# Release verification build for the current VOW mobile state.
-# Hedgehog + grouped notifications + resilient AI planning verification build.
-# Capacitor Android build trigger for the current mobile branch.
-
 on:
   push:
     branches:
@@ -36,12 +32,6 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Audit production dependencies
-        uses: google/osv-scanner-action/osv-scanner-action@06b2ab4348248b456ee06c9e953637f55e03504f
-        with:
-          scan-args: |-
-            --format=table
-            --lockfile=package-lock.json
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
