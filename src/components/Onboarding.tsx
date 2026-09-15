@@ -10,6 +10,34 @@ interface OnboardingProps {
   onComplete: () => void;
 }
 
+const goalPlaceholders = [
+  'Make ravioli',
+  'Land a bicycle kick',
+  'Build my first website',
+  'Run a 10K',
+  'Learn conversational Spanish',
+  'Build a robot',
+  'Make a short film',
+  'Learn to sail',
+  'Bake proper sourdough',
+  'Launch my first app',
+  'Get ready for football trials',
+  'Swim 1,500 m',
+  'Write my first song',
+  'Plan a backpacking trip',
+  'Learn to play guitar',
+  'Read 12 books',
+  'Start a garden',
+  'Cook a proper curry',
+  'Pass my maths exam',
+  'Learn to edit videos',
+  'Cycle 100 km',
+  'Build a portfolio',
+  'Learn how to surf',
+  'Design a game',
+  'Make the perfect pizza',
+];
+
 const exampleGoals = [
   'Run a 10K',
   'Train for a football trial',
@@ -19,9 +47,14 @@ const exampleGoals = [
   'Learn to code',
 ];
 
+function getRandomPlaceholder() {
+  return goalPlaceholders[Math.floor(Math.random() * goalPlaceholders.length)];
+}
+
 export function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [step, setStep] = useState(0);
   const [rawGoal, setRawGoal] = useState('');
+  const [goalPlaceholder, setGoalPlaceholder] = useState(getRandomPlaceholder);
   const [decomposed, setDecomposed] = useState<DecomposedGoal | null>(null);
   const [whyItMatters, setWhyItMatters] = useState('');
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
@@ -129,7 +162,7 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
             <p className="text-vow-muted text-sm leading-relaxed mb-8">
               Most apps help you track what you’re doing. VOW helps you figure out what to do next. Describe the outcome in your own words — VOW will turn it into a concrete plan with milestones and a realistic weekly commitment.
             </p>
-            <textarea value={rawGoal} onChange={(e) => setRawGoal(e.target.value)} rows={3} className="vow-input resize-none mb-4" placeholder="e.g. I want to run a sub-25 minute 5K" autoFocus />
+            <textarea value={rawGoal} onChange={(e) => setRawGoal(e.target.value)} rows={3} className="vow-input resize-none mb-4" placeholder={goalPlaceholder} autoFocus />
             <p className="text-xs text-vow-muted mb-2">Try one:</p>
             <div className="flex flex-wrap gap-2 mb-8">
               {exampleGoals.map((s) => (
@@ -177,7 +210,7 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setStep(0)} className="vow-btn-ghost"><ArrowLeft className="w-4 h-4" />Back</button>
+              <button onClick={() => { setGoalPlaceholder(getRandomPlaceholder()); setStep(0); }} className="vow-btn-ghost"><ArrowLeft className="w-4 h-4" />Back</button>
               <button onClick={() => setStep(2)} className="vow-btn-primary flex-1">Looks good <ArrowRight className="w-4 h-4" /></button>
             </div>
           </div>
