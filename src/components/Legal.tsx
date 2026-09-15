@@ -1,24 +1,16 @@
+import { ArrowLeft } from 'lucide-react';
 import { PageHeader } from './AppShell';
 
-function Glyph({ children, className = '' }: { children: string; className?: string }) { return <span aria-hidden="true" className={`inline-flex items-center justify-center font-medium leading-none ${className}`}>{children}</span>; }
-
 const sections = [
-  ['1. Service and scope', 'VOW is a personal planning, accountability, progress-tracking and evidence-organising product. It provides general informational and productivity assistance only. VOW is not a medical, mental-health, financial, legal, educational, coaching or emergency service, and its outputs are not professional advice.'],
-  ['2. Eligibility and accounts', 'You may use VOW only where you are legally permitted to use the service and meet applicable age requirements. If your jurisdiction requires parental or guardian consent, you must obtain it before using VOW. You are responsible for activity under your account and for protecting your credentials and device. Do not create an account using another person’s identity or credentials.'],
-  ['3. AI-generated plans and recommendations', 'VOW may use automated systems and AI to interpret goals, organise information, generate plans, suggest activities, summarise progress and provide recommendations. AI outputs may be incomplete, outdated, unsuitable or wrong and may not reflect your full circumstances. You must use independent judgement and verify important information before acting on it. Never treat an AI output as a guarantee of an outcome.'],
-  ['4. Health, fitness, nutrition and safety', 'Fitness, nutrition, wellbeing and physically demanding recommendations are general information only. VOW does not examine you, diagnose conditions, assess individual risk or determine whether an activity is safe for you. Use appropriate supervision and qualified professional advice where needed. Stop an activity if you feel unsafe or unwell and seek appropriate professional or emergency assistance. VOW must never be used as a substitute for urgent care.'],
-  ['5. Sensitive and high-consequence decisions', 'Do not rely on VOW as the sole basis for decisions involving medical treatment, mental-health crises, significant financial decisions, legal rights, emergencies, personal safety or other high-consequence matters. VOW is not designed to make those decisions for you. Where appropriate, consult a qualified professional or relevant emergency service.'],
-  ['6. Evidence, verification and user content', 'VOW may classify information as self-reported, supporting evidence or verified evidence. Verification is an automated interpretation of available data and does not guarantee that a real-world event occurred, that information is complete, or that a source is trustworthy. You are responsible for the accuracy and legality of information you submit and for having the right to provide it.'],
-  ['7. Privacy and personal information', 'You retain responsibility for the information, goals, journal entries, records and other content you provide. VOW should process personal information only as reasonably necessary for requested features and according to its applicable privacy notice. Private content should not be treated as suitable for public disclosure. Do not submit passwords, payment-card details, government identity numbers or other information that a feature does not require.'],
-  ['8. Connected services and third parties', 'When you connect a third-party service, you authorise VOW to use the permissions and scopes that service makes available for the requested feature. Third-party services have their own terms, privacy policies and security practices. VOW does not control third-party availability, accuracy, security, content, permissions or continued operation.'],
-  ['9. Security and availability', 'VOW will use reasonable technical and organisational safeguards appropriate to the service, including authenticated access controls and least-privilege access where practical. No online service can guarantee absolute security, availability or error-free operation. You must protect your device, credentials and connected accounts and promptly report suspected unauthorised access through the available support channel.'],
-  ['10. Acceptable use', 'You must not misuse VOW, bypass or attempt to defeat access controls, interfere with the service, probe or attack infrastructure, impersonate another person, upload malicious or unlawful material, infringe another person’s rights, abuse connected services, or use VOW to facilitate harmful or unlawful activity. VOW may limit, suspend or remove access when reasonably necessary for security, legal, safety or operational reasons.'],
-  ['11. Deletion and user controls', 'Where VOW provides a delete control, using it may permanently remove the selected goal, session, review or other record and may also remove dependent records where the product design requires it. Deletion may not undo information already exported, synced to a third-party service, included in a prior notification or otherwise lawfully retained. Users are responsible for reviewing what a deletion action affects before confirming it.'],
-  ['12. Responsibility for decisions and outcomes', 'You are responsible for the accuracy of information you enter, the permissions you grant, the plans you choose to follow and decisions you make using VOW. VOW does not promise that a goal will be achieved, that a plan will be suitable, or that progress data will be complete. You remain responsible for adapting or stopping a plan when circumstances change.'],
-  ['13. Disclaimer and limitation of liability', 'To the maximum extent permitted by applicable law, VOW and its developers provide the service without warranties of uninterrupted availability, accuracy, completeness, fitness for a particular purpose or error-free operation. To the extent permitted by law, VOW is not liable for indirect, incidental, consequential or special losses arising from use of the service. Nothing in these terms excludes or limits liability, consumer rights or other protections that cannot lawfully be excluded or limited.'],
-  ['14. Changes, suspension and termination', 'VOW may change, suspend or discontinue features, integrations or parts of the service for security, legal, operational or technical reasons. These terms and related policies may be updated as the product develops. Where practical, material changes should be communicated before they take effect. If you do not agree to an updated term, you should stop using the affected service where legally permitted.'],
-  ['15. Governing law and disputes', 'The governing law, dispute-resolution process and mandatory consumer protections applicable to VOW depend on the jurisdiction governing the service and the user. Nothing in these terms is intended to remove rights or protections that cannot legally be waived. Any final commercial terms should identify the actual contracting entity, jurisdiction and required consumer provisions.'],
-  ['16. Contact and legal review', 'These product-level terms establish operating expectations for VOW but are not a substitute for jurisdiction-specific legal advice. Before public commercial release, the operator should have the final terms, privacy notice, age requirements, data-processing disclosures, consumer rights, intellectual-property provisions and jurisdiction-specific requirements reviewed by a qualified lawyer.'],
+  ['1. Service', 'VOW is a personal planning, accountability and evidence-organising tool. It is provided for general informational and productivity purposes and is not a substitute for professional medical, mental-health, financial, legal, educational or other professional advice.'],
+  ['2. Connected services', 'When you connect a third-party service, you authorise VOW to access only the data and scopes that service permits. Third-party services remain governed by their own terms and privacy policies. VOW does not guarantee the availability, accuracy, completeness or continued operation of any third-party integration.'],
+  ['3. Evidence and verification', 'VOW may classify information as self-reported, supporting evidence or verified evidence. Verification is an automated interpretation of available data and is not a guarantee that a real-world event occurred. You remain responsible for reviewing important records and decisions.'],
+  ['4. Privacy', 'VOW should collect and process only information reasonably necessary to provide the features you request. Sensitive journal content should remain private to your account. Connected-service data should be scoped to the permissions you grant and should not be sold or used for unrelated advertising.'],
+  ['5. Security', 'VOW will use reasonable technical and organisational safeguards, including authenticated access controls and least-privilege access where practical. No internet service can guarantee absolute security, and you should use a strong account password and protect access to your device.'],
+  ['6. Your responsibility', 'You are responsible for the accuracy of information you enter, the permissions you grant, and your use of recommendations or evidence produced by VOW. Do not use VOW as the sole basis for a decision where professional or emergency assistance is required.'],
+  ['7. Disclaimer and limitation of liability', 'To the maximum extent permitted by applicable law, VOW and its developers provide the service without warranties of uninterrupted availability, accuracy, fitness for a particular purpose or error-free operation. Nothing in these terms excludes liability that cannot lawfully be excluded or limited.'],
+  ['8. Changes and termination', 'Features, integrations and these policies may change as VOW develops. We may suspend or discontinue features when necessary for security, legal, operational or technical reasons. Where practical, material policy changes should be communicated before they take effect.'],
+  ['9. Governing law', 'The governing law, dispute-resolution process and any mandatory consumer protections will be determined by the jurisdiction applicable to the service and its users. Nothing here is intended to remove rights that cannot legally be waived.'],
 ] as const;
 
 export function LegalPage({ onBack }: { onBack?: () => void }) {
@@ -26,16 +18,32 @@ export function LegalPage({ onBack }: { onBack?: () => void }) {
     <div className="min-h-screen bg-vow-bg">
       <header className="sticky top-0 z-30 border-b border-vow-border bg-vow-bg/95 backdrop-blur" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-3xl mx-auto px-5 sm:px-8 h-16 flex items-center gap-4">
-          <button onClick={onBack} className="shrink-0 w-10 h-10 border border-vow-border flex items-center justify-center text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors" aria-label="Back to profile"><Glyph>←</Glyph></button>
-          <div className="min-w-0"><p className="text-sm font-medium text-vow-ink truncate">Terms & Policies</p><p className="text-[10px] text-vow-muted">VOW · Product policies</p></div>
+          <button onClick={onBack} className="shrink-0 w-10 h-10 border border-vow-border flex items-center justify-center text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors" aria-label="Back to profile">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-vow-ink truncate">Terms & Policies</p>
+            <p className="text-[10px] text-vow-muted">VOW · Product policies</p>
+          </div>
         </div>
       </header>
+
       <main className="max-w-3xl mx-auto px-5 sm:px-8 py-10 md:py-14">
-        <PageHeader title="Terms & Policies" subtitle="The rules, responsibilities, safety boundaries and privacy principles governing VOW." />
+        <PageHeader title="Terms & Policies" subtitle="The rules, responsibilities and privacy principles governing VOW." />
         <div className="mt-8 border border-vow-border divide-y divide-vow-border bg-white/20">
-          {sections.map(([title, body], index) => <section key={title} className="px-5 py-6 sm:px-7 sm:py-7"><div className="flex gap-4"><span className="shrink-0 pt-0.5 text-[10px] font-mono text-vow-muted">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0"><h2 className="text-sm font-medium text-vow-ink mb-2">{title.replace(/^\d+\. /, '')}</h2><p className="text-sm leading-7 text-vow-muted">{body}</p></div></div></section>)}
+          {sections.map(([title, body], index) => (
+            <section key={title} className="px-5 py-6 sm:px-7 sm:py-7">
+              <div className="flex gap-4">
+                <span className="shrink-0 pt-0.5 text-[10px] font-mono text-vow-muted">{String(index + 1).padStart(2, '0')}</span>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-medium text-vow-ink mb-2">{title.replace(/^\d+\. /, '')}</h2>
+                  <p className="text-sm leading-7 text-vow-muted">{body}</p>
+                </div>
+              </div>
+            </section>
+          ))}
         </div>
-        <p className="mt-6 text-[11px] leading-5 text-vow-muted">Last updated: 5 September 2026. These are product-level terms and should be reviewed by a qualified lawyer before public commercial release.</p>
+        <p className="mt-6 text-[11px] leading-5 text-vow-muted">Last updated: 27 August 2026. This page is a product-level terms framework, not a substitute for review by a qualified lawyer before public release.</p>
       </main>
     </div>
   );

@@ -1,10 +1,17 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import { getDisplayName } from './auth-utils';
 
 interface AuthContextValue { session: Session | null; loading: boolean; displayName: string; updateDisplayName: (name: string) => Promise<{ error: Error | null }>; }
 const AuthContext = createContext<AuthContextValue>({ session: null, loading: true, displayName: 'there', updateDisplayName: async () => ({ error: null }) });
+
+export function getDisplayName(session: Session | null) {
+  const metadata = session?.user?.user_metadata as Record<string, unknown> | undefined;
+  const fullName = typeof metadata?.full_name === 'string' ? metadata.full_name : typeof metadata?.name === 'string' ? metadata.name : '';
+  if (fullName.trim()) return fullName.trim();
+  const emailName = session?.user?.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+  return emailName || 'there';
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);

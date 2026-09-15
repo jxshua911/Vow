@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/vow_icon_white_black_bg" />
-    <foreground android:drawable="@drawable/vow_icon_white_foreground" />
+    <background android:drawable="@color/vow_icon_background" />
+    <foreground android:drawable="@drawable/ic_vow_launcher_foreground" />
 </adaptive-icon>

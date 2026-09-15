@@ -1,74 +1,57 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import type { Goal, Session, Review, GoalPlanItem, GoalMilestone, GoalReminder, PlanAdjustment, JournalInsight } from '@/types/database';
-import { formatTime, dayName } from '@/lib/dates';
+import type { Goal, Session } from '@/types/database';
+import { isThisWeek, formatTime, formatRelative, dayName } from '@/lib/dates';
 import { PageHeader } from './AppShell';
 import type { View } from './AppShell';
 
 interface DashboardProps { onNavigate: (view: View) => void; }
-function openGoal(onNavigate: (view: View) => void, userId: string, goalId: string) { localStorage.setItem(`vow:open-goal:${userId}`, goalId); onNavigate('goals'); }
-function shortText(value: string | null | undefined, max = 64) { const clean = (value || '').trim(); return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean; }
-function isSameDay(value: string, date: Date) { const d = new Date(value); return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth() && d.getDate() === date.getDate(); }
-function startOfCurrentWeek(date: Date) { const d = new Date(date); const day = d.getDay(); d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); d.setHours(0, 0, 0, 0); return d; }
-function health(items: GoalPlanItem[], goal: Goal) { const due = items.filter(i => new Date(i.scheduled_at).getTime() <= Date.now() && i.status !== 'cancelled'); const done = due.filter(i => i.status === 'completed').length; const overdue = due.filter(i => i.status === 'scheduled' || i.status === 'moved').length; const pct = due.length ? Math.round(done / due.length * 100) : goal.status === 'completed' ? 100 : 0; return { pct, overdue, label: goal.status === 'completed' || pct >= 80 ? 'On track' : pct >= 50 ? 'At risk' : 'Off track' }; }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { session, displayName } = useAuth();
-  const [goals,setGoals]=useState<Goal[]>([]); const [sessions,setSessions]=useState<Session[]>([]); const [planItems,setPlanItems]=useState<GoalPlanItem[]>([]);
-  const [weeklyReview,setWeeklyReview]=useState<Review|null>(null); const [milestones,setMilestones]=useState<GoalMilestone[]>([]); const [reminders,setReminders]=useState<GoalReminder[]>([]); const [adjustments,setAdjustments]=useState<PlanAdjustment[]>([]); const [insights,setInsights]=useState<JournalInsight[]>([]);
-  const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [online,setOnline]=useState(navigator.onLine);
-  const load=useCallback(async()=>{if(!session)return;setLoading(true);setError('');const weekStart=startOfCurrentWeek(new Date()).toISOString().slice(0,10);const now=new Date();const [g,s,p,r,m,rem,a,j]=await Promise.all([
-    supabase.from('goals').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}),
-    supabase.from('sessions').select('*').eq('user_id',session.user.id).order('scheduled_at',{ascending:true}),
-    supabase.from('goal_plan_items').select('*').eq('user_id',session.user.id).order('scheduled_at',{ascending:true}),
-    supabase.from('reviews').select('*').eq('user_id',session.user.id).eq('week_start',weekStart).maybeSingle(),
-    supabase.from('goal_milestones').select('*').eq('user_id',session.user.id).is('achieved_at',null).order('created_at',{ascending:true}).limit(6),
-    supabase.from('goal_reminders').select('*').eq('user_id',session.user.id).eq('status','scheduled').gte('scheduled_at',now.toISOString()).order('scheduled_at',{ascending:true}).limit(6),
-    supabase.from('plan_adjustments').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(5),
-    supabase.from('journal_insights').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(3)
-  ]); const firstError=[g,s,p,r,m,rem,a,j].find(x=>x.error)?.error; if(firstError)setError('Some dashboard signals could not be loaded.'); setGoals((g.data||[])as Goal[]);setSessions((s.data||[])as Session[]);setPlanItems((p.data||[])as GoalPlanItem[]);setWeeklyReview((r.data||null)as Review|null);setMilestones((m.data||[])as GoalMilestone[]);setReminders((rem.data||[])as GoalReminder[]);setAdjustments((a.data||[])as PlanAdjustment[]);setInsights((j.data||[])as JournalInsight[]);setLoading(false)},[session]);
-  useEffect(()=>{load().catch(()=>{setError('Could not load your dashboard.');setLoading(false)})},[load]);
-  useEffect(()=>{const on=()=>setOnline(true),off=()=>setOnline(false);addEventListener('online',on);addEventListener('offline',off);return()=>{removeEventListener('online',on);removeEventListener('offline',off)}},[]);
-  const now=useMemo(()=>new Date(),[]); const weekStart=startOfCurrentWeek(now);
-  const todaySessions=useMemo(()=>sessions.filter(s=>isSameDay(s.scheduled_at,now)).sort((a,b)=>new Date(a.scheduled_at).getTime()-new Date(b.scheduled_at).getTime()),[sessions,now]);
-  const priorities=useMemo(()=>planItems.filter(i=>i.status!=='cancelled'&&new Date(i.scheduled_at).getTime()<=Date.now()+48*60*60*1000).sort((a,b)=>{const rank=(x:GoalPlanItem)=>x.status==='scheduled'&&new Date(x.scheduled_at)<new Date()?-1:x.status==='scheduled'?0:1;return rank(a)-rank(b)||new Date(a.scheduled_at).getTime()-new Date(b.scheduled_at).getTime()}).slice(0,5),[planItems]);
-  const weekSessions=sessions.filter(s=>{const date=new Date(s.scheduled_at);return date>=weekStart&&date<=now}); const weekCompleted=weekSessions.filter(s=>s.status==='completed').length; const weekScheduled=sessions.filter(s=>{const date=new Date(s.scheduled_at);return date>=now&&date<=new Date(weekStart.getTime()+7*86400000)&&s.status==='scheduled'}).length;
-  const reviewScore=weeklyReview?Math.max(0,Math.min(100,Number(weeklyReview.completion_pct)||0)):null;
-  const goalHealth=useMemo(()=>goals.filter(g=>['active','locked','completed'].includes(g.status)).map(g=>({g,h:health(planItems.filter(i=>i.goal_id===g.id),g)})).slice(0,6),[goals,planItems]);
-  const upcomingMilestones=useMemo(()=>milestones.map(m=>({...m,goal:goals.find(g=>g.id===m.goal_id)})).filter(x=>x.goal),[milestones,goals]);
-  if(loading)return <div><PageHeader title={`Welcome back, ${displayName||'there'}`}/><div className="text-vow-muted text-sm py-8">Loading your dashboard…</div></div>;
-  return <div className="min-w-0 overflow-hidden">
-    <PageHeader title={`Welcome back, ${displayName||'there'}`} subtitle={`${dayName(now.toISOString())} — ${now.toLocaleDateString('en-GB',{day:'numeric',month:'long'})}`}/>
-    {!online&&<div className="border border-vow-border p-4 mb-6 text-sm text-vow-muted">You are offline. Your last synced dashboard remains available; changes will sync when you reconnect.</div>}
-    {error&&<p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 mb-8">{error}</p>}
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    <section className="border border-vow-border mb-8 p-5">
-      <div className="flex items-start justify-between gap-4"><div><p className="vow-label">Today</p><h2 className="vow-heading text-xl text-vow-ink mt-1">Your daily brief</h2><p className="text-xs text-vow-muted mt-1">What matters now, based on the work you actually have planned.</p></div><button type="button" onClick={()=>onNavigate('calendar')} className="min-h-10 px-2 text-xs text-vow-muted">Calendar →</button></div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-        <div className="border-t border-vow-border pt-3"><p className="text-xs text-vow-muted">Today</p><p className="text-xl text-vow-ink mt-1">{todaySessions.length}</p><p className="text-[10px] text-vow-muted">sessions</p></div>
-        <div className="border-t border-vow-border pt-3"><p className="text-xs text-vow-muted">This week</p><p className="text-xl text-vow-ink mt-1">{weekCompleted}</p><p className="text-[10px] text-vow-muted">completed</p></div>
-        <div className="border-t border-vow-border pt-3"><p className="text-xs text-vow-muted">Upcoming</p><p className="text-xl text-vow-ink mt-1">{weekScheduled}</p><p className="text-[10px] text-vow-muted">scheduled</p></div>
-        <div className="border-t border-vow-border pt-3"><p className="text-xs text-vow-muted">Review</p><p className="text-xl text-vow-ink mt-1">{reviewScore===null?'—':reviewScore}</p><p className="text-[10px] text-vow-muted">consistency</p></div>
+  const load = useCallback(async () => {
+    if (!session) return;
+    const [goalsRes, sessionsRes] = await Promise.all([
+      supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+      supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true }),
+    ]);
+    setGoals(goalsRes.data || []);
+    setSessions(sessionsRes.data || []);
+    setLoading(false);
+  }, [session]);
+
+  useEffect(() => { load(); }, [load]);
+  const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
+  const thisWeekSessions = sessions.filter((s) => isThisWeek(s.scheduled_at));
+  const completedThisWeek = thisWeekSessions.filter((s) => s.status === 'completed');
+  const completionPct = thisWeekSessions.length > 0 ? Math.round((completedThisWeek.length / thisWeekSessions.length) * 100) : 0;
+  const sortedByDate = [...sessions].sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+  let streak = 0;
+  for (const s of sortedByDate) { if (s.status === 'completed') streak++; else break; }
+  const now = new Date();
+  const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 5);
+  if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
+
+  return <div>
+    <PageHeader title={`Welcome back, ${displayName}`} subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`} />
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-10 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="This week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} /><StatCell label="Completion" value={`${completionPct}%`} /><StatCell label="Streak" value={`${streak}`} subtitle={streak === 0 ? 'Broken — honest count' : undefined} /></div>
+    <div className="grid md:grid-cols-2 gap-12">
+      <div>
+        <h2 className="vow-label mb-4">Upcoming sessions</h2>
+        {upcoming.length === 0 ? <div className="border border-vow-border p-8 text-center"><div className="w-7 h-7 mx-auto mb-3 border border-vow-border rounded-full" /><p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity">Schedule sessions</button></div> : <div className="space-y-px border border-vow-border">{upcoming.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); return <div key={s.id} className="bg-vow-bg px-4 py-3 flex items-center gap-3"><div className="w-2 h-2 rounded-full border border-vow-muted flex-shrink-0" /><div className="flex-1 min-w-0"><div className="text-sm text-vow-ink truncate">{s.title}</div><div className="text-xs text-vow-muted">{goal?.title || ''}</div></div><div className="text-right flex-shrink-0"><div className="text-xs text-vow-ink font-medium">{formatRelative(s.scheduled_at)}</div><div className="text-xs text-vow-muted">{formatTime(s.scheduled_at)}</div></div></div>; })}</div>}
       </div>
-    </section>
-
-    <section className="border border-vow-border mb-8 p-5"><div className="flex items-end justify-between gap-3"><div><p className="vow-label">Priority tasks</p><p className="text-xs text-vow-muted mt-1">The next pieces of work VOW thinks deserve attention.</p></div><button type="button" onClick={()=>onNavigate('goals')} className="min-h-10 px-2 text-xs text-vow-muted">Goals →</button></div>{priorities.length?<div className="mt-5 border-t border-vow-border divide-y divide-vow-border">{priorities.map(item=>{const goal=goals.find(g=>g.id===item.goal_id);const overdue=item.status==='scheduled'&&new Date(item.scheduled_at)<new Date();return <button key={item.id} type="button" onClick={()=>goal&&session&&openGoal(onNavigate,session.user.id,goal.id)} className="w-full text-left py-4 flex items-center gap-4"><span className={`w-2 h-2 rounded-full shrink-0 ${overdue?'bg-vow-ink':'border border-vow-ink'}`}/><div className="min-w-0 flex-1"><p className="text-sm text-vow-ink break-words">{shortText(item.task,90)}</p><p className="text-xs text-vow-muted mt-1">{goal?shortText(goal.title||goal.outcome,48):'Goal'} · {overdue?'Overdue':formatTime(item.scheduled_at)}</p></div></button>})}</div>:<p className="text-sm text-vow-muted mt-5 border-t border-vow-border pt-5">Nothing urgent is queued. Keep your attention on the next planned step.</p>}</section>
-
-    <section className="border border-vow-border mb-8 p-5"><div><p className="vow-label">Goal health</p><p className="text-xs text-vow-muted mt-1">Real progress from completed and outstanding plan work.</p></div><div className="mt-5 space-y-4">{goalHealth.length?goalHealth.map(({g,h})=><div key={g.id} className="border-t border-vow-border pt-4"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink truncate">{shortText(g.title||g.outcome,70)}</p><p className="text-xs text-vow-muted mt-1">{h.label} · {h.pct}% · {h.overdue} overdue</p></div><div className="w-28 h-1 bg-vow-border shrink-0"><div className="h-1 bg-vow-ink" style={{width:`${h.pct}%`}}/></div></div></div>):<p className="text-sm text-vow-muted mt-5">Create a goal to start seeing health signals.</p>}</div></section>
-
-    {adjustments.length>0&&<section className="border border-vow-border mb-8 p-5"><p className="vow-label">Adaptation</p><h2 className="vow-heading text-xl text-vow-ink mt-1">Your plan has adapted</h2><div className="mt-5 space-y-3">{adjustments.slice(0,3).map(a=><div key={a.id} className="border-t border-vow-border pt-3"><p className="text-sm text-vow-ink">{shortText(a.proposed_change,180)}</p><p className="text-xs text-vow-muted mt-1">{a.status} · {new Date(a.created_at).toLocaleDateString('en-GB')}</p></div>)}</div></section>}
-
-    {upcomingMilestones.length>0&&<section className="border border-vow-border mb-8 p-5"><p className="vow-label">Milestones</p><h2 className="vow-heading text-xl text-vow-ink mt-1">What you are approaching</h2><div className="mt-5 grid sm:grid-cols-2 gap-3">{upcomingMilestones.map(m=><div key={m.id} className="border border-vow-border p-4"><p className="text-sm text-vow-ink">{m.title}</p><p className="text-xs text-vow-muted mt-1">{shortText(m.description,100)}</p><p className="text-[10px] text-vow-muted mt-2">{shortText(m.goal?.title||m.goal?.outcome,55)}</p></div>)}</div></section>}
-
-    {reminders.length>0&&<section className="border border-vow-border mb-8 p-5"><p className="vow-label">Reminders</p><h2 className="vow-heading text-xl text-vow-ink mt-1">Upcoming nudges</h2><div className="mt-5 space-y-3">{reminders.map(r=>{const goal=goals.find(g=>g.id===r.goal_id);return <button key={r.id} type="button" onClick={()=>goal&&session&&openGoal(onNavigate,session.user.id,goal.id)} className="w-full text-left border-t border-vow-border pt-3"><p className="text-sm text-vow-ink">{goal?shortText(goal.title||goal.outcome,70):'Goal reminder'}</p><p className="text-xs text-vow-muted mt-1">{new Date(r.scheduled_at).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} · {r.kind}</p></button>})}</div></section>}
-
-    {insights.length>0&&<section className="border border-vow-border mb-8 p-5"><p className="vow-label">Reflection</p><h2 className="vow-heading text-xl text-vow-ink mt-1">What your reflections are showing</h2><div className="mt-5 space-y-3">{insights.map(i=><div key={i.id} className="border-t border-vow-border pt-3"><p className="text-sm text-vow-ink leading-relaxed">{i.summary}</p><p className="text-[10px] text-vow-muted mt-2">{i.evidence_count} reflection signal{i.evidence_count===1?'':'s'} · {new Date(i.created_at).toLocaleDateString('en-GB')}</p></div>)}</div></section>}
-
-    <section className="border border-vow-border mb-8 min-h-40"><div className="p-5 flex items-start justify-between gap-4 border-b border-vow-border"><div><p className="vow-label">Weekly review</p><p className="text-xs text-vow-muted mt-1">Reflect, learn and decide what changes next.</p></div>{weeklyReview&&<button type="button" onClick={()=>onNavigate('review')} className="min-h-10 px-2 text-xs text-vow-muted">Open review →</button>}</div>{weeklyReview?<div className="p-5 space-y-4"><div className="flex items-end justify-between gap-4"><div><p className="text-xs text-vow-muted">Consistency</p><p className="text-2xl text-vow-ink mt-1">{reviewScore}</p></div><div className="w-32 h-1 bg-vow-border"><div className="h-1 bg-vow-ink" style={{width:`${reviewScore}%`}}/></div></div>{weeklyReview.coaching_text&&<p className="text-sm text-vow-ink leading-relaxed whitespace-pre-wrap break-words">{shortText(weeklyReview.coaching_text,420)}</p>}</div>:<div className="p-5"><p className="text-sm text-vow-ink">Your weekly reflection is not ready yet.</p><button type="button" onClick={()=>onNavigate('review')} className="vow-btn-soft mt-4">Open review</button></div>}</section>
-
-    <section className="border border-vow-border p-5 flex items-center justify-between gap-4"><div><p className="vow-label">VOW Intelligence</p><p className="text-sm text-vow-ink mt-1">Deep goal health, adaptive planning and dependencies.</p></div><button type="button" onClick={()=>onNavigate('insights')} className="vow-btn-soft shrink-0">Open insights</button></section>
-
-    <section className="min-w-0 mt-8"><div className="flex items-end justify-between mb-4 gap-3"><div><h2 className="vow-label">Today’s sessions</h2><p className="text-xs text-vow-muted mt-1">Your committed work for today.</p></div></div>{todaySessions.length===0?<div className="border border-vow-border p-8"><p className="text-sm text-vow-ink">Nothing scheduled today.</p><p className="text-xs text-vow-muted mt-1">Your calendar is clear.</p></div>:<div className="border border-vow-border divide-y divide-vow-border">{todaySessions.map(s=>{const goal=goals.find(g=>g.id===s.goal_id);const complete=s.status==='completed';return <button key={s.id} type="button" onClick={()=>openGoal(onNavigate,session!.user.id,s.goal_id)} className="w-full min-h-20 text-left p-4 flex items-center gap-4"><span className={`w-7 h-7 border flex items-center justify-center shrink-0 text-xs ${complete?'border-vow-ink':'border-vow-border'}`}>{complete?'✓':'·'}</span><div className="min-w-0 flex-1"><p className={`text-sm text-vow-ink break-words ${complete?'line-through opacity-60':''}`}>{shortText(s.title)}</p><p className="text-xs text-vow-muted mt-1 truncate">{goal?shortText(goal.outcome,48):'Goal'}</p></div><div className="text-right shrink-0"><p className="text-xs text-vow-ink">{formatTime(s.scheduled_at)}</p><p className="text-[10px] text-vow-muted mt-1">{s.duration_minutes} min</p></div></button>})}</div>}</section>
-  </div>
+      <div>
+        <h2 className="vow-label mb-4">Active goals</h2>
+        {activeGoals.length === 0 ? <div className="border border-vow-border p-8 text-center"><p className="text-vow-muted text-sm">No active goals yet.</p></div> : <div className="space-y-px border border-vow-border">{activeGoals.map((g) => { const goalSessions = sessions.filter((s) => s.goal_id === g.id); const completed = goalSessions.filter((s) => s.status === 'completed').length; const total = goalSessions.length; const pct = total > 0 ? Math.round((completed / total) * 100) : 0; return <button key={g.id} onClick={() => onNavigate('goals')} className="w-full text-left bg-vow-bg px-4 py-3 hover:opacity-70 transition-opacity"><div className="flex items-center justify-between mb-2"><div className="text-sm text-vow-ink truncate flex-1">{g.outcome}</div><div className="text-xs text-vow-muted ml-2">{pct}%</div></div><div className="h-px bg-vow-border relative"><div className="absolute inset-y-0 left-0 bg-vow-ink transition-all duration-500" style={{ width: `${pct}%`, height: '1px' }} /></div><div className="text-xs text-vow-muted mt-1.5">{g.weekly_commitment_target} sessions/week — {completed}/{total} all-time</div></button>; })}</div>}
+      </div>
+    </div>
+    <div className="mt-8 border-t border-vow-border pt-5"><p className="text-xs text-vow-muted">Your journal remains private and is available within your Goals workspace.</p></div>
+  </div>;
 }
+
+function StatCell({ label, value, subtitle }: { label: string; value: string | number; subtitle?: string }) { return <div className="bg-vow-bg px-4 py-5"><div className="text-3xl vow-heading text-vow-ink">{value}</div><div className="vow-label mt-1.5">{label}</div>{subtitle && <div className="text-xs text-vow-muted mt-0.5">{subtitle}</div>}</div>; }

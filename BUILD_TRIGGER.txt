@@ -1,2 +1,1 @@
-VOW mobile build trigger
-Final UI and logo pass — 2026-09-06.
+VOW — trigger a fresh Android build after the latest Profile → Customise navigation/icon changes.

@@ -36,15 +36,11 @@ export type RavenSnapshot = {
 };
 
 function dateOnly(value: string) {
-  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
-  return new Date(year, month - 1, day);
+  return new Date(`${value.slice(0, 10)}T00:00:00`);
 }
 
-function localDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function isoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
 }
 
 function monday(date: Date) {
@@ -61,20 +57,17 @@ function weekEnd(start: Date) {
   return d;
 }
 
-function isObserved(session: Session, now: Date) {
-  return new Date(session.scheduled_at).getTime() <= now.getTime();
-}
-
 export function buildRavenWeeks(sessions: Session[], now = new Date()): RavenWeek[] {
-  const relevant = sessions.filter((session) => isObserved(session, now));
+  const relevant = sessions.filter((s) => new Date(s.scheduled_at) <= now);
   if (!relevant.length) return [];
+
   const buckets = new Map<string, RavenWeek>();
   for (const session of relevant) {
     const start = monday(new Date(session.scheduled_at));
-    const key = localDateKey(start);
+    const key = isoDate(start);
     const current = buckets.get(key) || {
       week_start: key,
-      week_end: localDateKey(weekEnd(start)),
+      week_end: isoDate(weekEnd(start)),
       committed: 0,
       completed: 0,
       skipped: 0,
@@ -87,19 +80,17 @@ export function buildRavenWeeks(sessions: Session[], now = new Date()): RavenWee
     if (session.status === 'moved') current.moved += 1;
     buckets.set(key, current);
   }
+
   return [...buckets.values()]
-    .map((week) => ({
-      ...week,
-      completion_pct: week.committed ? Math.round((week.completed / week.committed) * 100) : 0,
-    }))
+    .map((week) => ({ ...week, completion_pct: week.committed ? Math.round((week.completed / week.committed) * 100) : 0 }))
     .sort((a, b) => a.week_start.localeCompare(b.week_start));
 }
 
 export function calculateStreaks(sessions: Session[], now = new Date()) {
   const completedDays = new Set(
     sessions
-      .filter((session) => session.status === 'completed' && isObserved(session, now))
-      .map((session) => localDateKey(new Date(session.scheduled_at))),
+      .filter((s) => s.status === 'completed' && new Date(s.scheduled_at) <= now)
+      .map((s) => isoDate(new Date(s.scheduled_at))),
   );
   const days = [...completedDays].sort();
   if (!days.length) return { current: 0, best: 0 };
@@ -118,14 +109,11 @@ export function calculateStreaks(sessions: Session[], now = new Date()) {
     }
   }
 
-  const today = localDateKey(now);
-  const yesterdayDate = new Date(now);
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterday = localDateKey(yesterdayDate);
-  const cursorStart = completedDays.has(today) ? today : completedDays.has(yesterday) ? yesterday : null;
-  const cursor = cursorStart ? dateOnly(cursorStart) : null;
+  const today = isoDate(now);
+  const yesterday = isoDate(new Date(now.getTime() - 86400000));
   let current = 0;
-  while (cursor && completedDays.has(localDateKey(cursor))) {
+  let cursor = completedDays.has(today) ? dateOnly(today) : completedDays.has(yesterday) ? dateOnly(yesterday) : null;
+  while (cursor && completedDays.has(isoDate(cursor))) {
     current += 1;
     cursor.setDate(cursor.getDate() - 1);
   }
@@ -133,25 +121,22 @@ export function calculateStreaks(sessions: Session[], now = new Date()) {
 }
 
 export function calculateRavenSnapshot(sessions: Session[], previousSnapshot?: RavenSnapshot | null, now = new Date()): RavenSnapshot {
-  const observedSessions = sessions.filter((session) => isObserved(session, now));
-  const completed = observedSessions.filter((session) => session.status === 'completed').length;
-  const weeks = buildRavenWeeks(observedSessions, now);
+  const completed = sessions.filter((s) => s.status === 'completed' && new Date(s.scheduled_at) <= now).length;
+  const observed = sessions.filter((s) => new Date(s.scheduled_at) <= now).length;
+  const weeks = buildRavenWeeks(sessions, now);
   const recent = weeks.slice(-8);
   const currentWeek = weeks[weeks.length - 1] || null;
   const previousWeek = weeks[weeks.length - 2] || null;
-  const streaks = calculateStreaks(observedSessions, now);
-  const recentAverage = recent.length ? recent.reduce((sum, week) => sum + week.completion_pct, 0) / recent.length : 0;
+  const streaks = calculateStreaks(sessions, now);
+
+  const recentAverage = recent.length ? recent.reduce((sum, w) => sum + w.completion_pct, 0) / recent.length : 0;
   const streakContribution = Math.min(100, streaks.current * 12.5);
-  const score = observedSessions.length
-    ? Math.round(Math.max(0, Math.min(100, recentAverage * 0.8 + streakContribution * 0.2)))
-    : 0;
+  const score = observed ? Math.round(Math.max(0, Math.min(100, recentAverage * 0.8 + streakContribution * 0.2))) : 0;
   const previousScore = previousSnapshot?.score ?? (previousWeek ? previousWeek.completion_pct : null);
   const delta = previousScore === null ? null : score - previousScore;
   const trend: RavenSnapshot['trend'] = delta === null ? 'new' : delta > 2 ? 'up' : delta < -2 ? 'down' : 'steady';
-  const bestWeek = weeks.reduce<RavenWeek | null>(
-    (best, week) => !best || week.completion_pct > best.completion_pct || (week.completion_pct === best.completion_pct && week.completed > best.completed) ? week : best,
-    null,
-  );
+
+  const bestWeek = weeks.reduce<RavenWeek | null>((best, week) => (!best || week.completion_pct > best.completion_pct || (week.completion_pct === best.completion_pct && week.completed > best.completed) ? week : best), null);
   const signals: string[] = [];
   if (trend === 'down') signals.push('Your consistency score dropped compared with the previous period.');
   if (trend === 'up') signals.push('Your consistency is improving.');
@@ -168,8 +153,8 @@ export function calculateRavenSnapshot(sessions: Session[], previousSnapshot?: R
     current_streak: streaks.current,
     best_streak: streaks.best,
     total_completed: completed,
-    total_sessions: observedSessions.length,
-    completion_pct: observedSessions.length ? Math.round((completed / observedSessions.length) * 100) : 0,
+    total_sessions: observed,
+    completion_pct: observed ? Math.round((completed / observed) * 100) : 0,
     best_weekly_completion_pct: bestWeek?.completion_pct || 0,
     best_week_start: bestWeek?.week_start || null,
     weekly_completed_best: weeks.reduce((best, week) => Math.max(best, week.completed), 0),
@@ -180,30 +165,26 @@ export function calculateRavenSnapshot(sessions: Session[], previousSnapshot?: R
 }
 
 export function getRavenAwards(snapshot: RavenSnapshot, previousAwards: RavenAward[] = [], now = new Date()): RavenAward[] {
-  const existing = new Set(previousAwards.map((award) => award.key));
+  const existing = new Set(previousAwards.map((a) => a.key));
   const awards: RavenAward[] = [];
   const add = (key: string, title: string, description: string) => {
     if (!existing.has(key)) awards.push({ key, title, description, earned_at: now.toISOString() });
   };
+
   if (snapshot.total_completed >= 1) add('first_completion', 'First VOW', 'You completed your first tracked session.');
   if (snapshot.current_streak >= 3 || snapshot.best_streak >= 3) add('three_day_streak', 'Three-Day Run', 'You completed tracked work on three consecutive days.');
   if (snapshot.current_streak >= 7 || snapshot.best_streak >= 7) add('seven_day_streak', 'Seven-Day Streak', 'Seven consecutive days of completed work.');
   if (snapshot.best_weekly_completion_pct >= 80) add('strong_week', 'Strong Week', 'You completed at least 80% of a tracked week.');
-  if (snapshot.weeks_observed >= 4 && snapshot.recent_weeks.length >= 4 && snapshot.recent_weeks.slice(-4).every((week) => week.completion_pct >= 80)) add('four_week_consistency', 'Four Weeks Consistent', 'Four tracked weeks at 80% or better completion.');
+  if (snapshot.weeks_observed >= 4 && snapshot.recent_weeks.length >= 4 && snapshot.recent_weeks.slice(-4).every((w) => w.completion_pct >= 80)) add('four_week_consistency', 'Four Weeks Consistent', 'Four tracked weeks at 80% or better completion.');
   if (snapshot.score_delta !== null && snapshot.score_delta >= 15) add('bounce_back', 'Bounce Back', 'You recovered strongly after a consistency drop.');
   if (snapshot.best_weekly_completion_pct === 100) add('perfect_week', 'Clean Week', 'You completed every tracked session in a week.');
   return awards;
 }
 
-export function goalProgress(sessions: Session[], goals: Goal[], now = new Date()) {
+export function goalProgress(sessions: Session[], goals: Goal[]) {
   return goals.map((goal) => {
-    const items = sessions.filter((session) => session.goal_id === goal.id && isObserved(session, now));
-    const completed = items.filter((session) => session.status === 'completed').length;
-    return {
-      goal,
-      completed,
-      total: items.length,
-      pct: items.length ? Math.round((completed / items.length) * 100) : 0,
-    };
+    const items = sessions.filter((s) => s.goal_id === goal.id);
+    const completed = items.filter((s) => s.status === 'completed').length;
+    return { goal, completed, total: items.length, pct: items.length ? Math.round((completed / items.length) * 100) : 0 };
   });
 }

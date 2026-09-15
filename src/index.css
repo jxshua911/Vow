@@ -1,68 +1,60 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
 
 :root,
-:root[data-theme='light'] { --vow-bg: 247 247 245; --vow-ink: 17 17 17; --vow-muted: 107 107 107; --vow-border: 226 226 223; --vow-surface: 232 232 228; --vow-success: 63 107 79; --vow-accent: 181 96 67; --vow-accent-soft: 247 235 229; --vow-accent-secondary: 67 105 139; --vow-accent-secondary-soft: 232 239 245; color-scheme: light; }
-:root[data-theme='dark'] { --vow-bg: 17 17 17; --vow-ink: 247 247 245; --vow-muted: 173 173 173; --vow-border: 58 58 58; --vow-surface: 38 38 38; --vow-success: 128 174 145; --vow-accent: 211 126 94; --vow-accent-soft: 61 39 32; --vow-accent-secondary: 125 163 197; --vow-accent-secondary-soft: 30 43 54; color-scheme: dark; }
+:root[data-theme='light'] { --vow-bg: 247 247 245; --vow-ink: 17 17 17; --vow-muted: 107 107 107; --vow-border: 226 226 223; --vow-surface: 232 232 228; --vow-success: 63 107 79; color-scheme: light; }
+:root[data-theme='dark'] { --vow-bg: 17 17 17; --vow-ink: 247 247 245; --vow-muted: 173 173 173; --vow-border: 58 58 58; --vow-surface: 38 38 38; --vow-success: 128 174 145; color-scheme: dark; }
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: rgb(var(--vow-bg)); color-scheme: inherit; overflow-x: hidden; }
-  body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'Inter', system-ui, sans-serif; font-weight: 400; margin: 0; transition: background-color 180ms ease, color 180ms ease; overflow-x: hidden; }
-  ::selection { background: rgb(var(--vow-accent-soft)); color: rgb(var(--vow-ink)); }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: rgb(var(--vow-bg)); color-scheme: inherit; }
+  body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'Inter', system-ui, sans-serif; font-weight: 400; margin: 0; transition: background-color 180ms ease, color 180ms ease; }
+  ::selection { background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); }
   input, textarea, select, button { font-family: inherit; }
   input, textarea, select { color-scheme: inherit; }
-  button, a, input[type='checkbox'], input[type='radio'], input[type='time'], input[type='date'] { touch-action: manipulation; }
-  button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid rgb(var(--vow-accent)); outline-offset: 2px; }
 }
 
 @layer components {
   .vow-label { font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(var(--vow-muted)); }
-  .vow-input { width: 100%; min-height: 44px; background: transparent; border: 1px solid rgb(var(--vow-border)); padding: 0.75rem 0.875rem; font-size: 0.9375rem; color: rgb(var(--vow-ink)); transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease; }
-  .vow-input:focus { outline: none; border-color: rgb(var(--vow-accent)); box-shadow: 0 0 0 1px rgb(var(--vow-accent)); background: rgb(var(--vow-accent-soft) / 0.28); }
+  .vow-input { width: 100%; background: transparent; border: 1px solid rgb(var(--vow-border)); padding: 0.625rem 0.875rem; font-size: 0.875rem; color: rgb(var(--vow-ink)); transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease; }
+  .vow-input:focus { outline: none; border-color: rgb(var(--vow-ink)); box-shadow: 0 0 0 1px rgb(var(--vow-ink)); }
   .vow-input::placeholder { color: rgb(var(--vow-muted)); }
 }
 
 @layer utilities {
   .vow-heading { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; letter-spacing: -0.02em; }
-  .vow-btn-primary, .vow-btn-ghost, .vow-btn-soft { min-height: 44px; }
-  .vow-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgb(var(--vow-accent)); color: 255 255 255; font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease; }
-  .vow-btn-primary:hover { opacity: 0.9; background: rgb(var(--vow-accent-secondary)); }
+  .vow-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease; }
+  .vow-btn-primary:hover { opacity: 0.88; }
   .vow-btn-primary:active { transform: translateY(1px); }
   .vow-btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
   .vow-btn-ghost { display: inline-flex; align-items: center; gap: 0.5rem; background: rgb(var(--vow-surface) / 0.55); color: rgb(var(--vow-ink)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; border: 1px solid rgb(var(--vow-border)); transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease; }
-  .vow-btn-ghost:hover { border-color: rgb(var(--vow-accent)); background: rgb(var(--vow-accent-soft)); }
+  .vow-btn-ghost:hover { border-color: rgb(var(--vow-ink)); background: rgb(var(--vow-surface)); }
   .vow-btn-ghost:active { transform: translateY(1px); }
   .vow-btn-soft { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgb(var(--vow-surface)); color: rgb(var(--vow-ink)); border: 1px solid rgb(var(--vow-border)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease; }
-  .vow-btn-soft:hover { background: rgb(var(--vow-accent-soft)); border-color: rgb(var(--vow-accent)); }
+  .vow-btn-soft:hover { background: rgb(var(--vow-border)); border-color: rgb(var(--vow-muted)); }
   .vow-btn-soft:active { transform: translateY(1px); }
   .vow-card { background: rgb(var(--vow-bg)); border: 1px solid rgb(var(--vow-border)); }
   .vow-divider { border-color: rgb(var(--vow-border)); }
-  .vow-accent { color: rgb(var(--vow-accent)); }
-  .vow-accent-secondary { color: rgb(var(--vow-accent-secondary)); }
-  .vow-accent-bg { background: rgb(var(--vow-accent-soft)); }
-  .vow-accent-border { border-color: rgb(var(--vow-accent)); }
-  .vow-success { color: rgb(var(--vow-success)); }
 
-  .vow-splash-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; background: rgb(var(--vow-bg)); pointer-events: auto; opacity: 1; transition: opacity 280ms cubic-bezier(.4,0,.2,1), background-color 180ms ease; }
+  .vow-splash-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; background: rgb(var(--vow-bg)); pointer-events: auto; opacity: 1; transition: opacity 420ms cubic-bezier(.4,0,.2,1), background-color 180ms ease; }
   .vow-splash-overlay.vow-splash-fading { opacity: 0; pointer-events: none; }
-  .vow-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; margin: 0 auto; flex: 0 0 auto; animation: vow-splash-in 500ms cubic-bezier(.2,.7,.2,1) both; }
+  .vow-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; margin: 0 auto; flex: 0 0 auto; animation: vow-splash-in 650ms cubic-bezier(.2,.7,.2,1) both; }
   .vow-theme-splash { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; background: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); }
-  .vow-theme-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; animation: vow-theme-splash-in 400ms cubic-bezier(.2,.7,.2,1) both; }
+  .vow-theme-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; animation: vow-theme-splash-in 500ms cubic-bezier(.2,.7,.2,1) both; }
   .vow-loading-dots { display: flex; gap: 5px; align-items: center; }
-  .vow-loading-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--vow-accent)); animation: vow-dot 900ms ease-in-out infinite; opacity: 0.25; }
+  .vow-loading-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--vow-ink)); animation: vow-dot 900ms ease-in-out infinite; opacity: 0.25; }
   .vow-loading-dots span:nth-child(2) { animation-delay: 120ms; }
   .vow-loading-dots span:nth-child(3) { animation-delay: 240ms; }
-  .vow-calendar-sync-panel { max-height: 300px; opacity: 1; transform: translateY(0); overflow: hidden; transition: max-height 340ms ease, opacity 280ms ease, transform 340ms ease, margin-bottom 340ms ease, padding-top 340ms ease, padding-bottom 340ms ease, border-color 340ms ease; }
+  .vow-calendar-sync-panel { max-height: 300px; opacity: 1; transform: translateY(0); overflow: hidden; transition: max-height 460ms ease, opacity 380ms ease, transform 460ms ease, margin-bottom 460ms ease, padding-top 460ms ease, padding-bottom 460ms ease, border-color 460ms ease; }
   .vow-calendar-sync-panel-hiding { max-height: 0; opacity: 0; transform: translateY(-8px); margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-color: transparent; }
 }
 
-@keyframes vow-splash-in { from { opacity: 0; transform: scale(1.02) translateY(3px); } 60% { opacity: 1; } to { opacity: 1; transform: scale(1) translateY(0); } }
-@keyframes vow-theme-splash-in { from { opacity: 0; transform: scale(1.02); } to { opacity: 1; transform: scale(1); } }
+@keyframes vow-splash-in { from { opacity: 0; transform: scale(1.025) translateY(4px); } 60% { opacity: 1; } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes vow-theme-splash-in { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
 @keyframes vow-dot { 0%, 100% { opacity: .2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .vow-splash-logo, .vow-theme-splash-logo, .vow-loading-dots span { animation: none; } .vow-splash-overlay { transition: none; } }
-.vow-calendar-editor-enter { animation: vow-calendar-editor-enter 240ms cubic-bezier(.2,.7,.2,1) both; }
-@keyframes vow-calendar-editor-enter { from { opacity: 0; transform: translateY(12px) scale(.997); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.vow-calendar-editor-enter { animation: vow-calendar-editor-enter 320ms cubic-bezier(.2,.7,.2,1) both; }
+@keyframes vow-calendar-editor-enter { from { opacity: 0; transform: translateY(18px) scale(.995); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .vow-calendar-editor-enter { animation: none; } }

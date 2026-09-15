@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Link2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -15,10 +15,10 @@ type GoalResource = {
 
 function inferType(url: string): GoalResource['resource_type'] {
   const value = url.toLowerCase();
-  if (/youtube\.com|youtu\.be/.test(value)) return 'youtube';
-  if (/instagram\.com/.test(value)) return 'instagram';
-  if (/\.(mp4|webm|mov|m4v)(\?.*)?$/.test(value)) return 'video';
-  if (/\.(png|jpe?g|webp|gif)(\?.*)?$/.test(value)) return 'image';
+  if (/youtube\\.com|youtu\\.be/.test(value)) return 'youtube';
+  if (/instagram\\.com/.test(value)) return 'instagram';
+  if (/\\.(mp4|webm|mov|m4v)(\\?.*)?$/.test(value)) return 'video';
+  if (/\\.(png|jpe?g|webp|gif)(\\?.*)?$/.test(value)) return 'image';
   return 'link';
 }
 
@@ -37,21 +37,21 @@ export function GoalResources({ goalId }: { goalId: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const signedDisplayUrl = useCallback(async (urlValue: string) => {
+  async function signedDisplayUrl(urlValue: string) {
     if (!urlValue.startsWith('storage://')) return urlValue;
     const { data } = await supabase.storage.from('goal-resources').createSignedUrl(urlValue.slice('storage://'.length), 60 * 60);
     return data?.signedUrl || '';
-  }, []);
+  }
 
-  const loadResources = useCallback(async () => {
+  async function loadResources() {
     if (!goalId) return;
-    const { data, error: resourceError } = await supabase.from('goal_resources').select('*').eq('goal_id', goalId).eq('user_id', (await supabase.auth.getUser()).data.user?.id || '').order('created_at', { ascending: false });
+    const { data, error: resourceError } = await supabase.from('goal_resources').select('*').eq('goal_id', goalId).order('created_at', { ascending: false });
     if (resourceError) { setError('Could not load goal references.'); return; }
     const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await signedDisplayUrl(resource.url) })));
     setResources(next);
-  }, [goalId, signedDisplayUrl]);
+  }
 
-  useEffect(() => { loadResources().finally(() => setLoading(false)); }, [loadResources]);
+  useEffect(() => { loadResources().finally(() => setLoading(false)); }, [goalId]);
 
   async function addResource() {
     if (saving || !goalId || (!url.trim() && !file)) return;
@@ -89,7 +89,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
   async function removeResource(id: string) {
     const resource = resources.find((item) => item.id === id);
     if (resource?.url.startsWith('storage://')) await supabase.storage.from('goal-resources').remove([resource.url.slice('storage://'.length)]);
-    const { error: deleteError } = await supabase.from('goal_resources').delete().eq('id', id).eq('user_id', (await supabase.auth.getUser()).data.user?.id || '');
+    const { error: deleteError } = await supabase.from('goal_resources').delete().eq('id', id);
     if (deleteError) setError('Could not remove that reference.');
     await loadResources();
   }

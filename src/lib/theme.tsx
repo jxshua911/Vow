@@ -1,5 +1,3 @@
-import { Capacitor } from '@capacitor/core';
-import { StatusBar, Style } from '@capacitor/status-bar';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 export type VowTheme = 'light' | 'dark';
@@ -34,11 +32,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
     try { localStorage.setItem('vow:theme', theme); } catch { /* storage may be unavailable */ }
-
-    if (!Capacitor.isNativePlatform()) return;
-    void StatusBar.setStyle({ style: theme === 'dark' ? Style.Light : Style.Dark }).catch(() => {
-      // Theme switching should remain usable if the native status bar is unavailable.
-    });
   }, [theme]);
 
   useEffect(() => () => {

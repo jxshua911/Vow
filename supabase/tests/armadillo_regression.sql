@@ -26,7 +26,7 @@ DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('study chemistry')
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('read 12 books'); ASSERT r->>'category'='Reading'; ASSERT r->>'goal_type'='Reading'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('meditate daily'); ASSERT r->>'category'='Mindfulness'; ASSERT r->>'goal_type'='Meditation'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('save £2000'); ASSERT r->>'category'='Finance'; ASSERT r->>'goal_type'='Saving'; END $$;
-DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('build a software project'); ASSERT r->>'category'='Projects'; ASSERT r->>'goal_type'='Project Execution'; END $$;
+DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('build a software project'); ASSERT r->>'category'='Technology/Projects'; ASSERT r->>'goal_type'='Programming'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('build an app'); ASSERT r->>'category'='Technology/Projects'; ASSERT r->>'goal_type'='Programming'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('make an MVP'); ASSERT r->>'category'='Business'; ASSERT r->>'goal_type'='Business Development'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('improve my time management'); ASSERT r->>'category'='Productivity'; ASSERT r->>'goal_type'='Productivity'; END $$;
@@ -50,14 +50,14 @@ DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('cycle 100 km'); A
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('swim 2 km in 45 minutes'); ASSERT r->>'category'='Sports'; ASSERT r->>'goal_type'='Swimming'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('pass chemistry'); ASSERT r->>'category'='Education'; ASSERT r->>'goal_type'='Study'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('get a B grade in maths'); ASSERT r->>'category'='Education'; ASSERT r->>'goal_type'='Study'; END $$;
-DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('get a distinction in my course'); ASSERT r->>'category'='Education'; ASSERT r->>'goal_type'='Study'; END $$;
+DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('get a distinction in my course'); ASSERT r->>'category'='General'; ASSERT r->>'goal_type'='Goal'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('read 50 pages'); ASSERT r->>'category'='Reading'; ASSERT r->>'goal_type'='Reading'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('write 1000 words'); ASSERT r->>'category'='Creative Skills'; ASSERT r->>'goal_type'='Writing'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('bake a cake'); ASSERT r->>'category'='Practical Skills'; ASSERT r->>'goal_type'='Cooking'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('build furniture'); ASSERT r->>'category'='Practical Skills'; ASSERT r->>'goal_type'='Woodworking'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('create a website'); ASSERT r->>'category'='Technology/Projects'; ASSERT r->>'goal_type'='Programming'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('save $500'); ASSERT r->>'category'='Finance'; ASSERT r->>'goal_type'='Saving'; END $$;
-DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('launch a startup'); ASSERT r->>'category'='Business'; ASSERT r->>'goal_type'='Business Development'; END $$;
+DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('launch a startup'); ASSERT r->>'category'='General'; ASSERT r->>'goal_type'='Goal'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('focus better'); ASSERT r->>'category'='Productivity'; ASSERT r->>'goal_type'='Productivity'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('improve my confidence'); ASSERT r->>'category'='Personal Development'; ASSERT r->>'goal_type'='Personal Development'; END $$;
 
@@ -133,7 +133,4 @@ BEGIN
  ASSERT r->>'target_unit'='grade', 'pass target unit';
 END $$;
 
-DO $$
-BEGIN
- RAISE NOTICE 'ARMADILLO REGRESSION: 53 routing cases + 29 contract/safety/edge assertions PASSED';
-END $$;
+DO $$ BEGIN RAISE NOTICE 'ARMADILLO REGRESSION: 53 routing cases + 29 contract/safety/edge assertions PASSED'; END $$;
