@@ -10,6 +10,15 @@ interface OnboardingProps {
   onComplete: () => void;
 }
 
+const exampleGoals = [
+  'Run a 10K',
+  'Train for a football trial',
+  'Complete my first 100 km ride',
+  'Learn to swim 1,500 m',
+  'Pass my exams',
+  'Learn to code',
+];
+
 export function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [step, setStep] = useState(0);
   const [rawGoal, setRawGoal] = useState('');
@@ -107,70 +116,40 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
           <p className="vow-label">Onboarding</p>
         </div>
 
-        {/* Progress indicator */}
         <div className="flex items-center justify-center gap-3 mb-10">
           {steps.map((_, i) => (
-            <div
-              key={i}
-              className={`h-px transition-all duration-300 ${
-                i === step ? 'w-12 bg-vow-ink' : i < step ? 'w-8 bg-vow-ink' : 'w-8 bg-vow-border'
-              }`}
-            />
+            <div key={i} className={`h-px transition-all duration-300 ${i === step ? 'w-12 bg-vow-ink' : i < step ? 'w-8 bg-vow-ink' : 'w-8 bg-vow-border'}`} />
           ))}
         </div>
 
-        {/* Step 0: Goal input */}
         {step === 0 && (
           <div>
-            <h2 className="vow-heading text-2xl text-vow-ink mb-3">{steps[0]}</h2>
+            <p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Start with the outcome</p>
+            <h2 className="vow-heading text-2xl text-vow-ink mb-3">Tell VOW what you want to accomplish.</h2>
             <p className="text-vow-muted text-sm leading-relaxed mb-8">
-              Describe what you want in your own words. Vague is fine — we will turn it into a concrete plan
-              with milestones and a weekly commitment.
+              Most apps help you track what you’re doing. VOW helps you figure out what to do next. Describe the outcome in your own words — VOW will turn it into a concrete plan with milestones and a realistic weekly commitment.
             </p>
-            <textarea
-              value={rawGoal}
-              onChange={(e) => setRawGoal(e.target.value)}
-              rows={3}
-              className="vow-input resize-none mb-4"
-              placeholder="e.g. I want to get better at running"
-              autoFocus
-            />
+            <textarea value={rawGoal} onChange={(e) => setRawGoal(e.target.value)} rows={3} className="vow-input resize-none mb-4" placeholder="e.g. I want to run a sub-25 minute 5K" autoFocus />
+            <p className="text-xs text-vow-muted mb-2">Try one:</p>
             <div className="flex flex-wrap gap-2 mb-8">
-              {['Run a 5K', 'Write a book', 'Learn to code', 'Read more books', 'Build a meditation habit'].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setRawGoal(s)}
-                  className="text-xs px-3 py-1.5 border border-vow-border text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors"
-                >
-                  {s}
-                </button>
+              {exampleGoals.map((s) => (
+                <button key={s} onClick={() => setRawGoal(s)} className="text-xs px-3 py-1.5 border border-vow-border text-vow-muted hover:text-vow-ink hover:border-vow-ink transition-colors">{s}</button>
               ))}
             </div>
-            <button
-              onClick={handleDecompose}
-              disabled={!rawGoal.trim()}
-              className="vow-btn-primary w-full"
-            >
-              Decompose my goal
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <button onClick={handleDecompose} disabled={!rawGoal.trim()} className="vow-btn-primary w-full">Build my plan <ArrowRight className="w-4 h-4" /></button>
           </div>
         )}
 
-        {/* Step 1: Decomposition review */}
         {step === 1 && decomposed && (
           <div>
-            <h2 className="vow-heading text-2xl text-vow-ink mb-3">{steps[1]}</h2>
-            <p className="text-vow-muted text-sm leading-relaxed mb-8">
-              A concrete plan built from your input. Review and adjust before we lock it in.
-            </p>
+            <h2 className="vow-heading text-2xl text-vow-ink mb-3">Here is your first plan.</h2>
+            <p className="text-vow-muted text-sm leading-relaxed mb-8">VOW has turned your outcome into actions. Review it before you lock it in.</p>
 
             <div className="space-y-6 mb-8">
               <div className="border-t border-vow-border pt-4">
                 <p className="vow-label mb-1">Outcome</p>
                 <p className="text-vow-ink text-base font-medium">{decomposed.outcome}</p>
               </div>
-
               <div className="border-t border-vow-border pt-4">
                 <p className="vow-label mb-4">Milestones</p>
                 <div className="space-y-4">
@@ -186,113 +165,47 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
                   ))}
                 </div>
               </div>
-
               <div className="border-t border-vow-border pt-4 grid grid-cols-2 gap-6">
-                <div>
-                  <p className="vow-label mb-1">Weekly commitment</p>
-                  <p className="text-vow-ink font-medium">{decomposed.weeklyCommitment} sessions / week</p>
-                </div>
-                <div>
-                  <p className="vow-label mb-1">Session length</p>
-                  <p className="text-vow-ink font-medium">{decomposed.suggestedSessionDuration} min</p>
-                </div>
+                <div><p className="vow-label mb-1">Weekly commitment</p><p className="text-vow-ink font-medium">{decomposed.weeklyCommitment} sessions / week</p></div>
+                <div><p className="vow-label mb-1">Session length</p><p className="text-vow-ink font-medium">{decomposed.suggestedSessionDuration} min</p></div>
               </div>
             </div>
 
             <div className="mb-8">
               <label className="vow-label block mb-2">Why does this matter to you?</label>
-              <textarea
-                value={whyItMatters}
-                onChange={(e) => setWhyItMatters(e.target.value)}
-                rows={2}
-                className="vow-input resize-none"
-                placeholder="Your honest reason — your coach will reference this when motivation dips."
-              />
+              <textarea value={whyItMatters} onChange={(e) => setWhyItMatters(e.target.value)} rows={2} className="vow-input resize-none" placeholder="Your honest reason — VOW will use it when motivation dips." />
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setStep(0)} className="vow-btn-ghost">
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </button>
-              <button onClick={() => setStep(2)} className="vow-btn-primary flex-1">
-                Looks good
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <button onClick={() => setStep(0)} className="vow-btn-ghost"><ArrowLeft className="w-4 h-4" />Back</button>
+              <button onClick={() => setStep(2)} className="vow-btn-primary flex-1">Looks good <ArrowRight className="w-4 h-4" /></button>
             </div>
           </div>
         )}
 
-        {/* Step 2: Preferences */}
         {step === 2 && (
           <div>
-            <h2 className="vow-heading text-2xl text-vow-ink mb-3">{steps[2]}</h2>
-            <p className="text-vow-muted text-sm leading-relaxed mb-8">
-              These tune how your coach interacts with you. You can change them anytime.
-            </p>
+            <h2 className="vow-heading text-2xl text-vow-ink mb-3">Tune how VOW works with you.</h2>
+            <p className="text-vow-muted text-sm leading-relaxed mb-8">These preferences shape your planning rhythm. You can change them anytime.</p>
 
             <div className="space-y-6 mb-8">
-              <div>
-                <label className="vow-label block mb-2">Timezone</label>
-                <input
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="vow-input"
-                />
-              </div>
-
-              <div>
-                <label className="vow-label block mb-2">Preferred session time</label>
-                <input
-                  value={preferredTimes}
-                  onChange={(e) => setPreferredTimes(e.target.value)}
-                  placeholder="e.g. 9:00 am"
-                  className="vow-input"
-                />
-              </div>
-
+              <div><label className="vow-label block mb-2">Timezone</label><input value={timezone} onChange={(e) => setTimezone(e.target.value)} className="vow-input" /></div>
+              <div><label className="vow-label block mb-2">Preferred session time</label><input value={preferredTimes} onChange={(e) => setPreferredTimes(e.target.value)} placeholder="e.g. 9:00 am" className="vow-input" /></div>
               <div>
                 <label className="vow-label block mb-2">How often should I check in?</label>
                 <div className="flex gap-2">
-                  {[
-                    { val: 'daily', label: 'Daily' },
-                    { val: 'weekly', label: 'Weekly' },
-                    { val: 'biweekly', label: 'Every 2 weeks' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.val}
-                      onClick={() => setNotificationFreq(opt.val)}
-                      className={`flex-1 py-2.5 text-sm border transition-colors ${
-                        notificationFreq === opt.val
-                          ? 'border-vow-ink text-vow-ink font-medium'
-                          : 'border-vow-border text-vow-muted hover:border-vow-ink'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
+                  {[{ val: 'daily', label: 'Daily' }, { val: 'weekly', label: 'Weekly' }, { val: 'biweekly', label: 'Every 2 weeks' }].map((opt) => (
+                    <button key={opt.val} onClick={() => setNotificationFreq(opt.val)} className={`flex-1 py-2.5 text-sm border transition-colors ${notificationFreq === opt.val ? 'border-vow-ink text-vow-ink font-medium' : 'border-vow-border text-vow-muted hover:border-vow-ink'}`}>{opt.label}</button>
                   ))}
                 </div>
-                <p className="text-xs text-vow-muted mt-2">
-                  Weekly is recommended — daily check-ins can feel like nagging.
-                </p>
+                <p className="text-xs text-vow-muted mt-2">Weekly is recommended — daily check-ins can feel like nagging.</p>
               </div>
             </div>
 
-            {error && (
-              <p className="text-sm text-vow-ink mb-4" style={{ borderLeft: '2px solid #111', paddingLeft: '0.75rem' }}>
-                {error}
-              </p>
-            )}
-
+            {error && <p className="text-sm text-vow-ink mb-4" style={{ borderLeft: '2px solid #111', paddingLeft: '0.75rem' }}>{error}</p>}
             <div className="flex gap-3">
-              <button onClick={() => setStep(1)} className="vow-btn-ghost">
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </button>
-              <button onClick={handleComplete} disabled={saving} className="vow-btn-primary flex-1">
-                {saving ? 'Setting up...' : 'Lock in my first goal'}
-                <Check className="w-4 h-4" />
-              </button>
+              <button onClick={() => setStep(1)} className="vow-btn-ghost"><ArrowLeft className="w-4 h-4" />Back</button>
+              <button onClick={handleComplete} disabled={saving} className="vow-btn-primary flex-1">{saving ? 'Setting up...' : 'Lock in my first goal'} <Check className="w-4 h-4" /></button>
             </div>
           </div>
         )}
