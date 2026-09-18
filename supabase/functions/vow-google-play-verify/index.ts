@@ -127,6 +127,20 @@ Deno.serve(async (req) => {
 
     if (!lineItem) return json(400, { error: "PRODUCT_MISMATCH" });
 
+    const expectedAccountToken = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(user.id),
+    );
+    const expectedAccountTokenHex = Array.from(new Uint8Array(expectedAccountToken))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    const linkedAccountToken =
+      purchase.externalAccountIdentifiers?.obfuscatedExternalAccountId ?? null;
+
+    if (!linkedAccountToken || linkedAccountToken !== expectedAccountTokenHex) {
+      return json(403, { error: "PURCHASE_ACCOUNT_MISMATCH" });
+    }
+
     const state = purchase.subscriptionState;
     const activeStates = new Set([
       "SUBSCRIPTION_STATE_ACTIVE",
@@ -150,10 +164,14 @@ Deno.serve(async (req) => {
 
     const { data: existing } = await serviceClient
       .from("vow_subscription_records")
-      .select("id")
+      .select("id, user_id")
       .eq("provider", "google_play")
       .eq("provider_purchase_id", purchaseToken)
       .maybeSingle();
+
+    if (existing?.user_id && existing.user_id !== user.id) {
+      return json(409, { error: "PURCHASE_ALREADY_LINKED" });
+    }
 
     const { error: recordError } = await serviceClient.rpc("vow_set_subscription_record", {
       p_user_id: user.id,
