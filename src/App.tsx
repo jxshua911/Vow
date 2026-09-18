@@ -24,6 +24,7 @@ import { LanguageContext } from '@/lib/i18n';
 
 const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
+const SPLASH_FAILSAFE_MS = 8000;
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) { const { theme } = useTheme(); return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} data-theme={theme} aria-hidden={fadingOut}><BrandLogo className="vow-splash-logo" /></div>; }
 
@@ -39,6 +40,7 @@ function AppContent() {
   const [splashMounted, setSplashMounted] = useState(true);
   const [splashFadingOut, setSplashFadingOut] = useState(false);
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
+  const [splashFailsafe, setSplashFailsafe] = useState(false);
   const view = viewHistory[viewHistory.length - 1];
 
   const navigate = useCallback((next: View) => {
@@ -67,7 +69,17 @@ function AppContent() {
     });
     return () => { listener.then((handle) => handle.remove()); };
   }, [goBack]);
-  useEffect(() => { const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS); return () => window.clearTimeout(timer); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      console.warn('[VOW] Startup splash failsafe triggered; revealing app state.');
+      setSplashFailsafe(true);
+    }, SPLASH_FAILSAFE_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => {
     const listener = (event: Event) => {
       const next = (event as CustomEvent<View>).detail;
@@ -131,7 +143,13 @@ function AppContent() {
   }
 
   const contentReady = !loading && !settingsLoading && !termsLoading;
-  useEffect(() => { if (splashMinElapsed && contentReady && !splashFadingOut) { setSplashFadingOut(true); const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS); return () => window.clearTimeout(timer); } }, [splashMinElapsed, contentReady, splashFadingOut]);
+  useEffect(() => {
+    if ((splashMinElapsed && contentReady || splashFailsafe) && !splashFadingOut) {
+      setSplashFadingOut(true);
+      const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS);
+      return () => window.clearTimeout(timer);
+    }
+  }, [splashMinElapsed, contentReady, splashFailsafe, splashFadingOut]);
 
   let content: React.ReactNode;
   if (loading || (session && (settingsLoading || termsLoading))) content = <AppLoading />;
