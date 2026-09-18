@@ -86,11 +86,14 @@ public class VowIconPlugin extends Plugin {
                 .build();
 
         ShortcutManagerCompat.pushDynamicShortcut(context, shortcut);
+        boolean pinRequested = ShortcutManagerCompat.isRequestPinShortcutSupported(context)
+                && ShortcutManagerCompat.requestPinShortcut(context, shortcut, null);
 
         JSObject result = new JSObject();
         result.put("background", background);
         result.put("foreground", foreground);
         result.put("shortcut", true);
+        result.put("pinRequested", pinRequested);
         call.resolve(result);
     }
 
