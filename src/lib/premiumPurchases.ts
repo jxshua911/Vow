@@ -1,14 +1,19 @@
 import { NativePurchases, PURCHASE_TYPE } from '@capgo/native-purchases';
 import { supabase } from './supabase';
-
-export const VOW_PREMIUM_MONTHLY = 'com.vow.app.premium.monthly';
-export const VOW_PREMIUM_YEARLY = 'com.vow.app.premium.yearly';
+import {
+  VOW_PREMIUM_MONTHLY,
+  VOW_PREMIUM_MONTHLY_BASE_PLAN,
+  VOW_PREMIUM_YEARLY,
+  VOW_PREMIUM_YEARLY_BASE_PLAN,
+} from './premiumConfig';
 
 async function accountToken(userId: string) {
   const bytes = new TextEncoder().encode(userId);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+export { VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY };
 
 export async function getPremiumProducts() {
   return NativePurchases.getProducts({
@@ -25,7 +30,9 @@ export async function purchasePremium(
 
   const appAccountToken = await accountToken(user.id);
   const planIdentifier =
-    productId === VOW_PREMIUM_MONTHLY ? 'monthly' : 'yearly';
+    productId === VOW_PREMIUM_MONTHLY
+      ? VOW_PREMIUM_MONTHLY_BASE_PLAN
+      : VOW_PREMIUM_YEARLY_BASE_PLAN;
 
   const transaction = await NativePurchases.purchaseProduct({
     productIdentifier: productId,
@@ -37,13 +44,14 @@ export async function purchasePremium(
 
   if (!transaction.purchaseToken) throw new Error('PURCHASE_TOKEN_MISSING');
 
+  const billingPeriod = productId === VOW_PREMIUM_MONTHLY ? 'monthly' : 'yearly';
   const { data, error: verifyError } = await supabase.functions.invoke(
     'vow-google-play-verify',
     {
       body: {
         purchaseToken: transaction.purchaseToken,
         productId,
-        billingPeriod: productId === VOW_PREMIUM_MONTHLY ? 'monthly' : 'yearly',
+        billingPeriod,
       },
     },
   );
@@ -52,10 +60,7 @@ export async function purchasePremium(
     throw new Error(data?.error ?? verifyError?.message ?? 'PURCHASE_VERIFICATION_FAILED');
   }
 
-  await NativePurchases.acknowledgePurchase({
-    purchaseToken: transaction.purchaseToken,
-  });
-
+  // Backend verification and acknowledgement are authoritative on Android.
   return data;
 }
 
