@@ -32,7 +32,10 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const [nameMessage, setNameMessage] = useState('');
   const [selectedIcon, setSelectedIcon] = useState<IconColour>(() => (localStorage.getItem('vow:icon-colour') as IconColour) || 'white');
   const [iconMessage, setIconMessage] = useState('');
-  const [confirmSignOut, setConfirmSignOut] = useState(false);\n  const [confirmDelete, setConfirmDelete] = useState(false);\n  const [deleting, setDeleting] = useState(false);\n  const [deleteError, setDeleteError] = useState('');
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [premium, setPremium] = useState(false);
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
@@ -75,7 +78,20 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     if (!error) setEditingName(false);
   }
 
-  async function handleSignOut() { setConfirmSignOut(false); await supabase.auth.signOut(); }\n\n  async function handleDeleteAccount() {\n    if (deleting) return;\n    setDeleting(true); setDeleteError('');\n    const { data, error } = await supabase.functions.invoke('vow-account-delete', { body: { confirm: true } });\n    if (error || !data?.deleted) {\n      setDeleteError(data?.error || error?.message || 'VOW could not complete account deletion.');\n      setDeleting(false);\n      return;\n    }\n    await supabase.auth.signOut();\n    setDeleting(false);\n  }
+  async function handleSignOut() { setConfirmSignOut(false); await supabase.auth.signOut(); }
+
+  async function handleDeleteAccount() {
+    if (deleting) return;
+    setDeleting(true); setDeleteError('');
+    const { data, error } = await supabase.functions.invoke('vow-account-delete', { body: { confirm: true } });
+    if (error || !data?.deleted) {
+      setDeleteError(data?.error || error?.message || 'VOW could not complete account deletion.');
+      setDeleting(false);
+      return;
+    }
+    await supabase.auth.signOut();
+    setDeleting(false);
+  }
   const notificationsEnabled = notificationStatus === 'granted';
 
   if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
@@ -92,9 +108,11 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">VOW reminders use sound and vibration automatically when notifications are allowed.</p></div>{notificationsEnabled && <span className="text-xs text-vow-ink">Enabled</span>}</div><p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus}</p><div className="flex flex-wrap gap-2 mt-4">{!notificationsEnabled && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft disabled:opacity-50">{requesting ? 'Requesting…' : 'Enable notifications'}</button>}{notificationsEnabled && <span className="vow-btn-soft text-vow-muted">Sound + vibration active</span>}</div></div>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">My name</p><p className="text-xs text-vow-muted mt-1 truncate">{name || 'Not provided'}</p></div><button onClick={() => { setEditingName(true); setNameMessage(''); }} className="vow-btn-soft shrink-0">Change Name</button></div>{editingName && <div className="mt-4 border-t border-vow-border pt-4"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus className="vow-input" placeholder="What should VOW call you?" /><div className="flex gap-2 mt-2"><button onClick={handleSaveName} disabled={savingName || !name.trim()} className="vow-btn-primary disabled:opacity-50">{savingName ? 'Saving…' : 'Save name'}</button><button onClick={() => { setEditingName(false); setName(displayName); }} className="vow-btn-ghost">Cancel</button></div>{nameMessage && <p className="text-xs text-vow-muted mt-2">{nameMessage}</p>}</div>}</div>
         <div className="p-5"><p className="text-sm text-vow-ink">Account email</p><p className="text-xs text-vow-muted mt-1 break-words">{session?.user?.email || 'Not provided'}</p></div>
-        <button onClick={() => setConfirmSignOut(true)} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Sign out</p><p className="text-xs text-vow-muted mt-1">Sign out of this VOW account.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>\n        <button onClick={() => { setDeleteError(''); setConfirmDelete(true); }} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Delete account</p><p className="text-xs text-vow-muted mt-1">Permanently delete your VOW account and associated account data.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
+        <button onClick={() => setConfirmSignOut(true)} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Sign out</p><p className="text-xs text-vow-muted mt-1">Sign out of this VOW account.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
+        <button onClick={() => { setDeleteError(''); setConfirmDelete(true); }} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Delete account</p><p className="text-xs text-vow-muted mt-1">Permanently delete your VOW account and associated account data.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       </div>
-      {confirmDelete && <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="delete-account-title"><div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full"><h2 id="delete-account-title" className="vow-heading text-xl text-vow-ink mb-2">Delete your VOW account?</h2><p className="text-sm text-vow-muted leading-relaxed mb-6">This is permanent. Your VOW account will be deleted and you will be signed out. This action cannot be undone.</p>{deleteError && <p role="alert" className="text-xs text-vow-ink mb-4 border-l-2 border-vow-ink pl-3">{deleteError}</p>}<div className="flex gap-3"><button onClick={() => setConfirmDelete(false)} disabled={deleting} className="vow-btn-ghost flex-1">Keep account</button><button onClick={() => void handleDeleteAccount()} disabled={deleting} className="vow-btn-primary flex-1">{deleting ? 'Deleting…' : 'Delete account'}</button></div></div></div>}\n      {confirmSignOut && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true"><div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Are you sure you want to sign out?</h2><p className="text-sm text-vow-muted leading-relaxed mb-6">You can sign back in whenever you are ready.</p><div className="flex gap-3"><button onClick={() => setConfirmSignOut(false)} className="vow-btn-ghost flex-1">Cancel</button><button onClick={handleSignOut} className="vow-btn-primary flex-1">Sign out</button></div></div></div>}
+      {confirmDelete && <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="delete-account-title"><div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full"><h2 id="delete-account-title" className="vow-heading text-xl text-vow-ink mb-2">Delete your VOW account?</h2><p className="text-sm text-vow-muted leading-relaxed mb-6">This is permanent. Your VOW account will be deleted and you will be signed out. This action cannot be undone.</p>{deleteError && <p role="alert" className="text-xs text-vow-ink mb-4 border-l-2 border-vow-ink pl-3">{deleteError}</p>}<div className="flex gap-3"><button onClick={() => setConfirmDelete(false)} disabled={deleting} className="vow-btn-ghost flex-1">Keep account</button><button onClick={() => void handleDeleteAccount()} disabled={deleting} className="vow-btn-primary flex-1">{deleting ? 'Deleting…' : 'Delete account'}</button></div></div></div>}
+      {confirmSignOut && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true"><div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Are you sure you want to sign out?</h2><p className="text-sm text-vow-muted leading-relaxed mb-6">You can sign back in whenever you are ready.</p><div className="flex gap-3"><button onClick={() => setConfirmSignOut(false)} className="vow-btn-ghost flex-1">Cancel</button><button onClick={handleSignOut} className="vow-btn-primary flex-1">Sign out</button></div></div></div>}
     </div>
   );
 }
