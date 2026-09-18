@@ -6,8 +6,9 @@ import { useTheme } from '@/lib/theme';
 import { PageHeader } from './AppShell';
 import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications } from '@/lib/notifications';
 import { getEntitlementSnapshot } from '@/lib/entitlements';
+import { VOW_LANGUAGES, LANGUAGE_STORAGE_KEY, languageName } from '@/lib/i18n';
 
-type ProfileSubpage = 'main' | 'shared' | 'customise';
+type ProfileSubpage = 'main' | 'shared' | 'customise' | 'language';
 type IconColour = 'white' | 'black' | 'gold' | 'blue';
 
 type VowIconPlugin = { setColour(options: { colour: IconColour }): Promise<{ colour: IconColour }> };
@@ -37,6 +38,9 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [premium, setPremium] = useState(false);
+  const [language, setLanguage] = useState(() => localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'en');
+  const [languageSaving, setLanguageSaving] = useState(false);
+  const [languageMessage, setLanguageMessage] = useState('');
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
@@ -96,6 +100,14 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
 
   if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
   if (subpage === 'customise') return <CustomisePage premium={premium} selectedIcon={selectedIcon} message={iconMessage} onIconChange={handleIconChange} onBack={() => setSubpage('main')} onUpgrade={onUpgrade} />;
+  if (subpage === 'language') return <LanguagePage language={language} saving={languageSaving} message={languageMessage} onChange={async (next) => {
+    setLanguageSaving(true); setLanguageMessage(''); setLanguage(next); localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
+    if (session) {
+      const { error } = await supabase.from('user_settings').update({ preferred_language: next }).eq('user_id', session.user.id);
+      setLanguageMessage(error ? 'Language saved on this device. Account sync will retry later.' : `${languageName(next)} selected.`);
+    } else setLanguageMessage(`${languageName(next)} selected.`);
+    setLanguageSaving(false);
+  }} onBack={() => setSubpage('main')} />;
 
   return (
     <div>
@@ -103,6 +115,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
       <div className="border border-vow-border divide-y divide-vow-border">
         <button onClick={() => premium ? setSubpage('customise') : onUpgrade?.()} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Customise</p><p className="text-xs text-vow-muted mt-1">{premium ? 'Personalise your VOW icon and app experience.' : 'Premium feature — personalise your VOW icon and app experience.'}</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
         <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
+        <button onClick={() => setSubpage('language')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Language</p><p className="text-xs text-vow-muted mt-1">Choose the language VOW uses for the app and AI coaching.</p></div><span className="text-sm text-vow-muted">{VOW_LANGUAGES.find((item) => item.code === language)?.flag || '🌐'}</span></button>
         <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">EULA, copyright and service policies.</p></button>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">VOW reminders use sound and vibration automatically when notifications are allowed.</p></div>{notificationsEnabled && <span className="text-xs text-vow-ink">Enabled</span>}</div><p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus}</p><div className="flex flex-wrap gap-2 mt-4">{!notificationsEnabled && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft disabled:opacity-50">{requesting ? 'Requesting…' : 'Enable notifications'}</button>}{notificationsEnabled && <span className="vow-btn-soft text-vow-muted">Sound + vibration active</span>}</div></div>
@@ -115,6 +128,11 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
       {confirmSignOut && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true"><div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Are you sure you want to sign out?</h2><p className="text-sm text-vow-muted leading-relaxed mb-6">You can sign back in whenever you are ready.</p><div className="flex gap-3"><button onClick={() => setConfirmSignOut(false)} className="vow-btn-ghost flex-1">Cancel</button><button onClick={handleSignOut} className="vow-btn-primary flex-1">Sign out</button></div></div></div>}
     </div>
   );
+}
+
+
+function LanguagePage({ language, saving, message, onChange, onBack }: { language: string; saving: boolean; message: string; onChange: (language: string) => void; onBack: () => void }) {
+  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Language" subtitle="VOW can adapt its coaching language to you." /><section className="border border-vow-border p-5"><div className="mb-5"><p className="vow-label mb-1">App language</p><p className="text-xs text-vow-muted">Languages are shown with a representative flag. A language is not limited to one country.</p></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{VOW_LANGUAGES.map((item) => <button key={item.code} disabled={saving} onClick={() => onChange(item.code)} aria-pressed={language === item.code} className={`flex items-center gap-3 border p-3 text-left transition-colors ${language === item.code ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><span className="text-xl" aria-hidden="true">{item.flag}</span><span><span className="block text-sm text-vow-ink">{item.nativeName}</span><span className="block text-[11px] text-vow-muted">{item.name}</span></span>{language === item.code && <span className="ml-auto text-xs text-vow-ink">✓</span>}</button>)}</div>{message && <p className="text-xs text-vow-muted mt-4" role="status">{message}</p>}</section></div>;
 }
 
 function CustomisePage({ premium, selectedIcon, message, onIconChange, onBack, onUpgrade }: { premium: boolean; selectedIcon: IconColour; message: string; onIconChange: (colour: IconColour) => void; onBack: () => void; onUpgrade?: () => void }) {
