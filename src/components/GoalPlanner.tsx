@@ -6,43 +6,738 @@ import { consumeEntitlement, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
 import type { Session } from '@/types/database';
 import { PageHeader } from './AppShell';
+import { analyseGoalForEvidence, type ArmadilloResult } from '@/lib/armadillo';
 
-type Clarification={questions:string[];recommended_duration_weeks:number;rationale:string};
-type PlanItem={week:number;day:string;task:string;purpose:string;target_metric:string;duration_minutes:number;preferred_time:string;scheduled_at?:string};
-type Plan={outcome:string;success_metric:string;baseline:string;assumptions:string[];milestones:Array<{title:string;description:string;week:number}>;schedule:PlanItem[];progression:string;checkpoints:string[];risks:string[];fallback_rules:string[];summary:string;duration_weeks:number;weekly_commitment_target:number;available_days:string[]};
-const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-const DURATION_OPTIONS=[
-  {weeks:1,label:'1 week',detail:'Quick start'},
-  {weeks:2,label:'2 weeks',detail:'Short sprint'},
-  {weeks:4,label:'1 month',detail:'Build momentum'},
-  {weeks:8,label:'2 months',detail:'Build consistency'},
-  {weeks:12,label:'3 months',detail:'Meaningful change'},
-  {weeks:26,label:'6 months',detail:'Long-term build'},
-  {weeks:52,label:'1 year',detail:'Full-year commitment'},
+type Clarification = {
+  questions: string[];
+  recommended_duration_weeks: number;
+  rationale: string;
+};
+type PlanItem = {
+  week: number;
+  day: string;
+  task: string;
+  purpose: string;
+  target_metric: string;
+  duration_minutes: number;
+  preferred_time: string;
+  scheduled_at?: string;
+};
+type PlanReference = {
+  url: string;
+  title: string | null;
+  resource_type: 'youtube' | 'instagram' | 'image' | 'video' | 'link';
+};
+type Plan = {
+  outcome: string;
+  success_metric: string;
+  baseline: string;
+  assumptions: string[];
+  milestones: Array<{ title: string; description: string; week: number }>;
+  schedule: PlanItem[];
+  progression: string;
+  checkpoints: string[];
+  risks: string[];
+  fallback_rules: string[];
+  summary: string;
+  duration_weeks: number;
+  weekly_commitment_target: number;
+  available_days: string[];
+  references?: PlanReference[];
+};
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DURATION_OPTIONS = [
+  { weeks: 1, label: '1 week', detail: 'Quick start' },
+  { weeks: 2, label: '2 weeks', detail: 'Short sprint' },
+  { weeks: 4, label: '1 month', detail: 'Build momentum' },
+  { weeks: 8, label: '2 months', detail: 'Build consistency' },
+  { weeks: 12, label: '3 months', detail: 'Meaningful change' },
+  { weeks: 26, label: '6 months', detail: 'Long-term build' },
+  { weeks: 52, label: '1 year', detail: 'Full-year commitment' },
 ];
-function nextMonday(){const d=new Date();const day=d.getDay();d.setHours(0,0,0,0);d.setDate(d.getDate()+(day===0?1:8-day));return d;}
-function deadlineFor(start:Date,weeks:number){return toDateString(addDays(start,weeks*7-1));}
-function durationLabel(w:number){const option=DURATION_OPTIONS.find(x=>x.weeks===w);return option?.label||`${w} weeks`;}
-function canonicalDay(day:unknown):string|null{const value=String(day??'').trim().toLowerCase();const idx=DAYS.findIndex(d=>d.toLowerCase()===value||(value.length>=3&&d.toLowerCase().slice(0,3)===value.slice(0,3)));return idx>=0?DAYS[idx]:null;}
-function normalizePlan(raw:Plan,durationWeeks:number):Plan|null{
-  if(!raw||typeof raw!=='object'||!Array.isArray(raw.schedule)||!Array.isArray(raw.milestones))return null;
-  const milestones=raw.milestones.slice(0,12).map((m)=>({title:String(m?.title??'').trim().slice(0,200),description:String(m?.description??'').trim().slice(0,600),week:Math.max(1,Math.min(durationWeeks,Math.round(Number(m?.week)||1)))})).filter((m)=>m.title);
-  const schedule=raw.schedule.slice(0,300).map((item)=>({week:Math.max(1,Math.min(durationWeeks,Math.round(Number(item?.week)||1))),day:canonicalDay(item?.day)??'Monday',task:String(item?.task??'').trim().slice(0,300),purpose:String(item?.purpose??'').trim().slice(0,300),target_metric:String(item?.target_metric??'').trim().slice(0,120),duration_minutes:Math.max(5,Math.min(240,Math.round(Number(item?.duration_minutes)||30))),preferred_time:String(item?.preferred_time??'09:00').trim().slice(0,8)})).filter((item)=>item.task);
-  if(!schedule.length||!milestones.length)return null;
-  return {...raw,milestones,schedule,outcome:String(raw.outcome||'').trim().slice(0,300),success_metric:String(raw.success_metric||'').trim().slice(0,300),baseline:String(raw.baseline||'').trim().slice(0,600),summary:String(raw.summary||'').trim().slice(0,1200),progression:String(raw.progression||'').trim().slice(0,600)};
+
+function nextMonday() {
+  const d = new Date();
+  const day = d.getDay();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + (day === 0 ? 1 : 8 - day));
+  return d;
+}
+function deadlineFor(start: Date, weeks: number) {
+  return toDateString(addDays(start, weeks * 7 - 1));
+}
+function durationLabel(w: number) {
+  const option = DURATION_OPTIONS.find(x => x.weeks === w);
+  return option?.label || `${w} weeks`;
+}
+function canonicalDay(day: unknown): string | null {
+  const value = String(day ?? '').trim().toLowerCase();
+  const idx = DAYS.findIndex(
+    d => d.toLowerCase() === value || (value.length >= 3 && d.toLowerCase().slice(0, 3) === value.slice(0, 3))
+  );
+  return idx >= 0 ? DAYS[idx] : null;
+}
+function normalizePlan(raw: Plan, durationWeeks: number): Plan | null {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.schedule) || !Array.isArray(raw.milestones))
+    return null;
+  const milestones = raw.milestones
+    .slice(0, 12)
+    .map(m => ({
+      title: String(m?.title ?? '').trim().slice(0, 200),
+      description: String(m?.description ?? '').trim().slice(0, 600),
+      week: Math.max(1, Math.min(durationWeeks, Math.round(Number(m?.week) || 1))),
+    }))
+    .filter(m => m.title);
+  const schedule = raw.schedule
+    .slice(0, 300)
+    .map(item => ({
+      week: Math.max(1, Math.min(durationWeeks, Math.round(Number(item?.week) || 1))),
+      day: canonicalDay(item?.day) ?? 'Monday',
+      task: String(item?.task ?? '').trim().slice(0, 300),
+      purpose: String(item?.purpose ?? '').trim().slice(0, 300),
+      target_metric: String(item?.target_metric ?? '').trim().slice(0, 120),
+      duration_minutes: Math.max(5, Math.min(240, Math.round(Number(item?.duration_minutes) || 30))),
+      preferred_time: String(item?.preferred_time ?? '09:00').trim().slice(0, 8),
+    }))
+    .filter(item => item.task);
+  if (!schedule.length || !milestones.length) return null;
+  const references = (Array.isArray(raw.references) ? raw.references : [])
+    .slice(0, 4)
+    .map(reference => ({
+      url: String(reference?.url || '').trim().slice(0, 1000),
+      title: reference?.title ? String(reference.title).trim().slice(0, 200) : null,
+      resource_type: (['youtube', 'instagram', 'image', 'video', 'link'].includes(reference?.resource_type || '')
+        ? reference.resource_type
+        : 'link') as PlanReference['resource_type'],
+    }))
+    .filter(reference => /^https?:\/\//i.test(reference.url));
+  return {
+    ...raw,
+    milestones,
+    schedule,
+    references,
+    outcome: String(raw.outcome || '').trim().slice(0, 300),
+    success_metric: String(raw.success_metric || '').trim().slice(0, 300),
+    baseline: String(raw.baseline || '').trim().slice(0, 600),
+    summary: String(raw.summary || '').trim().slice(0, 1200),
+    progression: String(raw.progression || '').trim().slice(0, 600),
+  };
 }
 
-export function GoalPlanner({userId,onCreated,onCancel}:{userId:string;onCreated:()=>void;onCancel:()=>void}){
- const [rawInput,setRawInput]=useState('');const [why,setWhy]=useState('');const [durationWeeks,setDurationWeeks]=useState(8);const [availableDays,setAvailableDays]=useState<string[]>(['Monday','Wednesday','Saturday']);const [clarification,setClarification]=useState<Clarification|null>(null);const [answers,setAnswers]=useState<string[]>([]);const [plan,setPlan]=useState<Plan|null>(null);const [draftGoalId,setDraftGoalId]=useState<string|null>(null);const [planning,setPlanning]=useState(false);const [saving,setSaving]=useState(false);const [error,setError]=useState('');const [upgrade,setUpgrade]=useState<EntitlementResult|null>(null);
- function toggleDay(day:string){setAvailableDays(x=>x.includes(day)?x.filter(d=>d!==day):x.length<7?[...x,day]:x);}
- async function ensureDraft(){if(draftGoalId)return draftGoalId;const start=nextMonday();const {data,error:e}=await supabase.from('goals').insert({user_id:userId,title:rawInput.trim(),outcome:rawInput.trim(),why_it_matters:why.trim()||null,start_date:toDateString(start),deadline:deadlineFor(start,durationWeeks),duration:`${durationWeeks}w`,status:'draft',weekly_commitment_target:availableDays.length}).select('id').single();if(e||!data)throw e||new Error('Could not start this goal.');setDraftGoalId(data.id);return data.id;}
- async function checkCreateEntitlement(){const result=await consumeEntitlement('create_goal',{surface:'goal_planner'});if(!result.allowed){setUpgrade(result);return false;}return true;}
- async function loadReferences(goalId:string){const {data}=await supabase.from('goal_resources').select('url,title,resource_type').eq('goal_id',goalId).order('created_at',{ascending:false}).limit(4);return data||[];}
- async function askQuestions(){if(!rawInput.trim()||planning||availableDays.length===0)return;if(rawInput.trim().length<3){setError('Please describe your goal in at least a few characters.');return;}setPlanning(true);setError('');setUpgrade(null);try{if(!(await checkCreateEntitlement()))return;const goalId=await ensureDraft();const references=await loadReferences(goalId);const {data,error:e}=await supabase.functions.invoke('vow-goal-ai',{body:{mode:'goal-clarify',goal:{id:goalId,title:rawInput.trim(),outcome:rawInput.trim(),why_it_matters:why.trim()||null,duration_weeks:durationWeeks,weekly_commitment_target:availableDays.length},message:`Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim()||'Not supplied.'}\nDuration: ${durationLabel(durationWeeks)}.\nAvailable days: ${availableDays.join(', ')}\nAsk 2-3 high-value follow-up questions that materially improve a personalised plan. Do not ask about information already supplied.`,available_days:availableDays,references}});if(e||!data?.structured)throw new Error(data?.error||e?.message||'VOW AI could not prepare the follow-up questions.');const next=data.structured as Clarification;if(!Array.isArray(next.questions)||next.questions.length===0)throw new Error('VOW AI returned no follow-up questions.');setClarification(next);setAnswers(next.questions.map(()=>''));const {error:ae}=await supabase.from('goal_clarification_answers').delete().eq('goal_id',goalId);if(ae)throw ae;const {error:ie}=await supabase.from('goal_clarification_answers').insert(next.questions.map((question,index)=>({goal_id:goalId,user_id:userId,question,answer:null,question_order:index})));if(ie)throw ie;}catch(err){setError(err instanceof Error?err.message:'VOW AI could not prepare the follow-up questions.');}finally{setPlanning(false);}}
- async function buildPlan(){if(!clarification||planning||availableDays.length===0)return;setPlanning(true);setError('');try{const goalId=await ensureDraft();const clean=answers.map(a=>a.trim());const {error:de}=await supabase.from('goal_clarification_answers').delete().eq('goal_id',goalId);if(de)throw de;const {error:ie}=await supabase.from('goal_clarification_answers').insert(clarification.questions.map((question,index)=>({goal_id:goalId,user_id:userId,question,answer:clean[index]||null,question_order:index})));if(ie)throw ie;const references=await loadReferences(goalId);const start=nextMonday();const {data,error:e}=await supabase.functions.invoke('vow-goal-ai',{body:{mode:'goal-plan',goal:{id:goalId,title:rawInput.trim(),outcome:rawInput.trim(),why_it_matters:why.trim()||null,start_date:toDateString(start),deadline:deadlineFor(start,durationWeeks),duration_weeks:durationWeeks,weekly_commitment_target:availableDays.length,plan_generated_at:null},message:`Build the final personalised VOW plan using these follow-up answers:\n${clarification.questions.map((q,i)=>`Q: ${q}\nA: ${clean[i]||'Skipped / not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${durationLabel(durationWeeks)}. Available days are exactly: ${availableDays.join(', ')}. Use the answers and references to tailor the plan, progression, sessions, targets and fallback rules.`,answers:clarification.questions.map((question,index)=>({question,answer:clean[index]||''})),available_days:availableDays,references}});if(e||!data?.structured)throw new Error(data?.error||e?.message||'VOW AI could not build the plan.');const next=data.structured as Plan;if(next.duration_weeks!==durationWeeks)throw new Error('VOW AI returned a plan for a different duration than you selected. Please try again.');const normalized=normalizePlan(next,durationWeeks);if(!normalized)throw new Error('VOW AI returned an incomplete plan. Please try again.');setPlan(normalized);}catch(err){setError(err instanceof Error?err.message:'VOW AI could not build the plan.');}finally{setPlanning(false);}}
- async function handleCreate(){if(!plan||!draftGoalId||saving)return;setSaving(true);setError('');try{const start=nextMonday();const {data:milestones,error:me}=await supabase.from('milestones').insert(plan.milestones.map((m,i)=>({goal_id:draftGoalId,title:m.title,description:m.description,sort_order:i,deadline:deadlineFor(start,Math.min(durationWeeks,Math.max(1,m.week))),status:i===0?'in_progress':'pending'}))).select('id,sort_order').order('sort_order');if(me)throw me;const rows=plan.schedule.filter(x=>availableDays.includes(x.day)).map(item=>{const week=Math.max(1,Math.min(durationWeeks,item.week));const dayIndex=Math.max(0,DAYS.indexOf(item.day));const date=addDays(start,(week-1)*7+dayIndex);const match=/^(\d{1,2}):(\d{2})/.exec(item.preferred_time||'09:00');date.setHours(Math.min(23,Number(match?.[1]||9)),Math.min(59,Number(match?.[2]||0)),0,0);const mi=Math.min(Math.max(0,Math.floor(((week-1)/Math.max(1,durationWeeks))*(milestones||[]).length)),Math.max(0,(milestones||[]).length-1));return{goal_id:draftGoalId,milestone_id:milestones?.[mi]?.id??null,user_id:userId,title:item.task,scheduled_at:date.toISOString(),duration_minutes:Math.max(5,Number(item.duration_minutes)||30),status:'scheduled',notes:[item.purpose,item.target_metric?`Target: ${item.target_metric}`:null].filter(Boolean).join('\n')||null};});if(!rows.length)throw new Error('The generated schedule does not match your selected days. Please rebuild the plan.');const {data:sessions,error:se}=await supabase.from('sessions').insert(rows).select('*');if(se)throw se;const {error:ge}=await supabase.from('goals').update({title:rawInput.trim(),outcome:plan.outcome||rawInput.trim(),why_it_matters:why.trim()||null,start_date:toDateString(start),deadline:deadlineFor(start,durationWeeks),duration:`${durationWeeks}w`,status:'active',weekly_commitment_target:availableDays.length,plan_json:plan,plan_version:1,plan_generated_at:new Date().toISOString(),planning_horizon_weeks:durationWeeks,planning_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone}).eq('id',draftGoalId);if(ge)throw ge;if(sessions)try{await syncUpcomingSessionNotifications(sessions as Session[]);}catch{console.warn('[VOW] Session notifications could not be synced.');}try{await supabase.functions.invoke('google-calendar-sync-goal',{body:{goalId:draftGoalId}});}catch{console.warn('[VOW] Google Calendar sync could not be completed.');}onCreated();}catch(err){setError(err instanceof Error?err.message:'Failed to create goal.');}finally{setSaving(false);}}
- if(upgrade)return <div><PageHeader title="New goal" subtitle="VOW keeps the first goal free. Premium lets you run multiple active goals at once."/><div className="max-w-xl"><UpgradePrompt result={upgrade} title="Your next goal is ready for Premium"/><button onClick={onCancel} className="vow-btn-ghost mt-4">Back to goals</button></div></div>;
- if(plan)return <div><button onClick={()=>setPlan(null)} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Adjust answers</button><PageHeader title="Your VOW plan" subtitle={`${durationLabel(durationWeeks)} · ${availableDays.length} sessions/week`}/><div className="max-w-3xl space-y-6"><section className="border border-vow-border p-5"><p className="vow-label mb-2">Outcome</p><p className="text-lg font-medium text-vow-ink">{plan.outcome}</p><p className="text-sm text-vow-muted mt-3">{plan.summary}</p></section><section className="border border-vow-border p-5"><p className="vow-label mb-2">Success metric</p><p className="text-sm text-vow-ink">{plan.success_metric}</p><p className="vow-label mt-5 mb-2">Baseline</p><p className="text-sm text-vow-muted">{plan.baseline}</p></section><section className="border border-vow-border p-5"><p className="vow-label mb-4">Schedule · {durationLabel(durationWeeks)}</p><div className="divide-y divide-vow-border">{plan.schedule.map((item,i)=><div key={`${item.week}-${item.day}-${i}`} className="py-3 flex gap-3"><span className="text-xs text-vow-muted w-12 shrink-0">W{item.week}</span><span className="text-xs text-vow-muted w-20 shrink-0">{item.day}</span><div><p className="text-sm text-vow-ink font-medium">{item.task}</p><p className="text-xs text-vow-muted mt-1">{item.duration_minutes} min · {item.target_metric}</p></div></div>)}</div></section><section className="border border-vow-border p-5"><p className="vow-label mb-4">Milestones & progression</p>{plan.milestones.map(m=><div key={`${m.week}-${m.title}`} className="mb-4"><p className="text-sm text-vow-ink font-medium">Week {m.week} · {m.title}</p><p className="text-xs text-vow-muted mt-1">{m.description}</p></div>)}<p className="text-sm text-vow-muted pt-4 border-t border-vow-border">{plan.progression}</p></section>{error&&<p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3">{error}</p>}<div className="flex gap-3"><button onClick={()=>setPlan(null)} className="vow-btn-ghost">Back</button><button onClick={handleCreate} disabled={saving} className="vow-btn-primary flex-1">{saving?'Locking in...':'Lock in VOW'}</button></div></div></div>;
- if(clarification)return <div><button onClick={()=>setClarification(null)} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Adjust goal</button><PageHeader title="A few questions first" subtitle="VOW uses your answers to make the commitment genuinely yours."/><div className="max-w-xl space-y-6">{clarification.questions.map((question,index)=><div key={`${index}-${question}`}><label className="vow-label block mb-2">{question}</label><textarea value={answers[index]||''} onChange={e=>setAnswers(x=>x.map((a,i)=>i===index?e.target.value:a))} rows={3} className="vow-input resize-none" placeholder="Your answer..."/></div>)}<p className="text-xs text-vow-muted">{clarification.rationale}</p>{error&&<p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3">{error}</p>}<div className="flex gap-3"><button onClick={()=>setClarification(null)} className="vow-btn-ghost">Back</button><button onClick={buildPlan} disabled={planning} className="vow-btn-primary flex-1">{planning?'VOW is building your plan...':'Build my VOW plan'}</button></div></div></div>;
- return <div><PageHeader title="New goal" subtitle="Tell VOW what you want to accomplish. It will ask the right questions before building your plan."/><div className="max-w-xl space-y-6"><textarea value={rawInput} onChange={e=>setRawInput(e.target.value)} rows={4} maxLength={300} className="vow-input resize-none" placeholder="e.g. Run a sub-60-minute 10K" autoFocus/><div><label className="vow-label block mb-2">Why does this matter?</label><textarea value={why} onChange={e=>setWhy(e.target.value)} rows={2} maxLength={500} className="vow-input resize-none" placeholder="Give VOW the reason behind the commitment."/></div><div><label className="vow-label block mb-3">How long are you committing?</label><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{DURATION_OPTIONS.map(option=><button key={option.weeks} type="button" onClick={()=>setDurationWeeks(option.weeks)} className={`text-left border px-3 py-3 transition-colors ${durationWeeks===option.weeks?'border-vow-ink bg-vow-ink text-vow-bg':'border-vow-border text-vow-muted hover:text-vow-ink'}`}><span className="block text-sm font-medium">{option.label}</span><span className={`block text-[10px] mt-1 ${durationWeeks===option.weeks?'text-vow-bg/70':'text-vow-muted'}`}>{option.detail}</span></button>)}</div></div><div><label className="vow-label block mb-3">Available days</label><div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{DAYS.map(day=><button key={day} type="button" onClick={()=>toggleDay(day)} className={`border px-3 py-2 text-xs transition-colors ${availableDays.includes(day)?'border-vow-ink bg-vow-ink text-vow-bg':'border-vow-border text-vow-muted hover:text-vow-ink'}`}>{day}</button>)}</div></div>{error&&<p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3">{error}</p>}<div className="flex gap-3"><button onClick={onCancel} className="vow-btn-ghost">Cancel</button><button onClick={askQuestions} disabled={!rawInput.trim()||planning||availableDays.length===0} className="vow-btn-primary flex-1">{planning?'VOW is preparing questions...':'Continue'}</button></div></div></div>;
+export function GoalPlanner({
+  userId,
+  onCreated,
+  onCancel,
+}: {
+  userId: string;
+  onCreated: () => void;
+  onCancel: () => void;
+}) {
+  const [rawInput, setRawInput] = useState('');
+  const [why, setWhy] = useState('');
+  const [durationWeeks, setDurationWeeks] = useState(8);
+  const [availableDays, setAvailableDays] = useState<string[]>(['Monday', 'Wednesday', 'Saturday']);
+  const [clarification, setClarification] = useState<Clarification | null>(null);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [draftGoalId, setDraftGoalId] = useState<string | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
+
+  const armadillo: ArmadilloResult = analyseGoalForEvidence({
+    title: rawInput,
+    outcome: rawInput,
+    why_it_matters: why,
+  });
+
+  function toggleDay(day: string) {
+    setAvailableDays(x => (x.includes(day) ? x.filter(d => d !== day) : x.length < 7 ? [...x, day] : x));
+  }
+
+  async function ensureDraft() {
+    if (draftGoalId) return draftGoalId;
+    const start = nextMonday();
+    const { data, error: e } = await supabase
+      .from('goals')
+      .insert({
+        user_id: userId,
+        title: rawInput.trim(),
+        outcome: rawInput.trim(),
+        why_it_matters: why.trim() || null,
+        start_date: toDateString(start),
+        deadline: deadlineFor(start, durationWeeks),
+        duration: `${durationWeeks}w`,
+        status: 'draft',
+        weekly_commitment_target: availableDays.length,
+      })
+      .select('id')
+      .single();
+    if (e || !data) throw e || new Error('Could not start this goal.');
+    setDraftGoalId(data.id);
+    return data.id;
+  }
+
+  async function checkCreateEntitlement() {
+    const result = await consumeEntitlement('create_goal', { surface: 'goal_planner' });
+    if (!result.allowed) {
+      setUpgrade(result);
+      return false;
+    }
+    return true;
+  }
+
+  async function loadReferences(goalId: string) {
+    const { data } = await supabase
+      .from('goal_resources')
+      .select('url,title,resource_type')
+      .eq('goal_id', goalId)
+      .order('created_at', { ascending: false })
+      .limit(4);
+    return data || [];
+  }
+
+  async function askQuestions() {
+    if (!rawInput.trim() || planning || availableDays.length === 0) return;
+    if (rawInput.trim().length < 3) {
+      setError('Please describe your goal in at least a few characters.');
+      return;
+    }
+    setPlanning(true);
+    setError('');
+    setUpgrade(null);
+    try {
+      if (!(await checkCreateEntitlement())) return;
+      const goalId = await ensureDraft();
+      const references = await loadReferences(goalId);
+      const { data, error: e } = await supabase.functions.invoke('vow-goal-ai', {
+        body: {
+          mode: 'goal-clarify',
+          goal: {
+            id: goalId,
+            title: rawInput.trim(),
+            outcome: rawInput.trim(),
+            why_it_matters: why.trim() || null,
+            domain: armadillo,
+            duration_weeks: durationWeeks,
+            weekly_commitment_target: availableDays.length,
+          },
+          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDomain: ${armadillo.category} / ${armadillo.goal_type}\nMethodology: ${armadillo.methodology}\nRequired information: ${armadillo.required_inputs.join('; ')}\nDuration: ${durationLabel(durationWeeks)}.\nAvailable days: ${availableDays.join(', ')}\nAsk 2-3 high-value questions that resolve the most important missing inputs for this exact domain. Never ask generic questions.`,
+          available_days: availableDays,
+          references,
+        },
+      });
+      if (e || !data?.structured) throw new Error(data?.error || e?.message || 'VOW AI could not prepare the follow-up questions.');
+      const next = data.structured as Clarification;
+      if (!Array.isArray(next.questions) || next.questions.length === 0)
+        throw new Error('VOW AI returned no follow-up questions.');
+      setClarification(next);
+      setAnswers(next.questions.map(() => ''));
+      const { error: ae } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
+      if (ae) throw ae;
+      const { error: ie } = await supabase.from('goal_clarification_answers').insert(
+        next.questions.map((question, index) => ({
+          goal_id: goalId,
+          user_id: userId,
+          question,
+          answer: null,
+          question_order: index,
+        }))
+      );
+      if (ie) throw ie;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'VOW AI could not prepare the follow-up questions.');
+    } finally {
+      setPlanning(false);
+    }
+  }
+
+  async function buildPlan() {
+    if (!clarification || planning || availableDays.length === 0) return;
+    setPlanning(true);
+    setError('');
+    try {
+      const goalId = await ensureDraft();
+      const clean = answers.map(a => a.trim());
+      const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
+      const unresolved = clean.filter(answer => !answer || unknown.test(answer)).length;
+      if (unresolved === clean.length) {
+        setError(
+          `VOW needs one decision before it can build a responsible ${armadillo.goal_type} plan: ${armadillo.required_inputs[0]}.`
+        );
+        return;
+      }
+      const { error: de } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
+      if (de) throw de;
+      const { error: ie } = await supabase.from('goal_clarification_answers').insert(
+        clarification.questions.map((question, index) => ({
+          goal_id: goalId,
+          user_id: userId,
+          question,
+          answer: clean[index] || null,
+          question_order: index,
+        }))
+      );
+      if (ie) throw ie;
+      const references = await loadReferences(goalId);
+      const start = nextMonday();
+      const { data, error: e } = await supabase.functions.invoke('vow-goal-ai', {
+        body: {
+          mode: 'goal-plan',
+          goal: {
+            id: goalId,
+            title: rawInput.trim(),
+            outcome: rawInput.trim(),
+            why_it_matters: why.trim() || null,
+            domain: armadillo,
+            start_date: toDateString(start),
+            deadline: deadlineFor(start, durationWeeks),
+            duration_weeks: durationWeeks,
+            weekly_commitment_target: availableDays.length,
+            plan_generated_at: null,
+          },
+          message: `Build a genuinely personalised ${armadillo.goal_type} plan. Methodology: ${armadillo.methodology}\nRequired inputs: ${armadillo.required_inputs.join('; ')}\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${durationLabel(durationWeeks)}. Available days are exactly: ${availableDays.join(', ')}. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions.`,
+          answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
+          available_days: availableDays,
+          references,
+        },
+      });
+      if (e || !data?.structured) throw new Error(data?.error || e?.message || 'VOW AI could not build the plan.');
+      if (data.structured?.clarification_needed) {
+        const followUp = data.structured as Clarification;
+        setClarification(followUp);
+        setAnswers(followUp.questions.map(() => ''));
+        setError('VOW needs a bit more detail before it can build a reliable plan — please answer the follow-up below.');
+        return;
+      }
+      const next = data.structured as Plan;
+      if (next.duration_weeks !== durationWeeks)
+        throw new Error('VOW AI returned a plan for a different duration than you selected. Please try again.');
+      const normalized = normalizePlan(next, durationWeeks);
+      if (!normalized) throw new Error('VOW AI returned an incomplete plan. Please try again.');
+      setPlan(normalized);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'VOW AI could not build the plan.');
+    } finally {
+      setPlanning(false);
+    }
+  }
+
+  async function handleCreate() {
+    if (!plan || !draftGoalId || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const start = nextMonday();
+
+      // 1. Insert milestones
+      const { data: milestones, error: me } = await supabase
+        .from('milestones')
+        .insert(
+          plan.milestones.map((m, i) => ({
+            goal_id: draftGoalId,
+            title: m.title,
+            description: m.description,
+            sort_order: i,
+            deadline: deadlineFor(start, Math.min(durationWeeks, Math.max(1, m.week))),
+            status: i === 0 ? 'in_progress' : 'pending',
+          }))
+        )
+        .select('id,sort_order')
+        .order('sort_order');
+      if (me) throw me;
+
+      // Helper: build a date from week + day
+      function buildDate(week: number, day: string, preferredTime: string): Date {
+        const w = Math.max(1, Math.min(durationWeeks, week));
+        const dayIndex = Math.max(0, DAYS.indexOf(day));
+        const date = addDays(start, (w - 1) * 7 + dayIndex);
+        const match = /^(\d{1,2}):(\d{2})/.exec(preferredTime || '09:00');
+        date.setHours(Math.min(23, Number(match?.[1] || 9)), Math.min(59, Number(match?.[2] || 0)), 0, 0);
+        return date;
+      }
+      function milestoneIndex(week: number): number {
+        return Math.min(
+          Math.max(0, Math.floor(((week - 1) / Math.max(1, durationWeeks)) * (milestones || []).length)),
+          Math.max(0, (milestones || []).length - 1)
+        );
+      }
+
+      const filteredItems = plan.schedule.filter(x => availableDays.includes(x.day));
+      if (!filteredItems.length)
+        throw new Error('The generated schedule does not match your selected days. Please rebuild the plan.');
+
+      // 2. Insert sessions
+      const sessionRows = filteredItems.map(item => {
+        const date = buildDate(item.week, item.day, item.preferred_time);
+        return {
+          goal_id: draftGoalId,
+          milestone_id: milestones?.[milestoneIndex(item.week)]?.id ?? null,
+          user_id: userId,
+          title: item.task,
+          scheduled_at: date.toISOString(),
+          duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
+          status: 'scheduled',
+          notes:
+            [item.purpose, item.target_metric ? `Target: ${item.target_metric}` : null]
+              .filter(Boolean)
+              .join('\n') || null,
+        };
+      });
+      const { data: sessions, error: se } = await supabase.from('sessions').insert(sessionRows).select('*');
+      if (se) throw se;
+
+      // 3. Insert goal_plan_items — required for Google Calendar sync.
+      //    The DB trigger materialize_plan_execution_from_active_goal() aborts early
+      //    if sessions already exist, so goal_plan_items must be populated here
+      //    before we flip status to 'active'.
+      const planItemRows = filteredItems.map(item => {
+        const date = buildDate(item.week, item.day, item.preferred_time);
+        return {
+          goal_id: draftGoalId,
+          plan_version: 1,
+          week_number: Math.max(1, Math.min(durationWeeks, item.week)),
+          day_of_week: item.day,
+          scheduled_at: date.toISOString(),
+          task: item.task,
+          purpose: item.purpose || null,
+          target_metric: item.target_metric || null,
+          duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
+          status: 'scheduled',
+        };
+      });
+      const { error: pie } = await supabase.from('goal_plan_items').insert(planItemRows);
+      if (pie) throw pie;
+
+      // 4. Activate goal — done AFTER sessions + goal_plan_items so GCal sync
+      //    finds data immediately when it queries goal_plan_items.
+      const { error: ge } = await supabase
+        .from('goals')
+        .update({
+          title: rawInput.trim(),
+          outcome: plan.outcome || rawInput.trim(),
+          why_it_matters: why.trim() || null,
+          start_date: toDateString(start),
+          deadline: deadlineFor(start, durationWeeks),
+          duration: `${durationWeeks}w`,
+          status: 'active',
+          weekly_commitment_target: availableDays.length,
+          plan_json: plan,
+          plan_version: 1,
+          plan_generated_at: new Date().toISOString(),
+          planning_horizon_weeks: durationWeeks,
+          planning_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        })
+        .eq('id', draftGoalId);
+      if (ge) throw ge;
+
+      // 5. Save AI-recommended references
+      if (plan.references?.length) {
+        const { error: referenceError } = await supabase.from('goal_resources').insert(
+          plan.references.map(reference => ({
+            goal_id: draftGoalId,
+            user_id: userId,
+            url: reference.url,
+            title: reference.title,
+            resource_type: reference.resource_type,
+          }))
+        );
+        if (referenceError) throw referenceError;
+      }
+
+      // 6. Sync local notifications
+      if (sessions)
+        try {
+          await syncUpcomingSessionNotifications(sessions as Session[]);
+        } catch {
+          console.warn('[VOW] Session notifications could not be synced.');
+        }
+
+      // 7. Trigger Google Calendar sync
+      try {
+        await supabase.functions.invoke('google-calendar-sync-goal', { body: { goalId: draftGoalId } });
+      } catch {
+        console.warn('[VOW] Google Calendar sync could not be completed.');
+      }
+
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create goal.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Upgrade wall ─────────────────────────────────────────────────────────────
+  if (upgrade)
+    return (
+      <div>
+        <PageHeader
+          title="New goal"
+          subtitle="VOW keeps the first goal free. Premium lets you run multiple active goals at once."
+        />
+        <div className="max-w-xl">
+          <UpgradePrompt result={upgrade} title="Your next goal is ready for Premium" />
+          <button onClick={onCancel} className="vow-btn-ghost mt-4">
+            Back to goals
+          </button>
+        </div>
+      </div>
+    );
+
+  // ── Step 3 — Plan review ──────────────────────────────────────────────────────
+  if (plan)
+    return (
+      <div>
+        <button onClick={() => setPlan(null)} className="text-sm text-vow-muted hover:text-vow-ink mb-6">
+          ← Adjust answers
+        </button>
+        <PageHeader title="Your VOW plan" subtitle={`${durationLabel(durationWeeks)} · ${availableDays.length} sessions/week`} />
+        <div className="max-w-3xl space-y-6">
+          <section className="border border-vow-border p-5">
+            <p className="vow-label mb-2">Outcome</p>
+            <p className="text-lg font-medium text-vow-ink">{plan.outcome}</p>
+            <p className="text-sm text-vow-muted mt-3">{plan.summary}</p>
+          </section>
+          <section className="border border-vow-border p-5">
+            <p className="vow-label mb-2">Success metric</p>
+            <p className="text-sm text-vow-ink">{plan.success_metric}</p>
+            <p className="vow-label mt-5 mb-2">Baseline</p>
+            <p className="text-sm text-vow-muted">{plan.baseline}</p>
+          </section>
+          <section className="border border-vow-border p-5">
+            <p className="vow-label mb-4">Schedule · {durationLabel(durationWeeks)}</p>
+            <div className="divide-y divide-vow-border">
+              {plan.schedule.map((item, i) => (
+                <div key={`${item.week}-${item.day}-${i}`} className="py-3 flex gap-3">
+                  <span className="text-xs text-vow-muted w-12 shrink-0">W{item.week}</span>
+                  <span className="text-xs text-vow-muted w-20 shrink-0">{item.day}</span>
+                  <div>
+                    <p className="text-sm text-vow-ink font-medium">{item.task}</p>
+                    <p className="text-xs text-vow-muted mt-1">
+                      {item.duration_minutes} min · {item.target_metric}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="border border-vow-border p-5">
+            <p className="vow-label mb-4">Milestones &amp; progression</p>
+            {plan.milestones.map(m => (
+              <div key={`${m.week}-${m.title}`} className="mb-4">
+                <p className="text-sm text-vow-ink font-medium">
+                  Week {m.week} · {m.title}
+                </p>
+                <p className="text-xs text-vow-muted mt-1">{m.description}</p>
+              </div>
+            ))}
+            <p className="text-sm text-vow-muted pt-4 border-t border-vow-border">{plan.progression}</p>
+          </section>
+          {plan.references?.length ? (
+            <section className="border border-vow-border p-5">
+              <p className="vow-label mb-3">Relevant references</p>
+              {plan.references.map(reference => (
+                <a
+                  key={reference.url}
+                  href={reference.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block text-sm text-vow-ink underline underline-offset-4 mb-2 last:mb-0"
+                >
+                  {reference.title || reference.url}
+                </a>
+              ))}
+            </section>
+          ) : null}
+          {error && (
+            <div className="flex items-start gap-3 border-l-2 border-vow-ink pl-3">
+              <p className="text-sm text-vow-ink flex-1">{error}</p>
+              <button onClick={handleCreate} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">
+                Retry
+              </button>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button onClick={() => setPlan(null)} className="vow-btn-ghost">
+              Back
+            </button>
+            <button onClick={handleCreate} disabled={saving} className="vow-btn-primary flex-1">
+              {saving ? 'Locking in…' : 'Lock in VOW'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
+  // ── Step 2 — Clarification answers ────────────────────────────────────────────
+  if (clarification)
+    return (
+      <div>
+        <button onClick={() => setClarification(null)} className="text-sm text-vow-muted hover:text-vow-ink mb-6">
+          ← Adjust goal
+        </button>
+        <PageHeader
+          title="A few questions first"
+          subtitle="VOW uses your answers to make the commitment genuinely yours."
+        />
+        <div className="max-w-xl space-y-6">
+          {/* Armadillo domain context */}
+          <div className="border border-vow-border p-4 space-y-1">
+            <p className="text-xs text-vow-muted uppercase tracking-wider">
+              {armadillo.category} · {armadillo.goal_type}
+            </p>
+            <p className="text-sm text-vow-ink">{armadillo.methodology}</p>
+          </div>
+          {clarification.questions.map((question, index) => (
+            <div key={`${index}-${question}`}>
+              <label className="vow-label block mb-2">{question}</label>
+              <textarea
+                value={answers[index] || ''}
+                onChange={e => setAnswers(x => x.map((a, i) => (i === index ? e.target.value : a)))}
+                rows={3}
+                className="vow-input resize-none"
+                placeholder="Your answer…"
+              />
+            </div>
+          ))}
+          <p className="text-xs text-vow-muted">{clarification.rationale}</p>
+          {error && (
+            <div className="flex items-start gap-3 border-l-2 border-vow-ink pl-3">
+              <p className="text-sm text-vow-ink flex-1">{error}</p>
+              <button onClick={buildPlan} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">
+                Retry
+              </button>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button onClick={() => setClarification(null)} className="vow-btn-ghost">
+              Back
+            </button>
+            <button onClick={buildPlan} disabled={planning} className="vow-btn-primary flex-1">
+              {planning ? 'VOW is building your plan…' : 'Build my VOW plan'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
+  // ── Step 0 / 1 — Goal entry ───────────────────────────────────────────────────
+  return (
+    <div>
+      <PageHeader
+        title="New goal"
+        subtitle="Tell VOW what you want to accomplish. It will ask the right questions before building your plan."
+      />
+      <div className="max-w-xl space-y-6">
+        <textarea
+          value={rawInput}
+          onChange={e => setRawInput(e.target.value)}
+          rows={4}
+          maxLength={300}
+          className="vow-input resize-none"
+          placeholder="e.g. Run a sub-60-minute 10K"
+          autoFocus
+        />
+
+        {/* Armadillo live domain signal — visible as soon as 3+ chars typed */}
+        {rawInput.trim().length >= 3 && (
+          <div className="border border-vow-border p-4 space-y-1">
+            <p className="text-xs text-vow-muted uppercase tracking-wider">
+              Detected · {armadillo.category} — {armadillo.goal_type}
+            </p>
+            <p className="text-sm text-vow-ink">{armadillo.methodology}</p>
+            {armadillo.required_inputs.length > 0 && (
+              <p className="text-xs text-vow-muted mt-1">
+                VOW will ask: {armadillo.required_inputs.slice(0, 2).join(' · ')}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div>
+          <label className="vow-label block mb-2">Why does this matter?</label>
+          <textarea
+            value={why}
+            onChange={e => setWhy(e.target.value)}
+            rows={2}
+            maxLength={500}
+            className="vow-input resize-none"
+            placeholder="Give VOW the reason behind the commitment."
+          />
+        </div>
+
+        <div>
+          <label className="vow-label block mb-3">How long are you committing?</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {DURATION_OPTIONS.map(option => (
+              <button
+                key={option.weeks}
+                type="button"
+                onClick={() => setDurationWeeks(option.weeks)}
+                className={`text-left border px-3 py-3 transition-colors ${
+                  durationWeeks === option.weeks
+                    ? 'border-vow-ink bg-vow-ink text-vow-bg'
+                    : 'border-vow-border text-vow-muted hover:text-vow-ink'
+                }`}
+              >
+                <span className="block text-sm font-medium">{option.label}</span>
+                <span
+                  className={`block text-[10px] mt-1 ${
+                    durationWeeks === option.weeks ? 'text-vow-bg/70' : 'text-vow-muted'
+                  }`}
+                >
+                  {option.detail}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="vow-label block mb-3">Available days</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {DAYS.map(day => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => toggleDay(day)}
+                className={`border px-3 py-2 text-xs transition-colors ${
+                  availableDays.includes(day)
+                    ? 'border-vow-ink bg-vow-ink text-vow-bg'
+                    : 'border-vow-border text-vow-muted hover:text-vow-ink'
+                }`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-3 border-l-2 border-vow-ink pl-3">
+            <p className="text-sm text-vow-ink flex-1">{error}</p>
+            <button onClick={askQuestions} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">
+              Retry
+            </button>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="vow-btn-ghost">
+            Cancel
+          </button>
+          <button
+            onClick={askQuestions}
+            disabled={!rawInput.trim() || planning || availableDays.length === 0}
+            className="vow-btn-primary flex-1"
+          >
+            {planning ? 'VOW is preparing questions…' : 'Continue'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
