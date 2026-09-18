@@ -37,7 +37,7 @@ export function UpgradePage() {
   const [manageState, setManageState] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
   const isYearly = billing === 'yearly';
-  const isPremium = usage?.plan === 'premium' && usage.status === 'active';
+  const isPremium = usage?.plan === 'premium';
 
   useEffect(() => { getEntitlementSnapshot().then(setUsage); }, []);
 
