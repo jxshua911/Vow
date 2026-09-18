@@ -123,9 +123,20 @@ async function consumePlanningEntitlement(
     ? null
     : (data as Record<string, unknown>);
 }
-async function record(uid: string, kind: keyof typeof COOLDOWN) {
-  void uid;
-  void kind;
+async function record(
+  req: Request,
+  mode: "goal-clarify" | "goal-plan" | "chat",
+  outcome: "success" | "error" | "blocked",
+  latencyMs: number,
+  errorCode?: string
+) {
+  const { error } = await client(req).rpc("vow_record_ai_usage", {
+    p_mode: mode,
+    p_outcome: outcome,
+    p_latency_ms: latencyMs,
+    p_error_code: errorCode || null,
+  });
+  if (error) console.warn("AI usage telemetry failed", error.message);
 }
 async function searchKnowledge(query: string) {
   if (!query.trim()) return [];
@@ -159,9 +170,37 @@ async function searchKnowledge(query: string) {
     return [];
   }
 }
-async function ai(messages: any[], kind: keyof typeof MAX) {
+async function claimGuardrail(req: Request) {
+  const requestId = crypto.randomUUID();
+  const reservation = Number(Deno.env.get("VOW_AI_RESERVATION_USD") || "0.01");
+  const { data, error } = await client(req).rpc("vow_claim_ai_guardrail", {
+    p_request_id: requestId,
+    p_reservation_usd: Number.isFinite(reservation) && reservation > 0 ? reservation : 0.01,
+  });
+  if (error) throw new Error("AI_GUARDRAIL_CHECK_FAILED");
+  if (!data || typeof data !== "object" || (data as Record<string, unknown>).allowed !== true) {
+    const code = typeof (data as Record<string, unknown> | null)?.code === "string"
+      ? String((data as Record<string, unknown>).code)
+      : "AI_GUARDRAIL_BLOCKED";
+    throw new Error(code);
+  }
+  return requestId;
+}
+
+async function releaseGuardrail(req: Request, requestId: string) {
+  const { error } = await client(req).rpc("vow_release_ai_guardrail", {
+    p_request_id: requestId,
+  });
+  if (error) console.warn("AI guardrail release failed", error.message);
+}
+
+async function ai(req: Request, messages: any[], kind: keyof typeof MAX) {
+  const requestId = await claimGuardrail(req);
   const key = Deno.env.get("GROQ_API_KEY");
-  if (!key) throw new Error("GROQ_API_KEY_MISSING");
+  if (!key) {
+    await releaseGuardrail(req, requestId);
+    throw new Error("GROQ_API_KEY_MISSING");
+  }
   const c = new AbortController(),
     timer = setTimeout(() => c.abort(), 35000);
   try {
@@ -195,6 +234,7 @@ async function ai(messages: any[], kind: keyof typeof MAX) {
     return parse(content);
   } finally {
     clearTimeout(timer);
+    await releaseGuardrail(req, requestId);
   }
 }
 function schedule(b: any, w: number, ds: string[], startDate: string) {
@@ -258,13 +298,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
   let mode = "chat";
+  let uid = "";
+  const startedAt = Date.now();
   try {
     if (!(req.headers.get("Authorization") || "").startsWith("Bearer "))
       return json({ error: "Authentication required." }, 401);
     const { data, error } = await client(req).auth.getUser();
     if (error || !data.user)
       return json({ error: "Authentication required." }, 401);
-    const uid = data.user.id;
+    uid = data.user.id;
     const contentLength = Number(req.headers.get("content-length") || 0);
     if (contentLength > MAX_BODY_BYTES)
       return json({ error: "Request body is too large." }, 413);
@@ -373,7 +415,7 @@ Deno.serve(async (req) => {
     if (mode === "goal-clarify") {
       let r: any;
       try {
-        r = await ai(
+        r = await ai(req,
           [
             {
               role: "system",
@@ -385,10 +427,7 @@ Deno.serve(async (req) => {
         );
       } catch (e) {
         console.warn("clarify AI error", e);
-        return json(
-          { error: "VOW AI could not generate clarification questions right now. Please try again in a moment." },
-          503
-        );
+        throw e;
       }
       const questions = arr(r.questions, 3).slice(0, 3);
       if (questions.length < 2) {
@@ -403,13 +442,13 @@ Deno.serve(async (req) => {
         Math.max(1, Number(r.recommended_duration_weeks) || w)
       );
       r.rationale = str(r.rationale, 500);
-      await record(uid, "clarify");
+      await record(req, "goal-clarify", "success", Date.now() - startedAt);
       return json({ structured: r, text: JSON.stringify(r) });
     }
     if (mode === "goal-plan") {
       let b: any;
       try {
-        b = await ai(
+        b = await ai(req,
           [
             {
               role: "system",
@@ -423,7 +462,7 @@ Deno.serve(async (req) => {
         );
       } catch (e) {
         console.warn("plan AI failed", e);
-        return json({ error: "VOW could not build a reliable personalised plan. Please answer the missing context questions and try again." }, 503);
+        throw e;
       }
       if (b?.clarification_needed === true) {
         const followupQuestions = arr(b.questions, 3).slice(0, 3);
@@ -471,12 +510,12 @@ Deno.serve(async (req) => {
           str(g?.start_date) || new Date().toISOString().slice(0, 10)
         ),
       };
-      await record(uid, "plan");
+      await record(req, "goal-plan", "success", Date.now() - startedAt);
       return json({ structured: result, text: JSON.stringify(result) });
     }
     let r: any;
     try {
-      r = await ai(
+      r = await ai(req,
         [
           {
             role: "system",
@@ -487,17 +526,35 @@ Deno.serve(async (req) => {
         ],
         "chat"
       );
-    } catch {
-      r = {
-        text: "VOW AI is ready to help. Focus on the next concrete action toward your VOW.",
-      };
+    } catch (e) {
+      console.warn("chat AI failed", e);
+      throw e;
     }
-    await record(uid, "chat");
+    await record(req, "chat", "success", Date.now() - startedAt);
     return json({
       text: str(r?.text, 1600) || "I couldn't generate a response right now.",
     });
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
+    const telemetryMode =
+      mode === "goal-clarify" || mode === "goal-plan" || mode === "chat"
+        ? mode
+        : "chat";
+    const blocked =
+      m === "AI_CONCURRENCY_LIMIT" ||
+      m === "AI_USER_DAILY_LIMIT" ||
+      m === "AI_USER_MONTHLY_LIMIT" ||
+      m === "AI_GLOBAL_DAILY_BUDGET" ||
+      m === "AI_GLOBAL_MONTHLY_BUDGET";
+    if (uid) {
+      await record(
+        req,
+        telemetryMode,
+        blocked ? "blocked" : "error",
+        Date.now() - startedAt,
+        m
+      );
+    }
     console.error("vow-goal-ai", { mode, message: m });
     if (m === "GROQ_429")
       return json(
@@ -510,6 +567,14 @@ Deno.serve(async (req) => {
         { error: "VOW AI could not check availability. Please try again." },
         503
       );
+    if (m === "AI_GUARDRAIL_CHECK_FAILED")
+      return json({ error: "VOW AI safety controls could not be checked. Please try again." }, 503);
+    if (m === "AI_CONCURRENCY_LIMIT")
+      return json({ error: "VOW AI is already processing another request for you. Please wait a moment." }, 429, { "Retry-After": "15" });
+    if (m === "AI_USER_DAILY_LIMIT" || m === "AI_USER_MONTHLY_LIMIT")
+      return json({ error: "You have reached your VOW AI usage limit for this period." }, 429);
+    if (m === "AI_GLOBAL_DAILY_BUDGET" || m === "AI_GLOBAL_MONTHLY_BUDGET")
+      return json({ error: "VOW AI is temporarily at its usage safety limit. Please try again later." }, 503);
     if (m === "ENTITLEMENT_CHECK_FAILED")
       return json(
         { error: "VOW AI could not verify your plan. Please try again." },
