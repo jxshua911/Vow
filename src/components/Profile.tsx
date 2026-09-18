@@ -53,7 +53,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
-  useEffect(() => { getEntitlementSnapshot().then(snapshot => setPremium(snapshot.plan === 'premium')).catch(() => setPremium(false)); }, []);
+  useEffect(() => { getEntitlementSnapshot().then(snapshot => setPremium(Boolean(snapshot && snapshot.plan === 'premium'))).catch(() => setPremium(false)); }, []);
 
   async function handleEnableNotifications() {
     setRequesting(true);
