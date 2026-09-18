@@ -119,7 +119,22 @@ export function analyseGoalForEvidence(input: {
   why_it_matters?: string | null;
 }): ArmadilloResult {
   const text = [input.title, input.outcome, input.why_it_matters].filter(Boolean).join(' ').toLowerCase();
-  const ambiguousAbbreviation = /\bim\b/.test(text) && !/ironman|iron man/.test(text);\n  if (ambiguousAbbreviation)\n    return {\n      category: 'General',\n      goal_type: 'Needs clarification',\n      metric: 'goal-specific progress',\n      evidence: ['user clarification', 'manual progress updates', 'goal milestones'],\n      integration: null,\n      fallback: 'The abbreviation “IM” is ambiguous. VOW should ask what the user means before selecting a specialist methodology.',\n      confidence: 0.2,\n      methodology: 'Clarify the intended goal meaning before choosing a domain-specific methodology.',\n      required_inputs: ['what “IM” means in this goal'],\n    };\n\n  const match = rules.find(rule => rule.keywords.some(keyword => {\n    if (keyword.length <= 2) return new RegExp('\\\\b' + keyword.replace(/[.*+?^\\${}()|[\\]\\\\]/g, '\\\\  const match = rules.find(rule => rule.keywords.some(keyword => text.includes(keyword)));') + '\\\\b', 'i').test(text);\n    return text.includes(keyword);\n  }));
+  const ambiguousAbbreviation = /\bim\b/.test(text) && !/ironman|iron man/.test(text);
+  if (ambiguousAbbreviation)
+    return {
+      category: 'General',
+      goal_type: 'Needs clarification',
+      metric: 'goal-specific progress',
+      evidence: ['user clarification', 'manual progress updates', 'goal milestones'],
+      integration: null,
+      fallback: 'The abbreviation “IM” is ambiguous. VOW should ask what the user means before selecting a specialist methodology.',
+      confidence: 0.2,
+      methodology: 'Clarify the intended goal meaning before choosing a domain-specific methodology.',
+      required_inputs: ['what “IM” means in this goal'],
+    };
+
+  const match = rules.find(rule => rule.keywords.some(keyword => text.includes(keyword)));
+
 
   if (!match)
     return {
