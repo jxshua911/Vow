@@ -19,7 +19,7 @@ const rules = [
     integration: 'Strava',
     methodology: 'Build running volume gradually, establish a measurable baseline, then progress pace or distance through structured sessions and recovery.',
     required_inputs: ['current running baseline', 'target distance or time', 'available training days'],
-    keywords: ['run', 'running', '5k', '10k', 'marathon', 'half marathon', 'mile', 'km'],
+    keywords: ['run', 'running', '5k', '10k', 'marathon', 'half marathon', 'mile', 'km', 'xc', 'cross country'],
   },
   {
     category: 'Sports',
@@ -42,6 +42,26 @@ const rules = [
     keywords: ['football', 'soccer', 'match', 'football training'],
   },
   {
+    category: 'Languages',
+    goal_type: 'Language Learning',
+    metric: 'vocabulary, comprehension, speaking, practice time',
+    evidence: ['language practice sessions', 'vocabulary progress', 'speaking practice'],
+    integration: 'Google Calendar',
+    methodology: 'Establish a baseline, build useful vocabulary and grammar, practise comprehension and speaking, then increase real-world exposure.',
+    required_inputs: ['target language', 'current level', 'target outcome or deadline'],
+    keywords: ['spanish', 'french', 'japanese', 'german', 'swahili', 'italian', 'portuguese', 'mandarin', 'language'],
+  },
+  {
+    category: 'Crafts/Hobbies',
+    goal_type: 'Craft or Hobby',
+    metric: 'practice sessions, completed projects, demonstrated skill',
+    evidence: ['practice sessions', 'completed projects', 'manual progress updates'],
+    integration: null,
+    methodology: 'Identify the skill level and desired finished outcome, learn the core techniques, practise deliberately, and build progressively harder projects.',
+    required_inputs: ['specific skill or craft', 'current level', 'target project or outcome'],
+    keywords: ['knit', 'knitting', 'crochet', 'sew', 'sewing', 'embroidery', 'woodwork', 'woodworking', 'pottery', 'draw', 'drawing', 'paint', 'painting', 'craft'],
+  },
+  {
     category: 'Education',
     goal_type: 'Study',
     metric: 'study time, task completion, accuracy',
@@ -49,7 +69,7 @@ const rules = [
     integration: 'Google Calendar',
     methodology: 'Turn the outcome into specific study tasks, schedule focused sessions, use retrieval or practice, and review measurable progress.',
     required_inputs: ['subject or skill', 'current level', 'target outcome or deadline'],
-    keywords: ['study', 'revise', 'revision', 'exam', 'homework', 'learn', 'learning', 'physics', 'chemistry', 'biology', 'maths', 'mathematics'],
+    keywords: ['study', 'revise', 'revision', 'exam', 'homework', 'physics', 'chemistry', 'biology', 'maths', 'mathematics', 'school', 'coursework', 'assignment'],
   },
   {
     category: 'Reading',
@@ -99,7 +119,7 @@ export function analyseGoalForEvidence(input: {
   why_it_matters?: string | null;
 }): ArmadilloResult {
   const text = [input.title, input.outcome, input.why_it_matters].filter(Boolean).join(' ').toLowerCase();
-  const match = rules.find(rule => rule.keywords.some(keyword => text.includes(keyword)));
+  const ambiguousAbbreviation = /\bim\b/.test(text) && !/ironman|iron man/.test(text);\n  if (ambiguousAbbreviation)\n    return {\n      category: 'General',\n      goal_type: 'Needs clarification',\n      metric: 'goal-specific progress',\n      evidence: ['user clarification', 'manual progress updates', 'goal milestones'],\n      integration: null,\n      fallback: 'The abbreviation “IM” is ambiguous. VOW should ask what the user means before selecting a specialist methodology.',\n      confidence: 0.2,\n      methodology: 'Clarify the intended goal meaning before choosing a domain-specific methodology.',\n      required_inputs: ['what “IM” means in this goal'],\n    };\n\n  const match = rules.find(rule => rule.keywords.some(keyword => {\n    if (keyword.length <= 2) return new RegExp('\\\\b' + keyword.replace(/[.*+?^\\${}()|[\\]\\\\]/g, '\\\\  const match = rules.find(rule => rule.keywords.some(keyword => text.includes(keyword)));') + '\\\\b', 'i').test(text);\n    return text.includes(keyword);\n  }));
 
   if (!match)
     return {
