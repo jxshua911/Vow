@@ -59,3 +59,12 @@
 .vow-calendar-editor-enter { animation: vow-calendar-editor-enter 320ms cubic-bezier(.2,.7,.2,1) both; }
 @keyframes vow-calendar-editor-enter { from { opacity: 0; transform: translateY(18px) scale(.995); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .vow-calendar-editor-enter { animation: none; } }
+
+@layer components {
+  .vow-error { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; border-left:2px solid rgb(var(--vow-ink)); background:rgb(var(--vow-surface) / 0.45); padding:0.75rem 0.875rem; font-size:0.8125rem; line-height:1.45; color:rgb(var(--vow-ink)); }
+  .vow-error-dismiss { flex-shrink:0; font-size:0.6875rem; text-decoration:underline; text-underline-offset:3px; color:rgb(var(--vow-muted)); }
+  .vow-error-dismiss:hover { color:rgb(var(--vow-ink)); }
+  button:focus-visible, a:focus-visible { outline:2px solid rgb(var(--vow-ink)); outline-offset:2px; }
+  button:disabled { cursor:not-allowed; }
+}
+@media (max-width: 640px) { .vow-btn-primary, .vow-btn-ghost, .vow-btn-soft { min-height:2.75rem; } }
