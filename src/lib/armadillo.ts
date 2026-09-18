@@ -121,7 +121,8 @@ export function analyseGoalForEvidence(input: {
   why_it_matters?: string | null;
 }): ArmadilloResult {
   const text = [input.title, input.outcome, input.why_it_matters].filter(Boolean).join(' ').toLowerCase();
-  const tokens = text.match(/\b[A-Z0-9]{2,8}\b/g) || [];
+  const rawText = [input.title, input.outcome, input.why_it_matters].filter(Boolean).join(' ');
+  const tokens = rawText.match(/\b[A-Z][A-Z0-9]{1,7}\b/g) || [];
   const stopAcronyms = new Set(['AI', 'CV', 'UX', 'UI', 'GPS', 'API', 'SQL', 'CSS', 'HTML', 'PDF', 'IGCSE', 'SAT', 'GPA']);
   const unknownAcronym = tokens.find(token => !stopAcronyms.has(token));
   const knownAmbiguousTerms = /\b(t100|im|hyrox|spartan|ocr|utmb|bjj|mma|xc|cross[- ]?country|ironman|iron man|70\.3|70\s*\.\s*3)\b/i;
@@ -129,34 +130,23 @@ export function analyseGoalForEvidence(input: {
 
   const match = rules.find(rule => rule.keywords.some(keyword => text.includes(keyword)));
 
-  if (hasAmbiguousSignal && !match)
-    return {
-      category: 'General',
-      goal_type: 'Needs clarification',
-      metric: 'goal-specific progress',
-      evidence: ['user clarification', 'manual progress updates', 'goal milestones'],
-      integration: null,
-      fallback: 'This goal contains an abbreviation, event name, or specialist term that VOW cannot safely interpret with its deterministic rules. Groq research should identify the term and then route the goal to the correct specialist.',
-      confidence: 0.2,
-      methodology: 'Research and clarify the intended meaning before selecting a specialist methodology.',
-      required_inputs: ['what the ambiguous term means in this goal'],
-      needs_ai_research: true,
-      research_reason: 'The goal contains a potentially ambiguous specialist term or event name.',
-    };
-
   if (!match)
     return {
       category: 'General',
-      goal_type: 'Needs research',
+      goal_type: hasAmbiguousSignal ? 'Needs clarification' : 'Needs research',
       metric: 'measurable progress toward the stated outcome',
-      evidence: ['manual progress updates', 'goal milestones', 'completed sessions or actions'],
+      evidence: ['user clarification', 'manual progress updates', 'goal milestones'],
       integration: null,
       fallback: 'VOW could not confidently map this goal to a specialist methodology. Groq research must investigate the goal before a specialist is selected.',
-      confidence: 0.35,
+      confidence: hasAmbiguousSignal ? 0.2 : 0.35,
       methodology: 'Research the goal and establish the correct domain, measurable baseline, milestones, and methodology before planning.',
-      required_inputs: ['specific desired outcome', 'current baseline', 'deadline or target timeframe'],
+      required_inputs: hasAmbiguousSignal
+        ? ['what the ambiguous term means in this goal']
+        : ['specific desired outcome', 'current baseline', 'deadline or target timeframe'],
       needs_ai_research: true,
-      research_reason: 'No deterministic specialist rule matched the goal.',
+      research_reason: hasAmbiguousSignal
+        ? 'The goal contains an abbreviation, event name, or specialist term that needs research.'
+        : 'No deterministic specialist rule matched the goal.',
     };
 
   return {
@@ -166,10 +156,12 @@ export function analyseGoalForEvidence(input: {
     evidence: match.evidence,
     integration: match.integration,
     fallback: 'Manual tracking remains fully usable if the suggested integration is not connected.',
-    confidence: 0.9,
+    confidence: hasAmbiguousSignal ? 0.45 : 0.9,
     methodology: match.methodology,
     required_inputs: match.required_inputs,
-    needs_ai_research: false,
-    research_reason: null,
+    needs_ai_research: hasAmbiguousSignal,
+    research_reason: hasAmbiguousSignal
+      ? 'The goal contains an abbreviation, event name, or specialist term that should be verified with live research before the specialist methodology is finalised.'
+      : null,
   };
 }
