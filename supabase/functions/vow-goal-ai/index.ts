@@ -159,7 +159,32 @@ async function searchKnowledge(query: string) {
     return [];
   }
 }
-async function ai(messages: any[], kind: keyof typeof MAX) {
+async function claimGuardrail(req: Request) {
+  const requestId = crypto.randomUUID();
+  const reservation = Number(Deno.env.get("VOW_AI_RESERVATION_USD") || "0.01");
+  const { data, error } = await client(req).rpc("vow_claim_ai_guardrail", {
+    p_request_id: requestId,
+    p_reservation_usd: Number.isFinite(reservation) && reservation > 0 ? reservation : 0.01,
+  });
+  if (error) throw new Error("AI_GUARDRAIL_CHECK_FAILED");
+  if (!data || typeof data !== "object" || (data as Record<string, unknown>).allowed !== true) {
+    const code = typeof (data as Record<string, unknown> | null)?.code === "string"
+      ? String((data as Record<string, unknown>).code)
+      : "AI_GUARDRAIL_BLOCKED";
+    throw new Error(code);
+  }
+  return requestId;
+}
+
+async function releaseGuardrail(req: Request, requestId: string) {
+  const { error } = await client(req).rpc("vow_release_ai_guardrail", {
+    p_request_id: requestId,
+  });
+  if (error) console.warn("AI guardrail release failed", error.message);
+}
+
+async function ai(req: Request, messages: any[], kind: keyof typeof MAX) {
+  const requestId = await claimGuardrail(req);
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY_MISSING");
   const c = new AbortController(),
@@ -195,6 +220,7 @@ async function ai(messages: any[], kind: keyof typeof MAX) {
     return parse(content);
   } finally {
     clearTimeout(timer);
+    await releaseGuardrail(req, requestId);
   }
 }
 function schedule(b: any, w: number, ds: string[], startDate: string) {
@@ -373,7 +399,7 @@ Deno.serve(async (req) => {
     if (mode === "goal-clarify") {
       let r: any;
       try {
-        r = await ai(
+        r = await ai(req,
           [
             {
               role: "system",
@@ -409,7 +435,7 @@ Deno.serve(async (req) => {
     if (mode === "goal-plan") {
       let b: any;
       try {
-        b = await ai(
+        b = await ai(req,
           [
             {
               role: "system",
@@ -476,7 +502,7 @@ Deno.serve(async (req) => {
     }
     let r: any;
     try {
-      r = await ai(
+      r = await ai(req,
         [
           {
             role: "system",
@@ -510,6 +536,14 @@ Deno.serve(async (req) => {
         { error: "VOW AI could not check availability. Please try again." },
         503
       );
+    if (m === "AI_GUARDRAIL_CHECK_FAILED")
+      return json({ error: "VOW AI safety controls could not be checked. Please try again." }, 503);
+    if (m === "AI_CONCURRENCY_LIMIT")
+      return json({ error: "VOW AI is already processing another request for you. Please wait a moment." }, 429, { "Retry-After": "15" });
+    if (m === "AI_USER_DAILY_LIMIT" || m === "AI_USER_MONTHLY_LIMIT")
+      return json({ error: "You have reached your VOW AI usage limit for this period." }, 429);
+    if (m === "AI_GLOBAL_DAILY_BUDGET" || m === "AI_GLOBAL_MONTHLY_BUDGET")
+      return json({ error: "VOW AI is temporarily at its usage safety limit. Please try again later." }, 503);
     if (m === "ENTITLEMENT_CHECK_FAILED")
       return json(
         { error: "VOW AI could not verify your plan. Please try again." },
