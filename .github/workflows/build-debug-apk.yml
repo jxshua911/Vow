@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - capacitor-mobile
+      - fix/apk-blank-screen
   workflow_dispatch: {}
 
 permissions:
