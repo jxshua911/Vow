@@ -20,6 +20,7 @@ import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
+import { LanguageContext } from '@/lib/i18n';
 
 const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
@@ -147,7 +148,7 @@ function AppContent() {
     {view === 'profile' && <ProfilePage onLegal={() => navigate('legal')} onUpgrade={() => navigate('upgrade')} />}
     {view === 'upgrade' && <UpgradePage />}
   </AppShell>;
-  return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
+  return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</LanguageContext.Provider>;
 }
 
 function AppLoading() { return <div className="min-h-screen bg-vow-bg flex items-center justify-center" aria-label="Loading"><div className="vow-loading-dots"><span /><span /><span /></div></div>; }
