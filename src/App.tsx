@@ -5,6 +5,7 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { AuthPage } from '@/components/AuthPage';
 import { Onboarding } from '@/components/Onboarding';
+import { TermsAcceptance, VOW_TERMS_VERSION } from '@/components/TermsAcceptance';
 import { AppShell, type View } from '@/components/AppShell';
 import { Dashboard } from '@/components/Dashboard';
 import { GoalHistoryActions } from '@/components/GoalHistoryActions';
@@ -16,6 +17,7 @@ import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
+import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 
@@ -28,6 +30,9 @@ function AppContent() {
   const { session, loading } = useAuth();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsLoading, setTermsLoading] = useState(true);
+  const [showTermsLegal, setShowTermsLegal] = useState(false);
   const [viewHistory, setViewHistory] = useState<View[]>(['dashboard']);
   const viewHistoryRef = useRef<View[]>(['dashboard']);
   const [splashMounted, setSplashMounted] = useState(true);
@@ -70,26 +75,52 @@ function AppContent() {
     window.addEventListener('vow:navigate', listener);
     return () => window.removeEventListener('vow:navigate', listener);
   }, [navigate]);
+
   useEffect(() => {
     let cancelled = false;
-    if (!session) { setSettings(null); setSettingsLoading(false); return; }
+    if (!session) {
+      setSettings(null);
+      setSettingsLoading(false);
+      setTermsAccepted(false);
+      setTermsLoading(false);
+      return;
+    }
     setSettingsLoading(true);
+    setTermsLoading(true);
     void (async () => {
       try {
-        const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle();
+        const [settingsResult, termsResult] = await Promise.all([
+          supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle(),
+          supabase.from('vow_terms_acceptances').select('id').eq('user_id', session.user.id).eq('terms_version', VOW_TERMS_VERSION).maybeSingle(),
+        ]);
         if (cancelled) return;
-        if (error) console.error('[VOW] Failed to load user settings:', error);
-        setSettings(data as UserSettings | null);
+        if (settingsResult.error) console.error('[VOW] Failed to load user settings:', settingsResult.error);
+        if (termsResult.error) console.error('[VOW] Failed to load terms acceptance:', termsResult.error);
+        setSettings(settingsResult.data as UserSettings | null);
+        setTermsAccepted(Boolean(termsResult.data));
       } catch (err) {
-        console.error('[VOW] Failed to load user settings:', err);
+        console.error('[VOW] Failed to load account state:', err);
         if (cancelled) return;
         setSettings(null);
+        setTermsAccepted(false);
       } finally {
-        if (!cancelled) setSettingsLoading(false);
+        if (!cancelled) {
+          setSettingsLoading(false);
+          setTermsLoading(false);
+        }
       }
     })();
     return () => { cancelled = true; };
   }, [session]);
+
+  useEffect(() => {
+    if (!session || !termsAccepted) return;
+    const sync = () => { void syncUserUpcomingSessionNotifications(session.user.id).catch((err) => console.warn('[VOW] Notification sync failed:', err)); };
+    sync();
+    const listener = CapacitorApp.addListener('resume', sync);
+    return () => { listener.then((handle) => handle.remove()); };
+  }, [session, termsAccepted]);
+
   async function handleOnboardingComplete() {
     if (!session) return;
     setSettingsLoading(true);
@@ -97,13 +128,15 @@ function AppContent() {
     if (error) console.error('[VOW] Failed to refresh settings:', error);
     setSettings(data as UserSettings | null); setSettingsLoading(false);
   }
-  const contentReady = !loading && (!session || !settingsLoading);
 
+  const contentReady = !loading && !settingsLoading && !termsLoading;
   useEffect(() => { if (splashMinElapsed && contentReady && !splashFadingOut) { setSplashFadingOut(true); const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS); return () => window.clearTimeout(timer); } }, [splashMinElapsed, contentReady, splashFadingOut]);
 
   let content: React.ReactNode;
-  if (loading || (session && settingsLoading)) content = <AppLoading />;
+  if (loading || (session && (settingsLoading || termsLoading))) content = <AppLoading />;
   else if (!session) content = <AuthPage />;
+  else if (!termsAccepted && showTermsLegal) content = <LegalPage onBack={() => setShowTermsLegal(false)} />;
+  else if (!termsAccepted) content = <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} onReadLegal={() => setShowTermsLegal(true)} />;
   else if (!settings || !settings.onboarding_complete) content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
   else if (view === 'legal') content = <LegalPage onBack={goBack} />;
   else content = <AppShell currentView={view} onNavigate={navigate}>
@@ -111,7 +144,7 @@ function AppContent() {
     {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
     {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
     {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
-    {view === 'profile' && <ProfilePage onLegal={() => navigate('legal')} />}
+    {view === 'profile' && <ProfilePage onLegal={() => navigate('legal')} onUpgrade={() => navigate('upgrade')} />}
     {view === 'upgrade' && <UpgradePage />}
   </AppShell>;
   return <>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</>;
