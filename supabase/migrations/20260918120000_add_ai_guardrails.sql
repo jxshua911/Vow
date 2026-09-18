@@ -204,3 +204,64 @@ grant execute on function public.vow_release_ai_guardrail(uuid) to authenticated
 
 comment on table public.vow_ai_guardrail_config is
   'Runtime-configurable VOW AI safety limits. Tune with reviewed database changes; do not rely on client enforcement.';
+
+
+-- P1 observability: aggregate AI request telemetry without storing prompts or model content.
+create table if not exists public.vow_ai_usage_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  mode text not null check (mode in ('goal-clarify','goal-plan','chat')),
+  outcome text not null check (outcome in ('success','error','blocked')),
+  latency_ms integer,
+  error_code text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_vow_ai_usage_events_created_at
+  on public.vow_ai_usage_events (created_at desc);
+
+create index if not exists idx_vow_ai_usage_events_user_created_at
+  on public.vow_ai_usage_events (user_id, created_at desc);
+
+alter table public.vow_ai_usage_events enable row level security;
+revoke all on public.vow_ai_usage_events from public, anon, authenticated;
+
+create or replace function public.vow_record_ai_usage(
+  p_mode text,
+  p_outcome text,
+  p_latency_ms integer default null,
+  p_error_code text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if auth.uid() is null then
+    return;
+  end if;
+
+  if p_mode not in ('goal-clarify','goal-plan','chat')
+     or p_outcome not in ('success','error','blocked') then
+    return;
+  end if;
+
+  insert into public.vow_ai_usage_events (
+    user_id, mode, outcome, latency_ms, error_code
+  )
+  values (
+    auth.uid(),
+    p_mode,
+    p_outcome,
+    case
+      when p_latency_ms is null then null
+      else greatest(0, least(p_latency_ms, 300000))
+    end,
+    nullif(left(coalesce(p_error_code, ''), 120), '')
+  );
+end;
+$$;
+
+revoke all on function public.vow_record_ai_usage(text, text, integer, text) from public, anon;
+grant execute on function public.vow_record_ai_usage(text, text, integer, text) to authenticated;
