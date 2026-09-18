@@ -11,7 +11,10 @@ import { VOW_LANGUAGES, LANGUAGE_STORAGE_KEY, languageName } from '@/lib/i18n';
 type ProfileSubpage = 'main' | 'shared' | 'customise' | 'language';
 type IconColour = 'white' | 'black' | 'gold' | 'blue';
 
-type VowIconPlugin = { setColour(options: { colour: IconColour }): Promise<{ colour: IconColour }> };
+type VowIconPlugin = {
+  setColour(options: { colour: IconColour }): Promise<{ colour: IconColour }>;
+  setCustom(options: { background: string; foreground: string }): Promise<{ background: string; foreground: string; shortcut?: boolean }>;
+};
 const VowIcon = registerPlugin<VowIconPlugin>('VowIcon');
 
 const ICON_OPTIONS: Array<{ value: IconColour; label: string; foreground: string; background: string }> = [
@@ -32,6 +35,12 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState('');
   const [selectedIcon, setSelectedIcon] = useState<IconColour>(() => (localStorage.getItem('vow:icon-colour') as IconColour) || 'white');
+  const [customBackground, setCustomBackground] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('vow:custom-icon') || '').background || '#ffffff'; } catch { return '#ffffff'; }
+  });
+  const [customForeground, setCustomForeground] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('vow:custom-icon') || '').foreground || '#3b82f6'; } catch { return '#3b82f6'; }
+  });
   const [iconMessage, setIconMessage] = useState('');
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -64,11 +73,25 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     setIconMessage('');
     setSelectedIcon(colour);
     localStorage.setItem('vow:icon-colour', colour);
+    localStorage.removeItem('vow:custom-icon');
     try {
       await VowIcon.setColour({ colour });
       setIconMessage(`${colour[0].toUpperCase()}${colour.slice(1)} VOW icon selected.`);
     } catch {
-      setIconMessage('Icon preference saved. The launcher icon will update on Android when native icon switching is available.');
+      setIconMessage('Icon preference saved. The launcher will update when Android applies the selected icon.');
+    }
+  }
+
+  async function handleCustomIconChange(background: string, foreground: string) {
+    setCustomBackground(background);
+    setCustomForeground(foreground);
+    setIconMessage('');
+    localStorage.setItem('vow:custom-icon', JSON.stringify({ background, foreground }));
+    try {
+      await VowIcon.setCustom({ background, foreground });
+      setIconMessage('Custom VOW icon created. Android may ask you to confirm the launcher shortcut.');
+    } catch {
+      setIconMessage('Custom icon preview saved. Native launcher shortcut could not be created on this device.');
     }
   }
 
@@ -99,7 +122,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const notificationsEnabled = notificationStatus === 'granted';
 
   if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
-  if (subpage === 'customise') return <CustomisePage premium={premium} selectedIcon={selectedIcon} message={iconMessage} onIconChange={handleIconChange} onBack={() => setSubpage('main')} onUpgrade={onUpgrade} />;
+  if (subpage === 'customise') return <CustomisePage premium={premium} selectedIcon={selectedIcon} customBackground={customBackground} customForeground={customForeground} message={iconMessage} onIconChange={handleIconChange} onCustomIconChange={handleCustomIconChange} onBack={() => setSubpage('main')} onUpgrade={onUpgrade} />;
   if (subpage === 'language') return <LanguagePage language={language} saving={languageSaving} message={languageMessage} onChange={async (next) => {
     setLanguageSaving(true); setLanguageMessage(''); setLanguage(next); localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
     if (session) {
@@ -135,9 +158,41 @@ function LanguagePage({ language, saving, message, onChange, onBack }: { languag
   return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Language" subtitle="VOW can adapt its coaching language to you." /><section className="border border-vow-border p-5"><div className="mb-5"><p className="vow-label mb-1">App language</p><p className="text-xs text-vow-muted">Languages are shown with a representative flag. A language is not limited to one country.</p></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{VOW_LANGUAGES.map((item) => <button key={item.code} disabled={saving} onClick={() => onChange(item.code)} aria-pressed={language === item.code} className={`flex items-center gap-3 border p-3 text-left transition-colors ${language === item.code ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><span className="text-xl" aria-hidden="true">{item.flag}</span><span><span className="block text-sm text-vow-ink">{item.nativeName}</span><span className="block text-[11px] text-vow-muted">{item.name}</span></span>{language === item.code && <span className="ml-auto text-xs text-vow-ink">✓</span>}</button>)}</div>{message && <p className="text-xs text-vow-muted mt-4" role="status">{message}</p>}</section></div>;
 }
 
-function CustomisePage({ premium, selectedIcon, message, onIconChange, onBack, onUpgrade }: { premium: boolean; selectedIcon: IconColour; message: string; onIconChange: (colour: IconColour) => void; onBack: () => void; onUpgrade?: () => void }) {
-  if (!premium) return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Customise" subtitle="Custom app icons are a Premium feature." /><div className="border border-vow-border p-6"><p className="text-sm text-vow-ink mb-2">VOW icon customisation</p><p className="text-sm text-vow-muted leading-relaxed mb-5">Choose a custom launcher icon after upgrading to VOW Premium.</p><button onClick={onUpgrade} className="vow-btn-primary">View Premium</button></div></div>;
-  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Customise" subtitle="Make VOW feel like yours without adding noise." /><section className="border border-vow-border p-5"><div className="mb-5"><p className="vow-label mb-1">VOW Icon</p><p className="text-xs text-vow-muted">Choose the launcher colour. The default mark is the VOW greater-than symbol.</p></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{ICON_OPTIONS.map((option) => <button key={option.value} onClick={() => onIconChange(option.value)} aria-pressed={selectedIcon === option.value} className={`border p-3 transition-colors ${selectedIcon === option.value ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><span className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center" style={{ background: option.background }}><span style={{ color: option.foreground, fontSize: 54, lineHeight: 0.8, fontWeight: 800, fontFamily: 'Arial, sans-serif' }}>&gt;</span></span><span className="block text-xs text-vow-ink mt-3">{option.label}</span></button>)}</div>{message && <p className="text-xs text-vow-muted mt-4">{message}</p>}</section></div>;
+function CustomisePage({ premium, selectedIcon, customBackground, customForeground, message, onIconChange, onCustomIconChange, onBack, onUpgrade }: {
+  premium: boolean;
+  selectedIcon: IconColour;
+  customBackground: string;
+  customForeground: string;
+  message: string;
+  onIconChange: (colour: IconColour) => void;
+  onCustomIconChange: (background: string, foreground: string) => void;
+  onBack: () => void;
+  onUpgrade?: () => void;
+}) {
+  if (!premium) return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Customise" subtitle="Custom app icons are a Premium feature." /><div className="border border-vow-border p-6"><p className="text-sm text-vow-ink mb-2">VOW icon customisation</p><p className="text-sm text-vow-muted leading-relaxed mb-5">Choose a preset or create your own launcher icon after upgrading to VOW Premium.</p><button onClick={onUpgrade} className="vow-btn-primary">View Premium</button></div></div>;
+
+  const customActive = Boolean(localStorage.getItem('vow:custom-icon'));
+  return <div>
+    <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button>
+    <PageHeader title="Customise" subtitle="Make VOW feel like yours." />
+    <section className="border border-vow-border p-5">
+      <div className="mb-5"><p className="vow-label mb-1">App icon</p><p className="text-xs text-vow-muted">Pick a preset, or create your own colour combination.</p></div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {ICON_OPTIONS.map((option) => <button key={option.value} onClick={() => onIconChange(option.value)} aria-pressed={selectedIcon === option.value && !customActive} className={`border p-3 transition-colors ${selectedIcon === option.value && !customActive ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><span className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center" style={{ background: option.background }}><span style={{ color: option.foreground, fontSize: 54, lineHeight: 0.8, fontWeight: 800, fontFamily: 'Arial, sans-serif' }}>&gt;</span></span><span className="block text-xs text-vow-ink mt-3">{option.label}</span></button>)}
+      </div>
+      <div className={`border-t border-vow-border mt-6 pt-6 ${customActive ? 'border-vow-ink' : ''}`}>
+        <div className="flex items-start justify-between gap-4 mb-4"><div><p className="vow-label mb-1">Customise icon</p><p className="text-xs text-vow-muted">Choose the background and VOW logo colours independently.</p></div><span className="text-[10px] border border-vow-border px-2 py-1 text-vow-muted">PREMIUM</span></div>
+        <div className="flex flex-col sm:flex-row gap-5">
+          <div className="shrink-0"><p className="text-xs text-vow-muted mb-2">Live preview</p><span className="w-28 h-28 rounded-2xl flex items-center justify-center border border-vow-border" style={{ background: customBackground }}><span style={{ color: customForeground, fontSize: 92, lineHeight: 0.8, fontWeight: 800, fontFamily: 'Arial, sans-serif' }}>&gt;</span></span></div>
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="text-xs text-vow-muted">Background colour<input aria-label="Icon background colour" type="color" value={customBackground} onChange={(e) => void onCustomIconChange(e.target.value, customForeground)} className="mt-2 block w-full h-12 border border-vow-border bg-transparent cursor-pointer" /></label>
+            <label className="text-xs text-vow-muted">VOW logo colour<input aria-label="VOW logo colour" type="color" value={customForeground} onChange={(e) => void onCustomIconChange(customBackground, e.target.value)} className="mt-2 block w-full h-12 border border-vow-border bg-transparent cursor-pointer" /></label>
+          </div>
+        </div>
+        {message && <p className="text-xs text-vow-muted mt-4" role="status">{message}</p>}
+      </div>
+    </section>
+  </div>;
 }
 
 function SharedInformationPage({ session, displayName, onBack }: { session: ReturnType<typeof useAuth>['session']; displayName: string; onBack: () => void }) {
