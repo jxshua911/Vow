@@ -20,8 +20,17 @@ export function decomposeGoal(rawInput: string): DecomposedGoal {
   let weeklyCommitment = 3;
   let suggestedSessionDuration = 45;
 
-  if (/run|running|5k|10k|marathon|couch/.test(input)) {
-    outcome = 'Run a 5K without stopping';
+  if (/half marathon|21\\s*km|13\\.?1\\s*miles?/.test(input)) {
+    outcome = 'Complete a half marathon';
+    milestones = [
+      { title: 'Establish a running baseline', description: 'Build a consistent aerobic base and establish a comfortable training rhythm.', weeksOut: 2 },
+      { title: 'Build long-run endurance', description: 'Progress weekly distance gradually while keeping recovery sustainable.', weeksOut: 8 },
+      { title: 'Complete the half marathon', description: 'Taper appropriately and complete the target 21.1 km distance.', weeksOut: 16 },
+    ];
+    weeklyCommitment = 4;
+    suggestedSessionDuration = 60;
+  } else if (/run|running|5k|10k|marathon|couch/.test(input)) {
+    outcome = /10k/.test(input) ? 'Complete a 10K run' : /marathon/.test(input) ? 'Complete a marathon' : 'Run a 5K without stopping';
     milestones = [
       { title: 'Run 1 mile without stopping', description: 'Build baseline aerobic capacity with walk-run intervals.', weeksOut: 2 },
       { title: 'Run 2 miles continuously', description: 'Extend endurance to 2 miles at conversational pace.', weeksOut: 4 },
