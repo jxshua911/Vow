@@ -39,7 +39,7 @@
   .vow-card { background: rgb(var(--vow-bg)); border: 1px solid rgb(var(--vow-border)); }
   .vow-divider { border-color: rgb(var(--vow-border)); }
 
-  .vow-splash-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; background: rgb(var(--vow-bg)); pointer-events: auto; opacity: 1; transition: opacity 420ms cubic-bezier(.4,0,.2,1), background-color 180ms ease; }
+  .vow-splash-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; background: rgb(var(--vow-bg)); pointer-events: auto; opacity: 1; transition: opacity 500ms cubic-bezier(.4,0,.2,1), background-color 180ms ease; }
   .vow-splash-overlay.vow-splash-fading { opacity: 0; pointer-events: none; }
   .vow-splash-logo { display: block; width: min(82vw, 620px); max-width: 620px; height: auto; margin: 0 auto; flex: 0 0 auto; animation: vow-splash-in 650ms cubic-bezier(.2,.7,.2,1) both; }
   .vow-theme-splash { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; background: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); }
