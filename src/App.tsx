@@ -22,8 +22,8 @@ import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
 
-const SPLASH_MIN_MS = 1400;
-const SPLASH_FADE_OUT_MS = 420;
+const SPLASH_MIN_MS = 2000;
+const SPLASH_FADE_OUT_MS = 500;
 const SPLASH_FAILSAFE_MS = 8000;
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) { const { theme } = useTheme(); return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} data-theme={theme} aria-hidden={fadingOut}><BrandLogo className="vow-splash-logo" /></div>; }
