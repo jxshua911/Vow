@@ -64,13 +64,8 @@ export function GoalResources({ goalId }: { goalId: string }) {
   async function addResource() {
     const cleanUrl = sanitiseExternalUrl(url);
     const cleanTitle = title.trim();
-    if (!cleanUrl || saving) return;
-    if (!/^https?:\/\/\S+\.\S+/i.test(cleanUrl)) {
-      setError('Enter a valid link starting with http:// or https://');
-      return;
-    }
-    if (cleanUrl.length > 2048) {
-      setError('That link is too long (maximum 2048 characters).');
+    if (!cleanUrl || saving) {
+      if (!cleanUrl && url.trim()) setError('Only safe http:// or https:// links are allowed.');
       return;
     }
     setSaving(true);
