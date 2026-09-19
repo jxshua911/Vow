@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FF000000" android:pathData="M25,28 L32,22 L78,54 L32,86 L25,80 L64,54 Z" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- VOW launcher mark: the exact > symbol isolated from the supplied >OW wordmark -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M32,29 L32,38.32 L65.93,54 L32.15,69.83 L32,79 L76,58.73 L76,49.27 Z" />
+
 </vector>
