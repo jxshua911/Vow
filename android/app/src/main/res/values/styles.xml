@@ -14,10 +14,12 @@
         <item name="android:background">@null</item>
     </style>
 
-    <!-- Android 12+ requires a starting window, but VOW must not show a second logo here. -->
+    <!-- Android 12+ starting window. Use the actual VOW wordmark rather than a
+         transparent placeholder so the launch transition never appears blank. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/vow_icon_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/vow_empty_splash</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_vow_splash</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/vow_icon_background</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
