@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link2, Trash2 } from '@/lib/ui-icons';
 import { supabase } from '@/lib/supabase';
+import { sanitiseExternalUrl } from '@/lib/urlSafety';
 
 type GoalResource = {
   id: string;
@@ -37,7 +38,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
   const [error, setError] = useState('');
 
   async function signedDisplayUrl(urlValue: string) {
-    if (!urlValue.startsWith('storage://')) return urlValue;
+    if (!urlValue.startsWith('storage://')) return sanitiseExternalUrl(urlValue) || '';
     const { data } = await supabase.storage.from('goal-resources').createSignedUrl(urlValue.slice('storage://'.length), 60 * 60);
     return data?.signedUrl || '';
   }
@@ -61,7 +62,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
   }, [goalId]);
 
   async function addResource() {
-    const cleanUrl = url.trim();
+    const cleanUrl = sanitiseExternalUrl(url);
     const cleanTitle = title.trim();
     if (!cleanUrl || saving) return;
     if (!/^https?:\/\/\S+\.\S+/i.test(cleanUrl)) {
