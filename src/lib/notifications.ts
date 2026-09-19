@@ -1,19 +1,23 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type PermissionStatus } from '@capacitor/local-notifications';
+import { supabase } from '@/lib/supabase';
 import type { Session } from '@/types/database';
 
 export type NotificationPermission = PermissionStatus['display'];
 export type NotificationPreferences = { sound: true; vibration: true };
 
-const CHANNEL_ID = 'vow-reminders-default-v3';
+const CHANNEL_ID = 'vow-reminders-default-v4';
 const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
 const PREF_KEY = 'vow:notification-preferences';
 const DEFAULT_PREFERENCES: NotificationPreferences = { sound: true, vibration: true };
 
-/** VOW reminders intentionally use one sensible Android channel: sound + vibration on. */
 export function getNotificationPreferences(): NotificationPreferences {
   try {
-    localStorage.setItem(PREF_KEY, JSON.stringify(DEFAULT_PREFERENCES));
+    const stored = localStorage.getItem(PREF_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<NotificationPreferences>;
+      return { sound: true, vibration: true, ...parsed };
+    }
   } catch {
     // Notification delivery should not depend on localStorage being available.
   }
@@ -60,7 +64,17 @@ export async function scheduleReminder(id: number, title: string, body: string, 
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
   if (await getNotificationPermission() !== 'granted') return;
   await setupNotifications();
-  await LocalNotifications.schedule({ notifications: [{ id, title, body, channelId: CHANNEL_ID, smallIcon: VOW_NOTIFICATION_ICON, schedule: { at, allowWhileIdle: true } }] });
+  await LocalNotifications.schedule({
+    notifications: [{
+      id,
+      title,
+      body,
+      channelId: CHANNEL_ID,
+      smallIcon: VOW_NOTIFICATION_ICON,
+      sound: 'default',
+      schedule: { at, allowWhileIdle: true },
+    }],
+  });
 }
 
 export async function cancelReminder(id: number): Promise<void> {
@@ -76,6 +90,20 @@ function notificationId(sessionId: string): number {
 
 export async function syncUpcomingSessionNotifications(sessions: Session[]): Promise<void> {
   if (!Capacitor.isNativePlatform() || await getNotificationPermission() !== 'granted') return;
+  await setupNotifications();
   const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now());
   await Promise.all(upcoming.map((session) => scheduleReminder(notificationId(session.id), `VOW · ${session.title}`, `${session.duration_minutes} min commitment. This is the time you set aside for it.`, new Date(session.scheduled_at))));
+}
+
+export async function syncUserUpcomingSessionNotifications(userId: string): Promise<void> {
+  if (!Capacitor.isNativePlatform() || await getNotificationPermission() !== 'granted') return;
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'scheduled')
+    .gte('scheduled_at', new Date().toISOString())
+    .order('scheduled_at', { ascending: true });
+  if (error) throw error;
+  await syncUpcomingSessionNotifications((data || []) as Session[]);
 }

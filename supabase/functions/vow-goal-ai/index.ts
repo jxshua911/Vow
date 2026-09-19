@@ -194,7 +194,7 @@ async function releaseGuardrail(req: Request, requestId: string) {
   if (error) console.warn("AI guardrail release failed", error.message);
 }
 
-async function ai(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
   const requestId = await claimGuardrail(req);
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) {
@@ -224,11 +224,19 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX) {
     });
     const raw = await r.text();
     if (!r.ok) {
-      console.error("Groq", r.status, raw.slice(0, 1200));
+      console.error("Groq provider error", { status: r.status });
       if (r.status === 429) throw new Error("GROQ_429");
       throw new Error(`GROQ_PROVIDER_ERROR_${r.status}`);
     }
-    const content = JSON.parse(raw)?.choices?.[0]?.message?.content;
+    const payload = JSON.parse(raw);
+    const message = payload?.choices?.[0]?.message;
+    const executedTools = Array.isArray(message?.executed_tools) ? message.executed_tools : [];
+    const usedWebSearch = executedTools.some((tool: any) =>
+      JSON.stringify(tool).toLowerCase().includes("web_search")
+    );
+    if (researchRequired && !usedWebSearch)
+      throw new Error("AI_RESEARCH_NOT_PERFORMED");
+    const content = message?.content;
     if (typeof content !== "string" || !content.trim())
       throw new Error("GROQ_EMPTY_RESPONSE");
     return parse(content);
@@ -333,6 +341,16 @@ Deno.serve(async (req) => {
         : "chat";
     const g = p?.goal || {};
     const domain = g?.domain && typeof g.domain === "object" ? g.domain : {};
+    const { data: userSettings } = await client(req)
+      .from("user_settings")
+      .select("preferred_language")
+      .eq("user_id", uid)
+      .maybeSingle();
+    const preferredLanguage =
+      typeof userSettings?.preferred_language === "string" &&
+      userSettings.preferred_language.trim()
+        ? userSettings.preferred_language.trim().slice(0, 16)
+        : "en";
     const message0 = str(p?.message, 3000);
     if (mode !== "chat" && !str(g?.title || g?.outcome, 300))
       return json(
@@ -398,6 +416,7 @@ Deno.serve(async (req) => {
       .filter(Boolean)
       .join(" ");
     const knowledge = await searchKnowledge(knowledgeQuery);
+    const researchRequired = domain?.needs_ai_research === true;
     const context = {
       goal: {
         title: str(g?.title || g?.outcome, 300),
@@ -410,6 +429,7 @@ Deno.serve(async (req) => {
       },
       answers,
       references: refs,
+      preferred_language: preferredLanguage,
       knowledge,
     };
     if (mode === "goal-clarify") {
@@ -419,11 +439,12 @@ Deno.serve(async (req) => {
           [
             {
               role: "system",
-              content: `You are VOW's specialist goal-discovery researcher. Use the supplied VOW knowledge base and domain profile as your first planning reference. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string}. Ask high-value questions that resolve the most important missing inputs for this exact domain. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
+              content: `You are VOW's specialist goal-discovery researcher. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Use the supplied VOW knowledge base and domain profile as your first planning reference. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string}. Ask high-value questions that resolve the most important missing inputs for this exact domain. If AI research is required, you MUST use the built-in web_search tool before deciding what an ambiguous abbreviation, event, competition, slang term, or specialist phrase means. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
             },
             { role: "user", content: JSON.stringify({ message, ...context }) },
           ],
-          "clarify"
+          "clarify",
+          researchRequired
         );
       } catch (e) {
         console.warn("clarify AI error", e);
@@ -452,13 +473,14 @@ Deno.serve(async (req) => {
           [
             {
               role: "system",
-              content: `You are VOW's expert planning and research engine. Build the best practical plan for the exact goal. The VOW knowledge base and domain profile are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. If a required input is genuinely missing, return JSON with clarification_needed:true and questions instead of a generic plan. Never fill missing personal context with boilerplate. Return a references array only for genuinely relevant public resources, preferably a useful YouTube resource when one materially helps the exact goal and level. Duration (${w} weeks) and available days (${ds.join(
+              content: `You are VOW's expert planning and research engine. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base and domain profile are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. If AI research is required, you MUST perform at least one web_search before selecting or finalising the specialist domain; do not guess what an abbreviation, event, competition, slang term, or specialist phrase means. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. If a required input is genuinely missing, return JSON with clarification_needed:true and questions instead of a generic plan. Never fill missing personal context with boilerplate. Return a references array only for genuinely relevant public resources, preferably a useful YouTube resource when one materially helps the exact goal and level. Duration (${w} weeks) and available days (${ds.join(
                 ", "
               )}) are HARD constraints. Follow-up answers are HARD personal context. Domain profile: ${JSON.stringify(domain)}. Return ONLY JSON with outcome, success_metric, baseline, assumptions, milestones (2-8 objects with title,description,week), session_templates (one object per selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), weekly_focus (one string per week), progression, checkpoints (3-8), risks (3-8), fallback_rules (2-6), summary, references (0-4 objects with url,title,resource_type). Make the plan genuinely domain-specific. Do not invent specialist claims when the knowledge/research does not support them. For each selected day, choose a distinct high-value session/task when the domain supports it. Every week must meaningfully progress toward the outcome.`,
             },
             { role: "user", content: JSON.stringify({ message, ...context }) },
           ],
-          "plan"
+          "plan",
+          researchRequired
         );
       } catch (e) {
         console.warn("plan AI failed", e);
@@ -520,11 +542,12 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You are VOW AI. Answer helpfully and briefly. Use the supplied VOW knowledge base first, then web research when current or specialist information would improve the answer.",
+              "You are VOW AI, a multilingual coaching assistant. The user's selected language code is " + preferredLanguage + ". Understand the user's actual input language and respond naturally in that language unless the user explicitly asks for another. Do not fail because the user writes in French, Turkish, Greek, Swahili, Arabic, or another language. Use the supplied VOW knowledge base first, then web research when current or specialist information would improve the answer. Preserve user privacy and never reveal internal user data.",
           },
           { role: "user", content: JSON.stringify({ message, ...context }) },
         ],
-        "chat"
+        "chat",
+        false
       );
     } catch (e) {
       console.warn("chat AI failed", e);
@@ -546,16 +569,36 @@ Deno.serve(async (req) => {
       m === "AI_USER_MONTHLY_LIMIT" ||
       m === "AI_GLOBAL_DAILY_BUDGET" ||
       m === "AI_GLOBAL_MONTHLY_BUDGET";
+    const telemetryCode =
+      blocked
+        ? m
+        : [
+            "GROQ_429",
+            "AI_USAGE_CHECK_FAILED",
+            "AI_GUARDRAIL_CHECK_FAILED",
+            "AI_CONCURRENCY_LIMIT",
+            "AI_USER_DAILY_LIMIT",
+            "AI_USER_MONTHLY_LIMIT",
+            "AI_GLOBAL_DAILY_BUDGET",
+            "AI_GLOBAL_MONTHLY_BUDGET",
+            "ENTITLEMENT_CHECK_FAILED",
+            "GROQ_API_KEY_MISSING",
+            "AI_RESEARCH_NOT_PERFORMED",
+            "GROQ_EMPTY_RESPONSE",
+            "INVALID_AI_JSON",
+          ].includes(m)
+          ? m
+          : "AI_REQUEST_FAILED";
     if (uid) {
       await record(
         req,
         telemetryMode,
         blocked ? "blocked" : "error",
         Date.now() - startedAt,
-        m
+        telemetryCode
       );
     }
-    console.error("vow-goal-ai", { mode, message: m });
+    console.error("vow-goal-ai", { mode, error_code: telemetryCode });
     if (m === "GROQ_429")
       return json(
         { error: "VOW AI is temporarily busy. Please try again shortly." },
@@ -569,6 +612,8 @@ Deno.serve(async (req) => {
       );
     if (m === "AI_GUARDRAIL_CHECK_FAILED")
       return json({ error: "VOW AI safety controls could not be checked. Please try again." }, 503);
+    if (m === "AI_RESEARCH_NOT_PERFORMED")
+      return json({ error: "VOW AI could not verify an ambiguous goal term with live research. Please try again." }, 503);
     if (m === "AI_CONCURRENCY_LIMIT")
       return json({ error: "VOW AI is already processing another request for you. Please wait a moment." }, 429, { "Retry-After": "15" });
     if (m === "AI_USER_DAILY_LIMIT" || m === "AI_USER_MONTHLY_LIMIT")
