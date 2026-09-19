@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M5,4 L6.8,2.5 L19,12 L6.8,21.5 L5,20 L14.9,12 Z" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Monochrome layer for Android themed launcher icons -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M32,29 L32,38.32 L65.93,54 L32.15,69.83 L32,79 L76,58.73 L76,49.27 Z" />
+
 </vector>
