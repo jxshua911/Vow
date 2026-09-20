@@ -33,8 +33,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setLoading(false);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => { setSession(sess); setDisplayName(getDisplayName(sess)); setLoading(false); });
-    return () => { active = false; listener.subscription.unsubscribe(); };
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+      setDisplayName(getDisplayName(sess));
+      setLoading(false);
+    });
+
+    const handleNativeOAuthSuccess = () => {
+      void supabase.auth.getSession().then(({ data, error }) => {
+        if (error) {
+          console.error('[VOW] Failed to refresh session after Google callback:', error);
+          return;
+        }
+        if (!active) return;
+        setSession(data.session);
+        setDisplayName(getDisplayName(data.session));
+        setLoading(false);
+      });
+    };
+
+    window.addEventListener('vow:oauth-success', handleNativeOAuthSuccess);
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+      window.removeEventListener('vow:oauth-success', handleNativeOAuthSuccess);
+    };
   }, []);
   async function updateDisplayName(name: string) {
     const next = name.trim();
