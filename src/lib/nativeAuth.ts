@@ -6,6 +6,7 @@ export const NATIVE_OAUTH_REDIRECT = 'com.vow.app://callback';
 export const NATIVE_CALENDAR_REDIRECT = 'com.vow.app://calendar-callback';
 
 export async function initNativeAuthListener() {
+  const processedCodes = new Set<string>();
   const listener = await App.addListener('appUrlOpen', async ({ url }) => {
     if (!url.startsWith(NATIVE_OAUTH_REDIRECT) && !url.startsWith(NATIVE_CALENDAR_REDIRECT)) return;
 
@@ -45,6 +46,9 @@ export async function initNativeAuthListener() {
         return;
       }
 
+      if (processedCodes.has(code)) return;
+      processedCodes.add(code);
+
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
         console.error('[VOW OAuth] Failed to exchange code for session:', error);
@@ -52,6 +56,16 @@ export async function initNativeAuthListener() {
         return;
       }
 
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        console.error('[VOW OAuth] Code exchange completed but no session was restored:', sessionError);
+        window.dispatchEvent(new CustomEvent('vow:oauth-error', {
+          detail: 'Google sign-in completed, but VOW could not restore the session. Please try again.',
+        }));
+        return;
+      }
+
+      window.dispatchEvent(new CustomEvent('vow:oauth-success'));
       console.log('[VOW OAuth] Session established successfully.');
     } catch (error) {
       console.error('[VOW OAuth] Callback handling failed:', error);
