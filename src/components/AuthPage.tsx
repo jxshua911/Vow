@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabase';
@@ -17,6 +17,24 @@ export function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const handleOAuthSuccess = () => {
+      setLoading(false);
+      setError(null);
+      setMessage('Google sign-in completed. Loading your VOW account…');
+    };
+    const handleOAuthError = (event: Event) => {
+      setLoading(false);
+      setError((event as CustomEvent<string>).detail || 'Google sign-in failed. Please try again.');
+    };
+    window.addEventListener('vow:oauth-success', handleOAuthSuccess);
+    window.addEventListener('vow:oauth-error', handleOAuthError);
+    return () => {
+      window.removeEventListener('vow:oauth-success', handleOAuthSuccess);
+      window.removeEventListener('vow:oauth-error', handleOAuthError);
+    };
+  }, []);
 
   function switchMode(next: AuthMode) {
     setMode(next);
