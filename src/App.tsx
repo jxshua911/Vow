@@ -21,6 +21,8 @@ import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
+import { NetworkStatusBanner } from '@/components/NetworkStatusBanner';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 
 const SPLASH_MIN_MS = 2000;
 const SPLASH_FADE_OUT_MS = 500;
@@ -166,8 +168,8 @@ function AppContent() {
     {view === 'profile' && <ProfilePage onLegal={() => navigate('legal')} onUpgrade={() => navigate('upgrade')} />}
     {view === 'upgrade' && <UpgradePage />}
   </AppShell>;
-  return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</LanguageContext.Provider>;
+  return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}><NetworkStatusBanner />{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</LanguageContext.Provider>;
 }
 
 function AppLoading() { return <div className="min-h-screen bg-vow-bg flex items-center justify-center" aria-label="Loading"><div className="vow-loading-dots"><span /><span /><span /></div></div>; }
-export default function App() { return <ThemeProvider><AuthProvider><AppContent /></AuthProvider></ThemeProvider>; }
+export default function App() { return <AppErrorBoundary><ThemeProvider><AuthProvider><AppContent /></AuthProvider></ThemeProvider></AppErrorBoundary>; }
