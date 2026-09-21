@@ -8,21 +8,22 @@ type Billing = 'monthly' | 'yearly';
 
 const premiumBenefits = [
   'Unlimited active goals',
-  'Unlimited planning actions',
-  'Unlimited adaptive plan rebuilding',
-  'Deeper AI coaching and planning',
-  'Goal-specific planning methodology',
+  'Unlimited planning actions, within reasonable service limits',
+  'Unlimited adaptive plan rebuilding, within reasonable service limits',
+  'Deeper AI coaching, planning and analysis',
+  'Full goal-specific planning methodology',
   'Advanced weekly review insights',
-  'Full plan history',
+  'Full plan history and long-term context',
 ];
 
 const freeBenefits = [
   '1 active goal',
   'Personalised plan with milestones',
   'Scheduled sessions and progress tracking',
-  '10 planning actions/month',
+  '3 planning actions/month',
   '1 adaptive replan/month',
   '1 advanced weekly review/month',
+  'Limited access to recently cached VOW content offline',
 ];
 
 function UsageBar({ label, used, limit }: { label: string; used: number; limit: number }) {
@@ -77,7 +78,7 @@ export function UpgradePage() {
       <p className="vow-label mb-2">Your current usage</p>
       <h2 className="vow-heading text-2xl text-vow-ink mb-5">See what Premium changes.</h2>
       <div className="grid md:grid-cols-3 gap-3">
-        <UsageBar label="Planning actions this month" used={usage.planning_used} limit={usage.planning_limit ?? 10} />
+        <UsageBar label="Planning actions this month" used={usage.planning_used} limit={usage.planning_limit ?? 3} />
         <UsageBar label="Adaptive replans" used={usage.adaptive_replans_used} limit={usage.adaptive_replans_limit ?? 1} />
         <div className="border border-vow-border rounded-xl p-4"><div className="flex justify-between gap-4 text-xs"><span className="text-vow-muted">Active goals</span><span className="text-vow-ink">{usage.active_goals}/1</span></div><p className="text-xs text-vow-muted mt-2">Premium removes the one-goal ceiling.</p></div>
       </div>
@@ -127,25 +128,22 @@ export function UpgradePage() {
         <div className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] bg-vow-surface/30 text-xs font-medium text-vow-ink">
           <div className="p-3">Feature</div><div className="p-3 text-center">Free</div><div className="p-3 text-center">Premium</div>
         </div>
-        <div key="1 active goal" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
-          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">✓</div><div className="p-3 text-center text-vow-ink">Unlimited</div>
-        </div><div key="Planning actions" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
-          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">10 / month</div><div className="p-3 text-center text-vow-ink">Unlimited</div>
-        </div><div key="Adaptive replanning" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
-          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">1 / month</div><div className="p-3 text-center text-vow-ink">Unlimited</div>
-        </div><div key="Advanced weekly review" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
-          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">1 / month</div><div className="p-3 text-center text-vow-ink">Unlimited</div>
-        </div><div key="Goal-specific methodology" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
-          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">✓</div><div className="p-3 text-center text-vow-ink">✓</div>
-        </div><div key="Scheduled sessions & tracking" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
-          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">✓</div><div className="p-3 text-center text-vow-ink">✓</div>
-        </div><div key="Full plan history" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
-          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">—</div><div className="p-3 text-center text-vow-ink">✓</div>
-        </div><div key="Offline cached saved data" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
-          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">✓</div><div className="p-3 text-center text-vow-ink">✓</div>
-        </div>
+        {[
+          ['Active goals', '1 active', 'Unlimited'],
+          ['AI planning actions', '3 / month', 'Unlimited*'],
+          ['Adaptive replanning', '1 / month', 'Unlimited*'],
+          ['Advanced weekly reviews', '1 / month', 'Unlimited*'],
+          ['Goal-specific methodology', 'Core', 'Full'],
+          ['Scheduled sessions & tracking', '✓', '✓'],
+          ['Journal & calendar', '✓', '✓'],
+          ['Full plan history', 'Limited', '✓'],
+          ['Deep AI analysis', '—', '✓'],
+          ['Recently cached content offline', 'Limited', 'Expanded'],
+        ].map(([feature, free, premium]) => <div key={feature} className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">{free}</div><div className="p-3 text-center text-vow-ink">{premium}</div>
+        </div>)}
       </div>
-      <p className="text-xs text-vow-muted mt-4">Offline caching lets both plans reopen data already saved on this device. AI actions, cloud sync and Google-connected services still require a connection.</p>
+      <p className="text-xs text-vow-muted mt-4">* Premium removes the product quota, but all AI use remains subject to VOW's abuse-prevention and service rate limits. Cached content is for resilience: AI actions, cloud sync and Google-connected services still require a connection.</p>
     </section>
 
     <section className="border-t border-vow-border pt-7"><p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Built for real goals</p><p className="text-sm text-vow-muted leading-relaxed max-w-2xl">Run a 10K. Make ravioli. Learn Spanish. Build a robot. Pass your exams. Launch an app. VOW Premium is about the planning intelligence underneath the goal — not the category itself.</p></section>
