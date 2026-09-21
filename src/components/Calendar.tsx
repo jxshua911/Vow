@@ -7,6 +7,7 @@ import type { Session } from '@/types/database';
 import { formatTime, toDateString } from '@/lib/dates';
 import { PageHeader } from './AppShell';
 import { NATIVE_CALENDAR_REDIRECT } from '@/lib/nativeAuth';
+import { readCache, writeCache } from '@/lib/cache';
 
 type CalendarEvent = { id: string; summary?: string; description?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } };
 type CalendarMode = 'month' | 'week';
@@ -44,7 +45,7 @@ export function CalendarPage() {
   const createPanelRef = useRef<HTMLDivElement | null>(null);
   const routineInputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const loadSessions = useCallback(async () => { if (!authSession) return; const start = new Date(); start.setMonth(start.getMonth() - 2); start.setHours(0,0,0,0); const end = new Date(); end.setMonth(end.getMonth() + 3); end.setHours(23,59,59,999); const { data, error: sessionsError } = await supabase.from('sessions').select('*').eq('user_id', authSession.user.id).gte('scheduled_at', start.toISOString()).lte('scheduled_at', end.toISOString()).order('scheduled_at', { ascending: true }); if (sessionsError) setError(sessionsError.message); else setSessions(data || []); setLoading(false); }, [authSession]);
+  const loadSessions = useCallback(async () => { if (!authSession) return; const userId = authSession.user.id; const cacheKey = `calendar:sessions:${userId}`; const cached = await readCache<Session[]>(cacheKey, userId); if (cached?.value) { setSessions(cached.value); setLoading(false); } const start = new Date(); start.setMonth(start.getMonth() - 2); start.setHours(0,0,0,0); const end = new Date(); end.setMonth(end.getMonth() + 3); end.setHours(23,59,59,999); const { data, error: sessionsError } = await supabase.from('sessions').select('*').eq('user_id', userId).gte('scheduled_at', start.toISOString()).lte('scheduled_at', end.toISOString()).order('scheduled_at', { ascending: true }); if (sessionsError) { setError(sessionsError.message); } else if (data) { setSessions(data); void writeCache(cacheKey, userId, data); } setLoading(false); }, [authSession]);
   const checkGoogleConnection = useCallback(async () => { if (!authSession) return; try { const { data } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'status' } }); setGoogleConnected(Boolean(data?.connected)); } catch { setGoogleConnected(false); } }, [authSession]);
   const loadGoogleEvents = useCallback(async () => { if (!authSession || !googleConnected) return; setGoogleLoading(true); try { const start = new Date(); start.setMonth(start.getMonth() - 1); start.setHours(0,0,0,0); const end = new Date(); end.setMonth(end.getMonth() + 3); end.setHours(23,59,59,999); const { data, error: functionError } = await supabase.functions.invoke('google-calendar-events', { body: { action: 'list', timeMin: start.toISOString(), timeMax: end.toISOString() } }); if (functionError) throw functionError; const events = data?.events || []; setGoogleEvents(events); localStorage.setItem(CACHE_KEY, JSON.stringify(events)); } catch (err) { setError(err instanceof Error ? err.message : 'Could not sync Google Calendar.'); } finally { setGoogleLoading(false); } }, [authSession, googleConnected]);
   useEffect(() => { loadSessions(); checkGoogleConnection(); }, [loadSessions, checkGoogleConnection]);
