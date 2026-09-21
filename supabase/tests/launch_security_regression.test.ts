@@ -40,3 +40,5 @@ Deno.test("destructive account deletion requires recent authentication", async (
   assertMatch(fn, /15 \* 60 \* 1000/);
   assertMatch(fn, /auth\.admin\.deleteUser/);
 });
+
+// Launch regression suite is intentionally deterministic and local-only.
