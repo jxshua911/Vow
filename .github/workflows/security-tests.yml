@@ -4,7 +4,15 @@ on:
   push:
     branches:
       - fix/apk-blank-screen
+      - fix/auth-content-offline-hardening
       - capacitor-mobile
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/tests/**'
+      - 'supabase/migrations/**'
+      - 'src/lib/urlSafety.ts'
+      - 'src/components/GoalResources.tsx'
+  pull_request:
     paths:
       - 'supabase/functions/**'
       - 'supabase/tests/**'
