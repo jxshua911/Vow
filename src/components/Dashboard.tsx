@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
 import { isThisWeek, formatTime, formatRelative, dayName } from '@/lib/dates';
 import { PageHeader } from './AppShell';
+import { readCache, writeCache } from '@/lib/cache';
 import type { View } from './AppShell';
 
 interface DashboardProps { onNavigate: (view: View) => void; }
@@ -16,12 +17,27 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   const load = useCallback(async () => {
     if (!session) return;
-    const [goalsRes, sessionsRes] = await Promise.all([
-      supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
-      supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true }),
+    const userId = session.user.id;
+    const [goalCache, sessionCache] = await Promise.all([
+      readCache<Goal[]>(`dashboard:goals:${userId}`, userId),
+      readCache<Session[]>(`dashboard:sessions:${userId}`, userId),
     ]);
-    setGoals(goalsRes.data || []);
-    setSessions(sessionsRes.data || []);
+    if (goalCache?.value) setGoals(goalCache.value);
+    if (sessionCache?.value) setSessions(sessionCache.value);
+    if (goalCache?.value || sessionCache?.value) setLoading(false);
+
+    const [goalsRes, sessionsRes] = await Promise.all([
+      supabase.from('goals').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+      supabase.from('sessions').select('*').eq('user_id', userId).order('scheduled_at', { ascending: true }),
+    ]);
+    if (goalsRes.data) {
+      setGoals(goalsRes.data);
+      void writeCache(`dashboard:goals:${userId}`, userId, goalsRes.data);
+    }
+    if (sessionsRes.data) {
+      setSessions(sessionsRes.data);
+      void writeCache(`dashboard:sessions:${userId}`, userId, sessionsRes.data);
+    }
     setLoading(false);
   }, [session]);
 
