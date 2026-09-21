@@ -8,6 +8,7 @@ import { GoalPlanner } from './GoalPlanner';
 import { GoalResources } from './GoalResources';
 import { GoalReferenceList } from './GoalReferenceList';
 import { Plus, Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from '@/lib/ui-icons';
+import { readCache, writeCache } from '@/lib/cache';
 
 export function GoalsPage() {
   const { session } = useAuth();
@@ -17,8 +18,18 @@ export function GoalsPage() {
   const [loading, setLoading] = useState(true);
   const loadGoals = useCallback(async () => {
     if (!session) return;
-    const { data } = await supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
-    setGoals(data || []); setLoading(false);
+    const userId = session.user.id;
+    const cached = await readCache<Goal[]>(`goals:list:${userId}`, userId);
+    if (cached?.value) {
+      setGoals(cached.value);
+      setLoading(false);
+    }
+    const { data } = await supabase.from('goals').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    if (data) {
+      setGoals(data);
+      void writeCache(`goals:list:${userId}`, userId, data);
+    }
+    setLoading(false);
   }, [session]);
   useEffect(() => { loadGoals(); }, [loadGoals]);
 
