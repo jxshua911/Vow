@@ -36,6 +36,9 @@ async function worker() {
       if (response.ok) {
         successes++;
         console.log(`#${index + 1} ${response.status} ${elapsed}ms`);
+      } else if (response.status === 429 || response.status === 503) {
+        // Expected under deliberate concurrency/budget pressure: the server is protecting the provider.
+        console.log(`#${index + 1} protected ${response.status} ${elapsed}ms`);
       } else {
         failures++;
         console.log(`#${index + 1} ${response.status} ${elapsed}ms`);
