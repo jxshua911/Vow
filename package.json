@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:ai-load": "node scripts/ai-load-test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
