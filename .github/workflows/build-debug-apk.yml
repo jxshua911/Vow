@@ -5,6 +5,7 @@ on:
     branches:
       - capacitor-mobile
       - fix/apk-blank-screen
+      - fix/auth-content-offline-hardening
   workflow_dispatch: {}
 
 permissions:
