@@ -120,6 +120,34 @@ export function UpgradePage() {
       {manageState && <p role="alert" className="text-xs text-vow-muted mt-3">{manageState}</p>}
     </section>
 
+    <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
+      <p className="vow-label mb-2">Free vs Premium</p>
+      <h2 className="vow-heading text-2xl text-vow-ink mb-5">What you get at each level.</h2>
+      <div className="border border-vow-border rounded-xl overflow-hidden">
+        <div className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] bg-vow-surface/30 text-xs font-medium text-vow-ink">
+          <div className="p-3">Feature</div><div className="p-3 text-center">Free</div><div className="p-3 text-center">Premium</div>
+        </div>
+        <div key="1 active goal" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">✓</div><div className="p-3 text-center text-vow-ink">Unlimited</div>
+        </div><div key="Planning actions" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">10 / month</div><div className="p-3 text-center text-vow-ink">Unlimited</div>
+        </div><div key="Adaptive replanning" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">1 / month</div><div className="p-3 text-center text-vow-ink">Unlimited</div>
+        </div><div key="Advanced weekly review" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">1 / month</div><div className="p-3 text-center text-vow-ink">Unlimited</div>
+        </div><div key="Goal-specific methodology" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">✓</div><div className="p-3 text-center text-vow-ink">✓</div>
+        </div><div key="Scheduled sessions & tracking" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">✓</div><div className="p-3 text-center text-vow-ink">✓</div>
+        </div><div key="Full plan history" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">—</div><div className="p-3 text-center text-vow-ink">✓</div>
+        </div><div key="Offline cached saved data" className="grid grid-cols-[1fr_5rem_5rem] md:grid-cols-[1fr_8rem_8rem] border-t border-vow-border text-xs">
+          <div className="p-3 text-vow-muted">{feature}</div><div className="p-3 text-center text-vow-ink">✓</div><div className="p-3 text-center text-vow-ink">✓</div>
+        </div>
+      </div>
+      <p className="text-xs text-vow-muted mt-4">Offline caching lets both plans reopen data already saved on this device. AI actions, cloud sync and Google-connected services still require a connection.</p>
+    </section>
+
     <section className="border-t border-vow-border pt-7"><p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Built for real goals</p><p className="text-sm text-vow-muted leading-relaxed max-w-2xl">Run a 10K. Make ravioli. Learn Spanish. Build a robot. Pass your exams. Launch an app. VOW Premium is about the planning intelligence underneath the goal — not the category itself.</p></section>
 
     {confirmCancel && <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-premium-title">
