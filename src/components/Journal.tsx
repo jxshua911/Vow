@@ -5,6 +5,7 @@ import type { JournalEntry, Goal } from '@/types/database';
 import { formatDateLong } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
 import { Link2, Trash2, X } from '@/lib/ui-icons';
+import { readCache, writeCache } from '@/lib/cache';
 
 function Modal({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
   return <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-label={title}><div className="bg-vow-bg border border-vow-border p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto"><div className="flex items-center justify-between mb-6"><h2 className="vow-heading text-lg text-vow-ink">{title}</h2><button type="button" onClick={onClose} className="text-vow-muted hover:text-vow-ink" aria-label="Close"><X className="w-4 h-4" /></button></div>{children}</div></div>;
@@ -18,11 +19,28 @@ export function JournalPage({ embedded = false }: { embedded?: boolean }) {
   const [showCompose, setShowCompose] = useState(false);
   const load = useCallback(async () => {
     if (!session) return;
-    const [entriesRes, goalsRes] = await Promise.all([
-      supabase.from('journal_entries').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
-      supabase.from('goals').select('*').eq('user_id', session.user.id).in('status', ['active', 'locked', 'completed']).order('created_at', { ascending: false }),
+    const userId = session.user.id;
+    const [entryCache, goalCache] = await Promise.all([
+      readCache<JournalEntry[]>(`journal:entries:${userId}`, userId),
+      readCache<Goal[]>(`journal:goals:${userId}`, userId),
     ]);
-    setEntries(entriesRes.data || []); setGoals(goalsRes.data || []); setLoading(false);
+    if (entryCache?.value) setEntries(entryCache.value);
+    if (goalCache?.value) setGoals(goalCache.value);
+    if (entryCache?.value || goalCache?.value) setLoading(false);
+
+    const [entriesRes, goalsRes] = await Promise.all([
+      supabase.from('journal_entries').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+      supabase.from('goals').select('*').eq('user_id', userId).in('status', ['active', 'locked', 'completed']).order('created_at', { ascending: false }),
+    ]);
+    if (entriesRes.data) {
+      setEntries(entriesRes.data);
+      void writeCache(`journal:entries:${userId}`, userId, entriesRes.data);
+    }
+    if (goalsRes.data) {
+      setGoals(goalsRes.data);
+      void writeCache(`journal:goals:${userId}`, userId, goalsRes.data);
+    }
+    setLoading(false);
   }, [session]);
   useEffect(() => { load(); }, [load]);
   async function handleDelete(id: string) { if (!confirm('Delete this journal entry? This cannot be undone.')) return; await supabase.from('journal_entries').delete().eq('id', id); load(); }
