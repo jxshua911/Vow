@@ -34,4 +34,4 @@ jobs:
         with:
           deno-version: v2.x
       - name: Run media upload security regression tests
-        run: deno test --no-check supabase/tests/
+        run: deno test --no-check --allow-read supabase/tests/
