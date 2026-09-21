@@ -51,7 +51,12 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const [languageSaving, setLanguageSaving] = useState(false);
   const [languageMessage, setLanguageMessage] = useState('');
 
-  useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
+  useEffect(() => {
+    void getNotificationPermission().then(setNotificationStatus);
+    const refresh = () => { void getNotificationPermission().then(setNotificationStatus); };
+    window.addEventListener('vow:notification-status-refresh', refresh);
+    return () => window.removeEventListener('vow:notification-status-refresh', refresh);
+  }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
   useEffect(() => { getEntitlementSnapshot().then(snapshot => setPremium(Boolean(snapshot && snapshot.plan === 'premium'))).catch(() => setPremium(false)); }, []);
 
@@ -60,6 +65,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     try {
       const status = await requestNotificationPermission();
       setNotificationStatus(status);
+      window.dispatchEvent(new Event('vow:notification-status-refresh'));
       if (status === 'granted' && session) {
         const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
         if (data) await syncUpcomingSessionNotifications(data);
@@ -112,7 +118,11 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     setDeleting(true); setDeleteError('');
     const { data, error } = await supabase.functions.invoke('vow-account-delete', { body: { confirm: true } });
     if (error || !data?.deleted) {
-      setDeleteError(data?.error || error?.message || 'VOW could not complete account deletion.');
+      setDeleteError(
+        data?.error === 'RECENT_AUTH_REQUIRED'
+          ? 'For your security, sign in again before deleting your account.'
+          : data?.error || error?.message || 'VOW could not complete account deletion.'
+      );
       setDeleting(false);
       return;
     }
