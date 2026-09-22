@@ -3,6 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
+import { track } from '@/lib/telemetry';
 import { AuthPage } from '@/components/AuthPage';
 import { Onboarding } from '@/components/Onboarding';
 import { TermsAcceptance, VOW_TERMS_VERSION } from '@/components/TermsAcceptance';
@@ -46,6 +47,7 @@ function AppContent() {
       if (current[current.length - 1] === next) return current;
       const nextHistory = [...current, next];
       viewHistoryRef.current = nextHistory;
+      void track('view_changed', { screen: next });
       return nextHistory;
     });
   }, []);
@@ -55,6 +57,7 @@ function AppContent() {
       if (current.length <= 1) { viewHistoryRef.current = current; return current; }
       const nextHistory = current.slice(0, -1);
       viewHistoryRef.current = nextHistory;
+      void track('view_changed', { screen: nextHistory[nextHistory.length - 1] });
       return nextHistory;
     });
   }, []);
