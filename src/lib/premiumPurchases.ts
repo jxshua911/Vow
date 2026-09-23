@@ -16,6 +16,7 @@ async function accountToken(userId: string) {
 export { VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY };
 
 export async function getPremiumProducts() {
+  if (!VOW_PREMIUM_MONTHLY || !VOW_PREMIUM_YEARLY) return { products: [] };
   return NativePurchases.getProducts({
     productIdentifiers: [VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY],
     productType: PURCHASE_TYPE.SUBS,
@@ -25,6 +26,7 @@ export async function getPremiumProducts() {
 export async function purchasePremium(
   productId: typeof VOW_PREMIUM_MONTHLY | typeof VOW_PREMIUM_YEARLY,
 ) {
+  if (!productId) throw new Error('PREMIUM_NOT_CONFIGURED');
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) throw new Error('UNAUTHORIZED');
 
