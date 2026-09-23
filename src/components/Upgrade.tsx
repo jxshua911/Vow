@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { PageHeader } from './AppShell';
 import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
-import { openPremiumManagement, restorePremium } from '@/lib/premiumPurchases';
+import { getPremiumProducts, openPremiumManagement, purchasePremium, restorePremium } from '@/lib/premiumPurchases';
+import { VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY } from '@/lib/premiumConfig';
 import { userFacingError } from '@/lib/userFacingError';
 
 type Billing = 'monthly' | 'yearly';
@@ -36,10 +37,27 @@ export function UpgradePage() {
   const [restoreState, setRestoreState] = useState('');
   const [manageState, setManageState] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [purchaseState, setPurchaseState] = useState('');
+  const [products, setProducts] = useState<Array<{ identifier: string; price: number; priceString: string }>>([]);
   const isYearly = billing === 'yearly';
   const isPremium = usage?.plan === 'premium';
+  const monthlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_MONTHLY);
+  const yearlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_YEARLY);
+  const selectedProduct = isYearly ? yearlyProduct : monthlyProduct;
+  const annualSavings = monthlyProduct && yearlyProduct && monthlyProduct.price > 0
+    ? Math.max(0, Math.round((1 - yearlyProduct.price / (monthlyProduct.price * 12)) * 100))
+    : null;
 
-  useEffect(() => { getEntitlementSnapshot().then(setUsage); }, []);
+  useEffect(() => {
+    void getEntitlementSnapshot().then(setUsage);
+    void getPremiumProducts().then((result) => {
+      setProducts((result.products || []).map((product) => ({
+        identifier: product.identifier,
+        price: Number(product.price || 0),
+        priceString: product.priceString || '',
+      })));
+    }).catch(() => setProducts([]));
+  }, []);
 
   async function handleRestore() {
     setRestoreState('');
@@ -49,6 +67,18 @@ export function UpgradePage() {
       if (result.restored) setUsage(await getEntitlementSnapshot());
     } catch (err) {
       setRestoreState(userFacingError(err, 'We could not restore your Premium purchase. Please try again.'));
+    }
+  }
+
+  async function handlePurchase() {
+    setPurchaseState('');
+    try {
+      const productId = isYearly ? VOW_PREMIUM_YEARLY : VOW_PREMIUM_MONTHLY;
+      await purchasePremium(productId);
+      setPurchaseState('Premium is now active.');
+      setUsage(await getEntitlementSnapshot());
+    } catch (err) {
+      setPurchaseState(userFacingError(err, 'We could not complete the Premium purchase. Please try again.'));
     }
   }
 
@@ -94,19 +124,19 @@ export function UpgradePage() {
         </div>
         <div className="border border-vow-ink rounded-xl p-5">
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
-          <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? '$71.99' : '$9.99'}</div>
-          <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year · save 40%' : 'per month'}</p>
+          <div className="text-3xl font-medium text-vow-ink mb-1">{selectedProduct?.priceString || 'Price unavailable'}</div>
+          <p className="text-xs text-vow-muted mb-5">{isYearly ? `per year${annualSavings !== null ? ` · save ${annualSavings}%` : ''}` : 'per month'}</p>
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><span aria-hidden="true">✓</span><span>{benefit}</span></div>)}</div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
-        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">$9.99 / month</span></button>
-        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">$71.99 / year · save 40%</span></button>
+        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">{monthlyProduct?.priceString ? `${monthlyProduct.priceString} / month` : 'Current Google Play price'}</span></button>
+        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">{yearlyProduct?.priceString ? `${yearlyProduct.priceString} / year${annualSavings !== null ? ` · save ${annualSavings}%` : ''}` : 'Current Google Play price'}</span></button>
       </div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
-        <p className="text-xs text-vow-muted mt-1">Premium checkout will be enabled for the Android release once the Google Play products and offers are live. The final checkout screen will show the current Play price and renewal terms.
-        <button type="button" disabled className="w-full mt-4 rounded-xl border border-vow-border bg-vow-ink text-vow-bg px-4 py-3.5 opacity-45 cursor-not-allowed">Premium checkout will be available with the Android release.</button>
+        <p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.
+        <button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button>
       </div>}
       {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium is active</p>
@@ -117,6 +147,7 @@ export function UpgradePage() {
         <button type="button" onClick={handleRestore} className="vow-btn-soft">Restore purchase</button>
       </div>
       {restoreState && <p role="status" className="text-xs text-vow-muted mt-3">{restoreState}</p>}
+      {purchaseState && <p role="status" className="text-xs text-vow-muted mt-3">{purchaseState}</p>}
       {manageState && <p role="alert" className="text-xs text-vow-muted mt-3">{manageState}</p>}
     </section>
 
