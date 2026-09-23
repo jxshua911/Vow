@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ArrowRight, ArrowLeft } from '@/lib/ui-icons';
 import { GoalPlanner } from './GoalPlanner';
+import { requestNotificationPermission } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 
 interface OnboardingProps {
@@ -95,7 +96,12 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
         userId={userId}
         initialGoal={rawGoal}
         initialWhy={whyItMatters}
-        onCreated={onComplete}
+        onCreated={async () => {
+          // The plan-creation tap is a user-initiated moment, so Android can
+          // request notification permission without surprising the user later.
+          try { await requestNotificationPermission(); } catch { /* keep onboarding resilient */ }
+          onComplete();
+        }}
         onCancel={onComplete}
       />
     );
