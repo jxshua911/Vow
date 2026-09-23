@@ -443,7 +443,7 @@ export function GoalPlanner({
             resource_type: reference.resource_type,
           }))
         );
-        if (referenceError) throw referenceError;
+        if (referenceError) console.warn('[VOW] Plan references could not be saved:', referenceError.message);
       }
 
       const { data: sessions, error: sessionLoadError } = await supabase
