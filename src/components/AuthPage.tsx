@@ -10,6 +10,21 @@ import { userFacingError } from '@/lib/userFacingError';
 
 type AuthMode = 'signin' | 'signup';
 
+async function isPasswordCompromised(password: string): Promise<boolean> {
+  const data = new TextEncoder().encode(password);
+  const digest = await crypto.subtle.digest('SHA-1', data);
+  const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+  const prefix = hash.slice(0, 5);
+  const suffix = hash.slice(5);
+  const response = await fetch('https://api.pwnedpasswords.com/range/' + prefix, {
+    headers: { 'Add-Padding': 'true' },
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('Password safety check failed');
+  const body = await response.text();
+  return body.split('\n').some((line) => line.trim().toUpperCase().startsWith(suffix + ':'));
+}
+
 export function AuthPage() {
   const [mode, setMode] = useState<AuthMode>('signup');
   const [email, setEmail] = useState('');
@@ -31,6 +46,9 @@ export function AuthPage() {
     setLoading(true);
     try {
       if (mode === 'signup') {
+        if (password.length < 12) throw new Error('Use a password with at least 12 characters.');
+        if (password.length > 128) throw new Error('Use a password with 128 characters or fewer.');
+        if (await isPasswordCompromised(password)) throw new Error('That password has appeared in a known data breach. Please choose a different password.');
         const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password });
         if (signUpError) throw signUpError;
         if (!data.session) setMessage('Check your email to confirm your account, then sign in.');
@@ -93,7 +111,7 @@ export function AuthPage() {
             <label className="vow-label block mb-2" htmlFor="vow-password">Password</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" />
-              <input id="vow-password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="vow-input pl-10" placeholder="At least 6 characters" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} disabled={loading} />
+              <input id="vow-password" type="password" required minLength={mode === 'signup' ? 12 : 1} value={password} onChange={(e) => setPassword(e.target.value)} className="vow-input pl-10" placeholder={mode === 'signup' ? 'At least 12 characters' : 'Your password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} disabled={loading} />
             </div>
           </div>
           {error && <div className="vow-error" role="alert"><span>{error}</span><button type="button" className="vow-error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">×</button></div>}
