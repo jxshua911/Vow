@@ -87,3 +87,12 @@ jobs:
         run: supabase functions deploy vow-embed-knowledge --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Deploy Stripe checkout function
+        run: supabase functions deploy vow-create-checkout --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Stripe webhook function
+        run: supabase functions deploy vow-stripe-webhook --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
