@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 const db=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"",{auth:{persistSession:false,autoRefreshToken:false}});
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json"}});
+type SessionUserRow={user_id:string};
 Deno.serve(async req=>{
   if(req.method!=="POST") return json({error:"POST_REQUIRED"},405);
   try{
@@ -17,7 +18,7 @@ Deno.serve(async req=>{
     const start=new Date(`${weekStart}T00:00:00Z`);const end=new Date(start);end.setUTCDate(end.getUTCDate()+7);
     const {data:users,error}=await db.from("sessions").select("user_id").gte("scheduled_at",start.toISOString()).lt("scheduled_at",end.toISOString()).limit(100000);
     if(error) throw error;
-    const ids=[...new Set((users||[]).map((x:any)=>x.user_id))];
+    const ids=[...new Set(((users||[]) as unknown as SessionUserRow[]).map(x=>x.user_id))];
     let created=0; for(const userId of ids){const {error:e}=await db.rpc("create_raven_weekly_snapshot",{p_user_id:userId,p_week_start:weekStart});if(e)throw e;created++;}
     return json({ok:true,week_start:weekStart,snapshots_created:created});
   }catch(e){return json({error:e instanceof Error?e.message:"SNAPSHOT_FAILED"},500);}
