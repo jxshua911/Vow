@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
     if (!googleResponse.ok) throw new Error("GOOGLE_PURCHASE_LOOKUP_FAILED");
 
     const purchase = await googleResponse.json();
+    if ((purchase.packageName ?? PACKAGE_NAME) !== PACKAGE_NAME) throw new Error("PACKAGE_MISMATCH");
     const lineItem = Array.isArray(purchase.lineItems)
       ? purchase.lineItems.find((item: { productId?: string }) =>
           item.productId === MONTHLY_PRODUCT_ID || item.productId === YEARLY_PRODUCT_ID)
