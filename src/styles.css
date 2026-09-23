@@ -7,7 +7,7 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Cormorant Garamond", Georgia, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  --color-vow-bg: rgb(var(--vow-bg)); --color-vow-ink: rgb(var(--vow-ink)); --color-vow-muted: rgb(var(--vow-muted)); --color-vow-border: rgb(var(--vow-border)); --color-vow-surface: rgb(var(--vow-surface));
+  --color-vow-bg: rgb(var(--vow-bg) / <alpha-value>); --color-vow-ink: rgb(var(--vow-ink) / <alpha-value>); --color-vow-muted: rgb(var(--vow-muted) / <alpha-value>); --color-vow-border: rgb(var(--vow-border) / <alpha-value>); --color-vow-surface: rgb(var(--vow-surface) / <alpha-value>);
 }
 :root { --vow-bg:247 247 245; --vow-ink:17 17 17; --vow-muted:107 107 107; --vow-border:226 226 223; --vow-surface:232 232 228; }
 @layer base {
