@@ -104,8 +104,8 @@ export function UpgradePage() {
         <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">$71.99 / year · save 40%</span></button>
       </div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
-        <p className="text-sm font-medium text-vow-ink">14-day free trial</p>
-        <p className="text-xs text-vow-muted mt-1">Try Premium for 14 days. Your selected plan renews at the displayed price after the trial unless you cancel through Google Play.</p>
+        <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
+        <p className="text-xs text-vow-muted mt-1">Premium checkout will be enabled for the Android release once the Google Play products and offers are live. The final checkout screen will show the current Play price and renewal terms.
         <button type="button" disabled className="w-full mt-4 rounded-xl border border-vow-border bg-vow-ink text-vow-bg px-4 py-3.5 opacity-45 cursor-not-allowed">Premium checkout will be available with the Android release.</button>
       </div>}
       {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
