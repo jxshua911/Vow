@@ -1,0 +1,10 @@
+import { site } from "./site"; import { p, ul, type LegalSection } from "./legal-types";
+export const copyrightIntro=`The VOW application, website, branding, text, graphics and software are the property of ${site.operator}. This page explains permitted use and how to report suspected infringement.`;
+export const copyrightSections:LegalSection[]=[
+{id:"ownership",heading:"1. Ownership",blocks:[p(`© ${site.operator}. All rights reserved. The VOW name, logo, app interface, website content and software are protected by copyright and other intellectual property laws.`)]},
+{id:"permitted-use",heading:"2. Permitted Use",blocks:[p("You may view and use VOW's website and app for personal, non-commercial purposes. You may not reproduce, redistribute, modify or create derivative works from VOW materials without permission, except as permitted by law.") ]},
+{id:"reporting",heading:"3. Reporting Copyright Infringement",blocks:[p("If you believe content available through VOW infringes your copyright, send a notice identifying the copyrighted work, the allegedly infringing material, your contact details, the required good-faith statements and your physical or electronic signature."),p(`Send notices to ${site.privacyEmail} with the subject line "Copyright Notice".`)]},
+{id:"counter",heading:"4. Counter-Notice",blocks:[p("If your material was removed following a notice and you believe the removal was mistaken, you may send a counter-notice to the same address with the required identification, contact details and good-faith statements.") ]},
+{id:"trademarks",heading:"5. Trademarks",blocks:[p("VOW and the VOW logo are marks used by the operator. Third-party names such as Google, Google Play and Strava belong to their respective owners.") ]},
+{id:"contact",heading:"6. Contact",blocks:[ul([`Copyright and privacy: ${site.privacyEmail}`])]}
+];
