@@ -10,7 +10,7 @@ const TABLES=[
   "raven_awards","raven_weekly_snapshots","moderation_appeals","moderation_events","moderation_ip_bans",
   "offline_operations","user_entitlements","vow_user_entitlements","vow_ai_usage","vow_ai_usage_events",
   "vow_ai_request_leases","vow_app_events","vow_payment_events","vow_subscription_records","vow_terms_acceptances",
-  "integration_connections","strava_oauth_states"
+  "integration_connections","google_calendar_connections","strava_connections","strava_oauth_states"
 ] as const;
 
 function admin(){return createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});}
