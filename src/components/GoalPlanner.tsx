@@ -129,13 +129,18 @@ export function GoalPlanner({
   userId,
   onCreated,
   onCancel,
+  initialGoal = '',
+  initialWhy = '',
 }: {
   userId: string;
   onCreated: () => void;
   onCancel: () => void;
+  initialGoal?: string;
+  initialWhy?: string;
 }) {
-  const [rawInput, setRawInput] = useState('');
-  const [why, setWhy] = useState('');
+  const [rawInput, setRawInput] = useState(initialGoal);
+
+  const [why, setWhy] = useState(initialWhy);
   const [durationWeeks, setDurationWeeks] = useState(8);
   const [availableDays, setAvailableDays] = useState<string[]>(['Monday', 'Wednesday', 'Saturday']);
   const [clarification, setClarification] = useState<Clarification | null>(null);
