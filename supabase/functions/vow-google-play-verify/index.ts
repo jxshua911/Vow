@@ -13,6 +13,7 @@ const PACKAGE_NAME = Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME") ?? "com.vow.app";
 const SERVICE_ACCOUNT_JSON = Deno.env.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON") ?? "";
 const MONTHLY_PRODUCT_ID = Deno.env.get("VOW_PREMIUM_MONTHLY_PRODUCT_ID") ?? "";
 const YEARLY_PRODUCT_ID = Deno.env.get("VOW_PREMIUM_YEARLY_PRODUCT_ID") ?? "";
+const MAX_TOKEN_LENGTH = 4096;
 
 type ServiceAccount = {
   client_email: string;
@@ -95,7 +96,8 @@ Deno.serve(async (req) => {
   if (!purchaseToken || !productId || !billingPeriod || !isAllowedProduct(productId, billingPeriod)) {
     return json(400, { error: "INVALID_PRODUCT" });
   }
-  if (purchaseToken.length > 4096) return json(400, { error: "INVALID_PURCHASE_TOKEN" });
+  if (purchaseToken.length > MAX_TOKEN_LENGTH) return json(400, { error: "INVALID_PURCHASE_TOKEN" });
+  if (!/^[A-Za-z0-9._:-]+$/.test(purchaseToken)) return json(400, { error: "INVALID_PURCHASE_TOKEN" });
 
   let account: ServiceAccount;
   try {
@@ -140,6 +142,9 @@ Deno.serve(async (req) => {
     if (!linkedAccountToken || linkedAccountToken !== expectedAccountTokenHex) {
       return json(403, { error: "PURCHASE_ACCOUNT_MISMATCH" });
     }
+
+    const purchasePackage = purchase.packageName ?? PACKAGE_NAME;
+    if (purchasePackage !== PACKAGE_NAME) return json(400, { error: "PACKAGE_MISMATCH" });
 
     const state = purchase.subscriptionState;
     const activeStates = new Set([
