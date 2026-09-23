@@ -386,7 +386,12 @@ Deno.serve(async (req) => {
       userSettings.preferred_language.trim()
         ? userSettings.preferred_language.trim().slice(0, 16)
         : "en";
-    const message0 = str(p?.message, 3000);
+    const rawTitle = typeof g?.title === "string" ? g.title.trim() : typeof g?.outcome === "string" ? g.outcome.trim() : "";
+    const rawWhy = typeof g?.why_it_matters === "string" ? g.why_it_matters.trim() : "";
+    const rawMessage = typeof p?.message === "string" ? p.message : "";
+    if (rawTitle.length > 300 || rawWhy.length > 500 || rawMessage.length > 3000)
+      return json({ error: "One or more planning inputs are too long." }, 413);
+    const message0 = str(rawMessage, 3000);
     if (mode !== "chat" && !str(g?.title || g?.outcome, 300))
       return json(
         { error: "A goal description is required for planning." },
