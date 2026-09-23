@@ -1,5 +1,19 @@
 {
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "eslint.config.js"],
+  "include": [
+    "src/routes/**/*.ts",
+    "src/routes/**/*.tsx",
+    "src/components/site/**/*.ts",
+    "src/components/site/**/*.tsx",
+    "src/content/**/*.ts",
+    "src/lib/error-*.ts",
+    "src/router.tsx",
+    "src/start.ts",
+    "src/server.ts",
+    "src/routeTree.gen.ts",
+    "src/styles.css",
+    "vite.config.ts",
+    "eslint.config.js"
+  ],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",
@@ -21,6 +35,6 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedSideEffectImports": true,
-    "paths": { "@/*": ["./src/*"] }
+    "paths": {"@/*": ["./src/*"]}
   }
 }
