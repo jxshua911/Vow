@@ -71,6 +71,7 @@ function AppContent() {
     return () => { listener.then((handle) => handle.remove()); };
   }, [goBack]);
   useEffect(() => { const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS); return () => window.clearTimeout(timer); }, []);
+  useEffect(() => { const timeout = window.setTimeout(() => { setSplashFadingOut(true); setSplashMounted(false); }, 6000); return () => window.clearTimeout(timeout); }, []);
   useEffect(() => {
     const listener = (event: Event) => {
       const next = (event as CustomEvent<View>).detail;
