@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { site } from "@/content/site";
 
 export const Route=createFileRoute("/support")({
@@ -16,7 +16,7 @@ const faqs=[
 
 function SupportPage(){
   const [sent,setSent]=useState(false);
-  function submit(e:React.FormEvent<HTMLFormElement>){
+  function submit(e:FormEvent<HTMLFormElement>){
     e.preventDefault();
     const data=new FormData(e.currentTarget);
     const subject=String(data.get("subject")||"VOW website enquiry");
