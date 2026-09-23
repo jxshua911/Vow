@@ -82,7 +82,7 @@ export async function cancelReminder(id: number): Promise<void> {
   await LocalNotifications.cancel({ notifications: [{ id }] });
 }
 
-function notificationId(sessionId: string): number {
+export function notificationId(sessionId: string): number {
   let hash = 0;
   for (let i = 0; i < sessionId.length; i += 1) hash = ((hash << 5) - hash + sessionId.charCodeAt(i)) | 0;
   return Math.abs(hash || 1);
