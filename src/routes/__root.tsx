@@ -1,0 +1,10 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Outlet, Link, createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
+import { useState, type ReactNode } from "react";
+import appCss from "../styles.css?url";
+import { SiteHeader } from "@/components/site/SiteHeader";
+import { SiteFooter } from "@/components/site/SiteFooter";
+function NotFound(){return <div className="container-site flex min-h-[60vh] items-center justify-center py-20"><div className="text-center"><p className="vow-label">404</p><h1 className="mt-3 text-5xl">Page not found.</h1><Link to="/" className="vow-btn-primary mt-7">Back home</Link></div></div>}
+export const Route=createRootRouteWithContext<{queryClient:QueryClient}>()({head:()=>({meta:[{charSet:"utf-8"},{name:"viewport",content:"width=device-width, initial-scale=1"},{title:"VOW — Goal planning and accountability"},{name:"description",content:"VOW turns goals into structured plans, sessions and follow-through."},{name:"author",content:"Joshua Nathan Kasanga"},{name:"theme-color",content:"#111111"},{property:"og:site_name",content:"VOW"},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}],links:[{rel:"preconnect",href:"https://fonts.googleapis.com"},{rel:"preconnect",href:"https://fonts.gstatic.com",crossOrigin:"anonymous"},{rel:"stylesheet",href:"https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap"},{rel:"stylesheet",href:appCss},{rel:"icon",href:"/favicon.ico",type:"image/x-icon"}]}),shellComponent:RootShell,component:RootComponent,notFoundComponent:NotFound});
+function RootShell({children}:{children:ReactNode}){return <html lang="en"><head><HeadContent/></head><body>{children}<Scripts/></body></html>}
+function RootComponent(){const[queryClient]=useState(()=>new QueryClient());return <QueryClientProvider client={queryClient}><div className="flex min-h-screen flex-col"><SiteHeader/><main id="main" className="flex-1"><Outlet/></main><SiteFooter/></div></QueryClientProvider>}
