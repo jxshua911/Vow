@@ -96,3 +96,7 @@ jobs:
         run: supabase functions deploy vow-stripe-webhook --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Deploy retired legacy planner function
+        run: supabase functions deploy vow-hamster --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
