@@ -35,6 +35,7 @@ export async function purchasePremium(
     productId === VOW_PREMIUM_MONTHLY
       ? VOW_PREMIUM_MONTHLY_BASE_PLAN
       : VOW_PREMIUM_YEARLY_BASE_PLAN;
+  if (!planIdentifier) throw new Error('PREMIUM_NOT_CONFIGURED');
 
   const transaction = await NativePurchases.purchaseProduct({
     productIdentifier: productId,
