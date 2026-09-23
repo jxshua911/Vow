@@ -38,6 +38,12 @@ Deno.serve(async (req) => {
       // Default to monthly when no JSON body is supplied.
     }
 
+    const { data: existingEntitlement } = await supabase
+      .from("vow_user_entitlements")
+      .select("stripe_customer_id, plan, status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     const priceId = billing === "yearly"
       ? Deno.env.get("STRIPE_PRICE_ID_YEARLY")
       : Deno.env.get("STRIPE_PRICE_ID_MONTHLY");
@@ -47,7 +53,9 @@ Deno.serve(async (req) => {
       mode: "subscription",
       "line_items[0][price]": priceId,
       "line_items[0][quantity]": "1",
-      customer_email: user.email || "",
+      ...(existingEntitlement?.stripe_customer_id
+        ? { customer: existingEntitlement.stripe_customer_id }
+        : { customer_email: user.email || "" }),
       success_url: successUrl,
       cancel_url: cancelUrl,
       "metadata[user_id]": user.id,
