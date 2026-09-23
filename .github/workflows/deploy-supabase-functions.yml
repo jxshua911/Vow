@@ -45,3 +45,32 @@ jobs:
         run: supabase functions deploy google-calendar-sync-goal --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Deploy Goal resources function
+        run: supabase functions deploy vow-goal-resources --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Strava OAuth function
+        run: supabase functions deploy strava-oauth --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Strava activities function
+        run: supabase functions deploy strava-activities --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Account deletion function
+        run: supabase functions deploy vow-account-delete --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Google Play verification function
+        run: supabase functions deploy vow-google-play-verify --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Google Play RTDN function
+        run: supabase functions deploy vow-google-play-rtdn --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
