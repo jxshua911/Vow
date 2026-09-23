@@ -1,13 +1,5 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { fileURLToPath, URL } from 'node:url';
+import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      'lucide-react': fileURLToPath(new URL('./src/lib/ui-icons.tsx', import.meta.url)),
-    },
-  },
+  tanstackStart: { server: { entry: "server" } },
 });
