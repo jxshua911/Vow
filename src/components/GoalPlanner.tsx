@@ -356,24 +356,6 @@ export function GoalPlanner({
     try {
       const start = nextMonday();
 
-      // 1. Insert milestones
-      const { data: milestones, error: me } = await supabase
-        .from('milestones')
-        .insert(
-          plan.milestones.map((m, i) => ({
-            goal_id: draftGoalId,
-            title: m.title,
-            description: m.description,
-            sort_order: i,
-            deadline: deadlineFor(start, Math.min(durationWeeks, Math.max(1, m.week))),
-            status: i === 0 ? 'in_progress' : 'pending',
-          }))
-        )
-        .select('id,sort_order')
-        .order('sort_order');
-      if (me) throw me;
-
-      // Helper: build a date from week + day
       function buildDate(week: number, day: string, preferredTime: string): Date {
         const w = Math.max(1, Math.min(durationWeeks, week));
         const dayIndex = Math.max(0, DAYS.indexOf(day));
@@ -382,45 +364,22 @@ export function GoalPlanner({
         date.setHours(Math.min(23, Number(match?.[1] || 9)), Math.min(59, Number(match?.[2] || 0)), 0, 0);
         return date;
       }
-      function milestoneIndex(week: number): number {
-        return Math.min(
-          Math.max(0, Math.floor(((week - 1) / Math.max(1, durationWeeks)) * (milestones || []).length)),
-          Math.max(0, (milestones || []).length - 1)
-        );
-      }
 
       const filteredItems = plan.schedule.filter(x => availableDays.includes(x.day));
       if (!filteredItems.length)
         throw new Error('The generated schedule does not match your selected days. Please rebuild the plan.');
 
-      // 2. Insert sessions
-      const sessionRows = filteredItems.map(item => {
-        const date = buildDate(item.week, item.day, item.preferred_time);
-        return {
-          goal_id: draftGoalId,
-          milestone_id: milestones?.[milestoneIndex(item.week)]?.id ?? null,
-          user_id: userId,
-          title: item.task,
-          scheduled_at: date.toISOString(),
-          duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
-          status: 'scheduled',
-          notes:
-            [item.purpose, item.target_metric ? `Target: ${item.target_metric}` : null]
-              .filter(Boolean)
-              .join('\n') || null,
-        };
-      });
-      const { data: sessions, error: se } = await supabase.from('sessions').insert(sessionRows).select('*');
-      if (se) throw se;
+      const milestoneRows = plan.milestones.map((m, i) => ({
+        title: m.title,
+        description: m.description,
+        sort_order: i,
+        deadline: deadlineFor(start, Math.min(durationWeeks, Math.max(1, m.week))),
+        status: i === 0 ? 'in_progress' : 'pending',
+      }));
 
-      // 3. Insert goal_plan_items — required for Google Calendar sync.
-      //    The DB trigger materialize_plan_execution_from_active_goal() aborts early
-      //    if sessions already exist, so goal_plan_items must be populated here
-      //    before we flip status to 'active'.
       const planItemRows = filteredItems.map(item => {
         const date = buildDate(item.week, item.day, item.preferred_time);
         return {
-          goal_id: draftGoalId,
           plan_version: 1,
           week_number: Math.max(1, Math.min(durationWeeks, item.week)),
           day_of_week: item.day,
@@ -432,14 +391,28 @@ export function GoalPlanner({
           status: 'scheduled',
         };
       });
-      const { error: pie } = await supabase.from('goal_plan_items').insert(planItemRows);
-      if (pie) throw pie;
 
-      // 4. Activate goal — done AFTER sessions + goal_plan_items so GCal sync
-      //    finds data immediately when it queries goal_plan_items.
-      const { error: ge } = await supabase
-        .from('goals')
-        .update({
+      const sessionRows = filteredItems.map(item => {
+        const date = buildDate(item.week, item.day, item.preferred_time);
+        const milestoneIndex = Math.min(
+          Math.max(0, Math.floor(((item.week - 1) / Math.max(1, durationWeeks)) * plan.milestones.length)),
+          Math.max(0, plan.milestones.length - 1)
+        );
+        return {
+          title: item.task,
+          scheduled_at: date.toISOString(),
+          duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
+          status: 'scheduled',
+          milestone_sort_order: milestoneIndex,
+          notes: [item.purpose, item.target_metric ? `Target: ${item.target_metric}` : null]
+            .filter(Boolean)
+            .join('\n') || null,
+        };
+      });
+
+      const { data: lockedGoalId, error: lockError } = await supabase.rpc('lock_goal_plan', {
+        p_goal_id: draftGoalId,
+        p_goal: {
           title: rawInput.trim(),
           outcome: plan.outcome || rawInput.trim(),
           why_it_matters: why.trim() || null,
@@ -453,11 +426,13 @@ export function GoalPlanner({
           plan_generated_at: new Date().toISOString(),
           planning_horizon_weeks: durationWeeks,
           planning_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        })
-        .eq('id', draftGoalId);
-      if (ge) throw ge;
+        },
+        p_milestones: milestoneRows,
+        p_plan_items: planItemRows,
+        p_sessions: sessionRows,
+      });
+      if (lockError || !lockedGoalId) throw lockError || new Error('VOW could not lock the plan safely.');
 
-      // 5. Save AI-recommended references
       if (plan.references?.length) {
         const { error: referenceError } = await supabase.from('goal_resources').insert(
           plan.references.map(reference => ({
@@ -471,17 +446,25 @@ export function GoalPlanner({
         if (referenceError) throw referenceError;
       }
 
-      // 6. Sync local notifications
-      if (sessions)
-        try {
-          await syncUpcomingSessionNotifications(sessions as Session[]);
-        } catch {
-          console.warn('[VOW] Session notifications could not be synced.');
-        }
+      const { data: sessions, error: sessionLoadError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('goal_id', draftGoalId)
+        .eq('user_id', userId)
+        .order('scheduled_at', { ascending: true });
+      if (sessionLoadError) throw sessionLoadError;
 
-      // 7. Trigger Google Calendar sync
       try {
-        await supabase.functions.invoke('google-calendar-sync-goal', { body: { goalId: draftGoalId } });
+        await syncUpcomingSessionNotifications((sessions || []) as Session[]);
+      } catch {
+        console.warn('[VOW] Session notifications could not be synced.');
+      }
+
+      try {
+        const { error: calendarError } = await supabase.functions.invoke('google-calendar-sync-goal', {
+          body: { goalId: draftGoalId },
+        });
+        if (calendarError) console.warn('[VOW] Google Calendar sync could not be completed:', calendarError.message);
       } catch {
         console.warn('[VOW] Google Calendar sync could not be completed.');
       }
