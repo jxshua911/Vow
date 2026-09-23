@@ -4,6 +4,7 @@ import { addDays, toDateString } from '@/lib/dates';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
 import { consumeEntitlement, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
+import { checkContentSafety } from '@/lib/contentSafety';
 import type { Session } from '@/types/database';
 import { PageHeader } from './AppShell';
 import { analyseGoalForEvidence, type ArmadilloResult } from '@/lib/armadillo';
@@ -210,6 +211,15 @@ export function GoalPlanner({
       setError('Please describe your goal in at least a few characters.');
       return;
     }
+    if (rawInput.trim().length > 5000 || why.trim().length > 5000) {
+      setError('Please keep your goal and context under 5,000 characters each.');
+      return;
+    }
+    const safety = await checkContentSafety(rawInput);
+    if (safety.status !== 'safe') {
+      setError(safety.message || 'VOW cannot plan that request.');
+      return;
+    }
     setPlanning(true);
     setError('');
     setUpgrade(null);
@@ -264,6 +274,15 @@ export function GoalPlanner({
     setPlanning(true);
     setError('');
     try {
+      if (rawInput.trim().length > 5000 || why.trim().length > 5000) {
+        setError('Please keep your goal and context under 5,000 characters each.');
+        return;
+      }
+      const safety = await checkContentSafety(rawInput);
+      if (safety.status !== 'safe') {
+        setError(safety.message || 'VOW cannot plan that request.');
+        return;
+      }
       const goalId = await ensureDraft();
       const clean = answers.map(a => a.trim());
       const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
