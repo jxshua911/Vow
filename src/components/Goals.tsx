@@ -79,8 +79,17 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
     await load();
   }
   async function toggleMilestoneStatus(ms: Milestone) { const newStatus = ms.status === 'completed' ? 'pending' : 'completed'; await supabase.from('milestones').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', ms.id); load(); }
-  async function abandonGoal() { if (!confirm('Mark this goal as abandoned? This records the outcome so VOW can learn from the pattern.')) return; await supabase.from('goals').update({ status: 'abandoned', updated_at: new Date().toISOString() }).eq('id', goalId); onBack(); }
-  async function completeGoal() { await supabase.from('goals').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', goalId); onBack(); }
+  async function abandonGoal() {
+    if (!confirm('Mark this goal as abandoned? This records the outcome so VOW can learn from the pattern.')) return;
+    await supabase.from('goals').update({ status: 'abandoned', updated_at: new Date().toISOString() }).eq('id', goalId);
+    await Promise.all(sessions.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at).getTime() > Date.now()).map(s => cancelReminder(notificationId(s.id))));
+    onBack();
+  }
+  async function completeGoal() {
+    await supabase.from('goals').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', goalId);
+    await Promise.all(sessions.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at).getTime() > Date.now()).map(s => cancelReminder(notificationId(s.id))));
+    onBack();
+  }
   async function handlePause(context: string) { if (!session) return; await supabase.from('user_settings').upsert({ user_id: session.user.id, pause_context: context || null, updated_at: new Date().toISOString() }, { onConflict: 'user_id' }); setShowPauseModal(false); }
   if (loading) return <div className="text-vow-muted text-sm">Loading...</div>;
   if (!goal) return <div className="text-vow-muted text-sm">Goal not found.</div>;
