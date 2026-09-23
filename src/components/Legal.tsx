@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft } from '@/lib/ui-icons';
 import { PageHeader } from './AppShell';
 
-type Policy = 'eula' | 'copyright';
+type Policy = 'eula' | 'privacy' | 'copyright';
 
 const CONTACT = {
   owner: 'Joshua Nathan Kasanga',
@@ -20,7 +20,7 @@ const eulaSections = [
   ['6. Acceptable Use', 'You must not use VOW to violate applicable law or another person’s rights; distribute malware; bypass security or usage controls; access another person’s account; manipulate subscription or entitlement status; reverse engineer the Service except where applicable law permits it; abuse automated systems; impersonate another person; or otherwise interfere with VOW or another user’s access.'],
   ['7. Intellectual Property', 'VOW, including its software, interface, branding, logos, methodologies, databases, documentation, and original materials, is owned by or licensed to VOW and protected by applicable intellectual-property laws. Except as expressly permitted, you may not copy, distribute, modify, sell, sublicense, reverse engineer, or commercially exploit VOW’s proprietary materials.'],
   ['8. Third-Party Services', 'VOW may rely on third-party services for authentication, cloud infrastructure, artificial intelligence, calendars, payments, subscriptions, and app distribution. Third-party services may have separate terms and privacy policies. VOW does not guarantee the availability or continued operation of third-party integrations.'],
-  ['9. VOW Premium and Payments', 'VOW Premium features may require a paid subscription. Current plans may include Premium Monthly at US$9.99 per month and Premium Yearly at US$71.99 per year. Prices, billing, renewal, cancellation, and refunds are subject to the purchase terms shown to you and applicable Google Play rules. Subscription entitlement may be verified server-side. Fraudulent attempts to obtain or manipulate Premium access are prohibited.'],
+  ['9. VOW Premium and Payments', 'VOW Premium features may require a paid subscription. Prices, billing, renewal, cancellation, and refunds are subject to the purchase terms shown at checkout and the rules of the applicable payment or app-distribution provider, including Google Play or Stripe where offered. Subscription entitlement may be verified server-side. Fraudulent attempts to obtain or manipulate Premium access are prohibited.'],
   ['10. Refunds', 'Purchases made through Google Play may be subject to Google Play’s applicable refund rules and procedures. Nothing in these Terms limits mandatory consumer rights or other rights that cannot legally be excluded.'],
   ['11. Calendar and Connected Services', 'When you connect a supported service, you authorise VOW to access the information and scopes necessary to provide the feature you request. You may revoke permissions through the relevant service or device settings where supported.'],
   ['12. Security and Availability', 'VOW uses reasonable technical and organisational safeguards intended to protect the Service. No online service can guarantee absolute security. VOW may experience outages or changes caused by maintenance, upgrades, security events, network problems, third-party failures, legal requirements, or other circumstances beyond its reasonable control.'],
@@ -32,6 +32,22 @@ const eulaSections = [
   ['18. Changes to the Service or Terms', 'VOW may change features, integrations, or these Terms as the product develops or where required for security, legal, operational, or technical reasons. Material changes may be communicated through VOW or another reasonable method.'],
   ['19. Governing Law and Jurisdiction', 'These Terms are governed by and interpreted in accordance with the laws of the United Republic of Tanzania, without regard to its conflict-of-laws principles, except to the extent mandatory laws applicable to a user cannot lawfully be excluded. Subject to applicable mandatory law, disputes arising from or relating to these Terms or the Service shall be submitted to the competent courts of the United Republic of Tanzania.'],
   ['20. Contact', 'VOW is owned by Joshua Nathan Kasanga. Legal and copyright correspondence: vowglobalapp@gmail.com. General product support: 99joshuanathan@gmail.com. Mailing address: 29 Upendo Street.'],
+] as const;
+
+const privacySections = [
+  ['1. Information We Collect', 'VOW may collect account information such as your email address and display name; goals, plans, milestones, sessions, reviews, journal content, preferences and other content you choose to provide; usage and app events needed to operate and secure the Service; subscription and payment-status records; and information required for connected services such as Google Calendar or Strava when you choose to connect them.'],
+  ['2. How We Use Information', 'We use information to authenticate you, create and execute goal plans, provide AI-assisted features, personalise the Service, schedule notifications and calendar events, provide Premium features, prevent abuse, diagnose failures, maintain security, comply with legal obligations, and respond to support or data requests.'],
+  ['3. AI Processing', 'Goal and coaching inputs may be processed by VOW AI infrastructure and third-party AI providers to generate responses and plans. VOW is designed to send the information needed for the requested feature and to avoid unnecessary sensitive information. Do not submit information you do not want processed by the Service or its providers.'],
+  ['4. Connected Services', 'If you connect Google Calendar or another supported integration, VOW processes the permissions and information necessary to provide the requested feature. OAuth credentials and tokens are stored server-side and are not included in account exports. Disconnecting an integration removes VOW’s stored connection data; account deletion also attempts to revoke supported external access.'],
+  ['5. Payments', 'Payment details are handled by the applicable payment provider rather than stored as raw card information by VOW. VOW may receive subscription identifiers, payment status, transaction metadata and entitlement information needed to provide Premium and prevent fraud.'],
+  ['6. Sharing', 'We may share information with service providers that help operate VOW, such as cloud infrastructure, AI, authentication, calendar, payment, analytics or app-distribution providers, only as reasonably necessary for the requested Service or lawful operations. We do not sell your personal information.'],
+  ['7. Retention and Deletion', 'We retain information while it is needed to operate the Service or meet legal, security or accounting obligations. You can request an account export or delete your account from VOW where those features are available. Account deletion removes the user-owned application data VOW is designed to delete and also deletes the associated authentication account after the deletion process succeeds.'],
+  ['8. Security', 'VOW uses authentication controls, database access policies, server-side entitlement checks, input limits, AI usage controls and other technical safeguards. No internet service can guarantee absolute security.'],
+  ['9. Your Choices and Rights', 'Depending on your jurisdiction, you may have rights to access, correct, delete, restrict or otherwise control personal information. You can update supported profile preferences, disconnect integrations, request an export, or delete your account through available VOW controls. You may also contact VOW about privacy requests.'],
+  ['10. Children and Young Users', 'VOW is not intended to bypass age requirements or parental-consent requirements that apply where you live. Where applicable law requires a parent or guardian to authorise use by a minor, that requirement applies.'],
+  ['11. International Processing', 'VOW and its service providers may process information in countries other than your own. Where required, applicable safeguards and contractual or legal mechanisms will be used for international transfers.'],
+  ['12. Contact', 'For privacy questions or data requests, contact vowglobalapp@gmail.com. General product support is available at 99joshuanathan@gmail.com.'],
+  ['13. Updates', 'This Privacy Policy may be updated when VOW changes its data practices, integrations, security controls or legal obligations. The latest version and effective date will be made available through VOW and the public privacy-policy location used for app-store compliance.'],
 ] as const;
 
 const copyrightSections = [
@@ -49,7 +65,7 @@ const copyrightSections = [
 
 export function LegalPage({ onBack }: { onBack?: () => void }) {
   const [policy, setPolicy] = useState<Policy>('eula');
-  const sections = policy === 'eula' ? eulaSections : copyrightSections;
+  const sections = policy === 'eula' ? eulaSections : policy === 'privacy' ? privacySections : copyrightSections;
 
   return (
     <div className="min-h-screen bg-vow-bg">
@@ -68,7 +84,7 @@ export function LegalPage({ onBack }: { onBack?: () => void }) {
       <main className="max-w-3xl mx-auto px-5 sm:px-8 py-10 md:py-14">
         <PageHeader title="Terms & Policies" subtitle="The rules, responsibilities and copyright procedures governing VOW." />
 
-        <div className="mt-8 grid grid-cols-2 border border-vow-border" role="tablist" aria-label="Legal documents">
+        <div className="mt-8 grid grid-cols-3 border border-vow-border" role="tablist" aria-label="Legal documents">
           <button
             type="button"
             role="tab"
@@ -77,6 +93,15 @@ export function LegalPage({ onBack }: { onBack?: () => void }) {
             className={`px-4 py-3 text-sm border-r border-vow-border transition-colors ${policy === 'eula' ? 'bg-vow-surface text-vow-ink' : 'text-vow-muted hover:text-vow-ink'}`}
           >
             EULA & Terms
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={policy === 'privacy'}
+            onClick={() => setPolicy('privacy')}
+            className={`px-4 py-3 text-sm border-r border-vow-border transition-colors ${policy === 'privacy' ? 'bg-vow-surface text-vow-ink' : 'text-vow-muted hover:text-vow-ink'}`}
+          >
+            Privacy
           </button>
           <button
             type="button"
@@ -116,7 +141,7 @@ export function LegalPage({ onBack }: { onBack?: () => void }) {
         </section>
 
         <p className="mt-6 text-[11px] leading-5 text-vow-muted">
-          Effective date: VOW launch date to be added. Last updated: 18 September 2026. These documents are intended as VOW’s product terms and copyright procedure and should receive qualified legal review before public launch.
+          Effective date: VOW launch date to be added. Last updated: 23 September 2026. These documents are intended as VOW’s product terms and copyright procedure and should receive qualified legal review before public launch.
         </p>
       </main>
     </div>
