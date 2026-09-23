@@ -245,60 +245,95 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
     await releaseGuardrail(req, requestId);
   }
 }
+function validatePlan(b: any, w: number, ds: string[]) {
+  const milestones = Array.isArray(b?.milestones) ? b.milestones : [];
+  const focus = Array.isArray(b?.weekly_focus) ? b.weekly_focus : [];
+  const weekly = Array.isArray(b?.weekly_session_templates) ? b.weekly_session_templates : [];
+  if (milestones.length < 2) return "INSUFFICIENT_MILESTONES";
+  if (focus.length < w) return "INSUFFICIENT_WEEKLY_FOCUS";
+  if (w <= 16 && weekly.length < w) return "INSUFFICIENT_WEEKLY_SESSIONS";
+
+  const planned = schedule(b, w, ds, str(b?.start_date) || new Date().toISOString().slice(0, 10));
+  if (planned.length !== w * ds.length) return "INCOMPLETE_SCHEDULE";
+
+  const tasks = planned.map((x: any) => str(x.task, 350).toLowerCase()).filter(Boolean);
+  const unique = new Set(tasks);
+  if (tasks.length >= 8 && unique.size / tasks.length < 0.55) return "REPETITIVE_SCHEDULE";
+
+  const generic = /^(work on|make progress on|continue working on|review your goal|do your task|practice more)/i;
+  if (planned.some((x: any) => generic.test(str(x.task, 350)))) return "GENERIC_SESSION_TASK";
+  return null;
+}
+
 function schedule(b: any, w: number, ds: string[], startDate: string) {
+  const weekly = Array.isArray(b?.weekly_session_templates)
+    ? b.weekly_session_templates
+        .map((week: any) => ({
+          week: Math.max(1, Math.min(w, Math.round(Number(week?.week) || 1))),
+          sessions: Array.isArray(week?.sessions)
+            ? week.sessions.filter((x: any) =>
+                ds.some((d) => d.toLowerCase() === String(x?.day || "").toLowerCase())
+              ).slice(0, ds.length)
+            : [],
+        }))
+        .filter((week: any) => week.sessions.length)
+    : [];
+
   const rawTemplates = Array.isArray(b?.session_templates) ? b.session_templates : [];
-  const templates = rawTemplates.length
-    ? rawTemplates
-    : ds.map((day, idx) => ({
-        day,
-        task: str(b?.weekly_focus?.[0], 350) || `Core session ${idx + 1} for ${str(b?.outcome, 100) || "your goal"}`,
-        purpose: str(b?.success_metric, 350) || "Make measurable progress toward the milestone target.",
-        target_metric: str(b?.success_metric, 180) || "Complete planned execution block",
-        duration_minutes: 30,
-        preferred_time: "09:00",
-      }));
-  const focus =
-    Array.isArray(b?.weekly_focus) && b.weekly_focus.length
-      ? b.weekly_focus
-      : [str(b?.summary, 350) || `Focus on progressing ${str(b?.outcome, 100) || "your goal"}`];
+  const templates = rawTemplates.length ? rawTemplates : ds.map((day, idx) => ({
+    day,
+    task: str(b?.weekly_focus?.[0], 350) || `Core session ${idx + 1} for ${str(b?.outcome, 100) || "your goal"}`,
+    purpose: str(b?.success_metric, 350) || "Make measurable progress toward the milestone target.",
+    target_metric: str(b?.success_metric, 180) || "Complete planned execution block",
+    duration_minutes: 30,
+    preferred_time: "09:00",
+  }));
+
+  const focus = Array.isArray(b?.weekly_focus) && b.weekly_focus.length
+    ? b.weekly_focus
+    : [str(b?.summary, 350) || `Focus on progressing ${str(b?.outcome, 100) || "your goal"}`];
+
   const out: any[] = [];
-  const start = new Date(
-    `${startDate || new Date().toISOString().slice(0, 10)}T09:00:00`
-  );
+  const start = new Date(`${startDate || new Date().toISOString().slice(0, 10)}T09:00:00`);
   const monday = (start.getDay() + 6) % 7;
   start.setDate(start.getDate() - monday);
-  for (let week = 1; week <= w; week++)
+
+  for (let week = 1; week <= w; week++) {
+    const explicitWeek = weekly.find((x: any) => x.week === week);
     for (const day of ds) {
       const d = new Date(start);
       d.setDate(d.getDate() + (week - 1) * 7 + DAYS.indexOf(day));
+
+      const explicit = explicitWeek?.sessions?.find(
+        (x: any) => String(x?.day || "").toLowerCase() === day.toLowerCase()
+      );
       const template =
-        templates.find(
-          (x: any) =>
-            DAYS.includes(x?.day) && x.day.toLowerCase() === day.toLowerCase()
-        ) || templates[(week - 1) % templates.length];
+        explicit ||
+        templates.find((x: any) => DAYS.includes(x?.day) && x.day.toLowerCase() === day.toLowerCase()) ||
+        templates[(week - 1) % templates.length];
+
       const f = str(focus[Math.min(week - 1, focus.length - 1)], 350);
-      const task = str(template?.task, 350) || f;
+      const baseTask = str(template?.task, 350) || f;
+      const task = explicit
+        ? baseTask
+        : f && !baseTask.toLowerCase().includes(f.toLowerCase())
+        ? `${f}: ${baseTask}`
+        : baseTask;
+
       out.push({
         week,
         day,
         task,
         purpose: [str(template?.purpose, 350), f].filter(Boolean).join(" "),
-        target_metric:
-          str(template?.target_metric, 180) ||
-          str(b?.success_metric, 180) ||
-          "Complete the planned work",
-        duration_minutes: Math.max(
-          5,
-          Math.min(240, Number(template?.duration_minutes) || 30)
-        ),
-        preferred_time: /^\d{1,2}:\d{2}$/.test(
-          str(template?.preferred_time, 10)
-        )
+        target_metric: str(template?.target_metric, 180) || str(b?.success_metric, 180) || "Complete the planned work",
+        duration_minutes: Math.max(5, Math.min(240, Number(template?.duration_minutes) || 30)),
+        preferred_time: /^\\d{1,2}:\\d{2}$/.test(str(template?.preferred_time, 10))
           ? template.preferred_time
           : "09:00",
         scheduled_at: d.toISOString(),
       });
     }
+  }
   return out;
 }
 
@@ -475,7 +510,7 @@ Deno.serve(async (req) => {
               role: "system",
               content: `You are VOW's expert planning and research engine. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base and domain profile are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. If AI research is required, you MUST perform at least one web_search before selecting or finalising the specialist domain; do not guess what an abbreviation, event, competition, slang term, or specialist phrase means. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. If a required input is genuinely missing, return JSON with clarification_needed:true and questions instead of a generic plan. Never fill missing personal context with boilerplate. Return a references array only for genuinely relevant public resources, preferably a useful YouTube resource when one materially helps the exact goal and level. Duration (${w} weeks) and available days (${ds.join(
                 ", "
-              )}) are HARD constraints. Follow-up answers are HARD personal context. Domain profile: ${JSON.stringify(domain)}. Return ONLY JSON with outcome, success_metric, baseline, assumptions, milestones (2-8 objects with title,description,week), session_templates (one object per selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), weekly_focus (one string per week), progression, checkpoints (3-8), risks (3-8), fallback_rules (2-6), summary, references (0-4 objects with url,title,resource_type). Make the plan genuinely domain-specific. Do not invent specialist claims when the knowledge/research does not support them. For each selected day, choose a distinct high-value session/task when the domain supports it. Every week must meaningfully progress toward the outcome.`,
+              )}) are HARD constraints. Follow-up answers are HARD personal context. Domain profile: ${JSON.stringify(domain)}. Return ONLY JSON with outcome, success_metric, baseline, assumptions, milestones (2-8 objects with title,description,week), weekly_session_templates (one object per week, each containing week and sessions; sessions must contain one concrete, distinct session for each selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), session_templates (fallback template per selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), weekly_focus (exactly one string per week), progression, checkpoints (3-8), risks (3-8), fallback_rules (2-6), summary, references (0-4 objects with url,title,resource_type). Make the plan genuinely domain-specific. Do not invent specialist claims when the knowledge/research does not support them. Each week's sessions must advance that week's focus rather than repeating the same task. Sessions must be concrete enough that the user can execute them without guessing what "work on it" means. Every week must meaningfully progress toward the outcome.`,
             },
             { role: "user", content: JSON.stringify({ message, ...context }) },
           ],
@@ -503,6 +538,18 @@ Deno.serve(async (req) => {
           },
         });
       }
+      const validationError = validatePlan(b, w, ds);
+      if (validationError) {
+        console.warn("plan validation failed", { validation_error: validationError });
+        return json(
+          {
+            error: "VOW AI returned a plan that did not meet VOW's planning quality checks. Please try again.",
+            code: validationError,
+          },
+          502
+        );
+      }
+
       const milestones = Array.isArray(b?.milestones)
         ? b.milestones
             .slice(0, 12)
