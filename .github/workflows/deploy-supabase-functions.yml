@@ -74,3 +74,7 @@ jobs:
         run: supabase functions deploy vow-google-play-rtdn --project-ref vqsrdausvmfjayffxiuh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Deploy Account export function
+        run: supabase functions deploy vow-account-export --project-ref vqsrdausvmfjayffxiuh
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
