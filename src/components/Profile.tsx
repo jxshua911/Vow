@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import { PageHeader } from './AppShell';
-import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications } from '@/lib/notifications';
+import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences, cancelAllVowNotifications } from '@/lib/notifications';
 import { getEntitlementSnapshot } from '@/lib/entitlements';
 import { VOW_LANGUAGES, LANGUAGE_STORAGE_KEY, languageName } from '@/lib/i18n';
 
@@ -29,6 +29,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const { theme, toggleTheme } = useTheme();
   const [subpage, setSubpage] = useState<ProfileSubpage>('main');
   const [notificationStatus, setNotificationStatus] = useState<string>('checking');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => getNotificationPreferences().enabled);
   const [requesting, setRequesting] = useState(false);
   const [name, setName] = useState(displayName);
   const [editingName, setEditingName] = useState(false);
@@ -60,13 +61,22 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     try {
       const status = await requestNotificationPermission();
       setNotificationStatus(status);
-      if (status === 'granted' && session) {
-        const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
-        if (data) await syncUpcomingSessionNotifications(data);
+      if (status === 'granted') {
+        const next = await setNotificationPreferences({ enabled: true });
+        setNotificationsEnabled(next.enabled);
+        if (session) {
+          const { data } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
+          if (data) await syncUpcomingSessionNotifications(data);
+        }
       }
     } finally {
       setRequesting(false);
     }
+  }
+
+  async function handleDisableNotifications() {
+    const next = await setNotificationPreferences({ enabled: false });
+    setNotificationsEnabled(next.enabled);
   }
 
   async function handleIconChange(colour: IconColour) {
@@ -119,7 +129,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     await supabase.auth.signOut();
     setDeleting(false);
   }
-  const notificationsEnabled = notificationStatus === 'granted';
+  const notificationsGranted = notificationStatus === 'granted';
 
   if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
   if (subpage === 'customise') return <CustomisePage premium={premium} selectedIcon={selectedIcon} customBackground={customBackground} customForeground={customForeground} message={iconMessage} onIconChange={handleIconChange} onCustomIconChange={handleCustomIconChange} onBack={() => setSubpage('main')} onUpgrade={onUpgrade} />;
@@ -141,7 +151,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
         <button onClick={() => setSubpage('language')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Language</p><p className="text-xs text-vow-muted mt-1">Choose the language VOW uses for the app and AI coaching.</p></div><span className="text-sm text-vow-muted">{VOW_LANGUAGES.find((item) => item.code === language)?.flag || '🌐'}</span></button>
         <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">EULA, copyright and service policies.</p></button>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
-        <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">VOW reminders use sound and vibration automatically when notifications are allowed.</p></div>{notificationsEnabled && <span className="text-xs text-vow-ink">Enabled</span>}</div><p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus}</p><div className="flex flex-wrap gap-2 mt-4">{!notificationsEnabled && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft disabled:opacity-50">{requesting ? 'Requesting…' : 'Enable notifications'}</button>}{notificationsEnabled && <span className="vow-btn-soft text-vow-muted">Sound + vibration active</span>}</div></div>
+        <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">VOW reminders use sound and vibration automatically when notifications are allowed.</p></div>{notificationsGranted && notificationsEnabled && <span className="text-xs text-vow-ink">Enabled</span>}</div><p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus} · {notificationsEnabled ? 'reminders on' : 'reminders off'}</p><div className="flex flex-wrap gap-2 mt-4">{(!notificationsGranted || !notificationsEnabled) && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft disabled:opacity-50">{requesting ? 'Requesting…' : 'Enable notifications'}</button>}{notificationsGranted && notificationsEnabled && <button onClick={() => void handleDisableNotifications()} className="vow-btn-soft">Disable reminders</button>}</div></div>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">My name</p><p className="text-xs text-vow-muted mt-1 truncate">{name || 'Not provided'}</p></div><button onClick={() => { setEditingName(true); setNameMessage(''); }} className="vow-btn-soft shrink-0">Change Name</button></div>{editingName && <div className="mt-4 border-t border-vow-border pt-4"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus className="vow-input" placeholder="What should VOW call you?" /><div className="flex gap-2 mt-2"><button onClick={handleSaveName} disabled={savingName || !name.trim()} className="vow-btn-primary disabled:opacity-50">{savingName ? 'Saving…' : 'Save name'}</button><button onClick={() => { setEditingName(false); setName(displayName); }} className="vow-btn-ghost">Cancel</button></div>{nameMessage && <p className="text-xs text-vow-muted mt-2">{nameMessage}</p>}</div>}</div>
         <div className="p-5"><p className="text-sm text-vow-ink">Account email</p><p className="text-xs text-vow-muted mt-1 break-words">{session?.user?.email || 'Not provided'}</p></div>
         <button onClick={() => setConfirmSignOut(true)} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Sign out</p><p className="text-xs text-vow-muted mt-1">Sign out of this VOW account.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
