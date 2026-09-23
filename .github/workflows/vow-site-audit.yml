@@ -1,0 +1,34 @@
+name: VOW site audit
+on:
+  push:
+    branches: [capacitor-mobile]
+permissions:
+  contents: write
+jobs:
+  audit:
+    if: contains(github.event.head_commit.message, '[site-audit]') == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect website files
+        shell: bash
+        run: |
+          set -e
+          {
+            echo "VOW SITE AUDIT"
+            echo "commit=$GITHUB_SHA"
+            echo
+            echo "--- candidate source files ---"
+            find . -type f \( -name '*.tsx' -o -name '*.ts' -o -name '*.jsx' -o -name '*.js' -o -name '*.css' -o -name '*.html' \) -not -path './node_modules/*' -not -path './android/*' -not -path './ios/*' | sort
+            echo
+            echo "--- branding/layout matches ---"
+            grep -RIlE 'paper|ink|editorial|How it works|How It Works|Get in touch|Get In Touch|Support|Privacy|Terms|delete-account|VOW' . --include='*.tsx' --include='*.ts' --include='*.jsx' --include='*.js' --include='*.css' --include='*.html' --exclude-dir=node_modules --exclude-dir=android --exclude-dir=ios | sort || true
+          } > .vow-site-audit.txt
+      - name: Commit audit report
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .vow-site-audit.txt
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: site audit [site-audit]"
+          git push
