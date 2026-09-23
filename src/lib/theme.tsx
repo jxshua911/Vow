@@ -61,7 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     {children}
     {showThemeSplash && (
       <div className="vow-theme-splash" data-theme={theme} role="status" aria-label={`Switched to ${theme} mode`}>
-        <img className="vow-theme-splash-logo" src={theme === 'dark' ? '/vow-logo-white.svg' : '/vow-logo.svg'} alt="VOW" />
+        <img className="vow-theme-splash-logo" src={theme === 'dark' ? './vow-logo-white.svg' : './vow-logo.svg'} alt="VOW" />
       </div>
     )}
   </ThemeContext.Provider>;
