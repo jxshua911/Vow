@@ -54,9 +54,8 @@ function getRandomPlaceholder() {
 export function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [step, setStep] = useState(0);
   const [rawGoal, setRawGoal] = useState('');
-  const [goalPlaceholder, setGoalPlaceholder] = useState(getRandomPlaceholder);
+  const [goalPlaceholder] = useState(getRandomPlaceholder);
   const [showPlanner, setShowPlanner] = useState(false);
-  const [whyItMatters, setWhyItMatters] = useState('');
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [preferredTimes, setPreferredTimes] = useState('9:00 am');
   const [notificationFreq, setNotificationFreq] = useState('weekly');
@@ -95,7 +94,7 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
       <GoalPlanner
         userId={userId}
         initialGoal={rawGoal}
-        initialWhy={whyItMatters}
+        initialWhy=""
         onCreated={async () => {
           // The plan-creation tap is a user-initiated moment, so Android can
           // request notification permission without surprising the user later.
