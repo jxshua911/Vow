@@ -135,7 +135,7 @@ export function UpgradePage() {
       </div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
-        <p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.
+        <p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.</p>
         <button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button>
       </div>}
       {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
