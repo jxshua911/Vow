@@ -1,0 +1,1 @@
+import "@tanstack/react-start/server-entry"; import serverEntry from "@tanstack/react-start/server-entry"; export default serverEntry;
