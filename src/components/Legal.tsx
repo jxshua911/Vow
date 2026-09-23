@@ -141,7 +141,7 @@ export function LegalPage({ onBack }: { onBack?: () => void }) {
         </section>
 
         <p className="mt-6 text-[11px] leading-5 text-vow-muted">
-          Effective date: VOW launch date to be added. Last updated: 23 September 2026. These documents are intended as VOW’s product terms and copyright procedure and should receive qualified legal review before public launch.
+          Effective date: 29 October 2026. Last updated: 23 September 2026. These documents are intended as VOW’s product terms and copyright procedure and should receive qualified legal review before public launch.
         </p>
       </main>
     </div>
