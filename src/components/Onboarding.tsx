@@ -54,7 +54,7 @@ function getRandomPlaceholder() {
 export function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [step, setStep] = useState(0);
   const [rawGoal, setRawGoal] = useState('');
-  const [goalPlaceholder] = useState(getRandomPlaceholder);
+  const goalPlaceholder = getRandomPlaceholder();
   const [showPlanner, setShowPlanner] = useState(false);
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [preferredTimes, setPreferredTimes] = useState('9:00 am');
