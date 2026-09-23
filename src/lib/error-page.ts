@@ -1,0 +1,1 @@
+export function renderErrorPage(){return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>VOW</title></head><body style="font-family:system-ui;padding:3rem;background:#f7f7f5;color:#111"><h1>VOW</h1><p>This page didn't load.</p><a href="/">Go home</a></body></html>`}
