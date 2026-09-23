@@ -59,8 +59,25 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
     setGoal(goalRes.data as Goal | null); setMilestones(msRes.data || []); setSessions(sessRes.data || []); setLoading(false);
   }, [goalId]);
   useEffect(() => { load(); }, [load]);
-  async function updateSessionStatus(sessId: string, status: Session['status']) { const updates: Partial<Session> = { status, updated_at: new Date().toISOString() }; if (status === 'completed') updates.completed_at = new Date().toISOString(); await supabase.from('sessions').update(updates).eq('id', sessId); load(); }
-  async function moveSession(sess: Session) { const newDate = addDays(new Date(sess.scheduled_at), 1); await supabase.from('sessions').update({ scheduled_at: newDate.toISOString(), moved_count: sess.moved_count + 1, status: 'moved', updated_at: new Date().toISOString() }).eq('id', sess.id); load(); }
+  async function updateSessionStatus(sessId: string, status: Session['status']) {
+    const updates: Partial<Session> = { status, updated_at: new Date().toISOString() };
+    if (status === 'completed') updates.completed_at = new Date().toISOString();
+    const { error } = await supabase.from('sessions').update(updates).eq('id', sessId);
+    if (!error && status !== 'scheduled') await cancelReminder(notificationId(sessId));
+    await load();
+  }
+  async function moveSession(sess: Session) {
+    const newDate = addDays(new Date(sess.scheduled_at), 1);
+    await cancelReminder(notificationId(sess.id));
+    const { error } = await supabase.from('sessions').update({
+      scheduled_at: newDate.toISOString(),
+      moved_count: sess.moved_count + 1,
+      status: 'scheduled',
+      updated_at: new Date().toISOString(),
+    }).eq('id', sess.id);
+    if (!error) await syncUpcomingSessionNotifications([{ ...sess, scheduled_at: newDate.toISOString(), status: 'scheduled', moved_count: sess.moved_count + 1 } as Session]);
+    await load();
+  }
   async function toggleMilestoneStatus(ms: Milestone) { const newStatus = ms.status === 'completed' ? 'pending' : 'completed'; await supabase.from('milestones').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', ms.id); load(); }
   async function abandonGoal() { if (!confirm('Mark this goal as abandoned? This records the outcome so VOW can learn from the pattern.')) return; await supabase.from('goals').update({ status: 'abandoned', updated_at: new Date().toISOString() }).eq('id', goalId); onBack(); }
   async function completeGoal() { await supabase.from('goals').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', goalId); onBack(); }
