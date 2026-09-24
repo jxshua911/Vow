@@ -17,8 +17,13 @@ function channelId(preferences: NotificationPreferences): string {
   return `${CHANNEL_PREFIX}-${sound}-${vibration}-v1`;
 }
 
-function isVowChannel(id?: string): boolean {
-  return Boolean(id && (id === CHANNEL_PREFIX || id.startsWith(`${CHANNEL_PREFIX}-`)));
+function isVowNotification(notification: { title: string; extra?: unknown }): boolean {
+  if (notification.extra && typeof notification.extra === 'object' && 'vow' in notification.extra) {
+    return (notification.extra as { vow?: unknown }).vow === true;
+  }
+  // Legacy VOW reminders did not persist channelId in pending notification
+  // records, so retain a title-based fallback for reminders created by older builds.
+  return notification.title.startsWith('VOW ·');
 }
 
 export function getNotificationPreferences(): NotificationPreferences {
@@ -109,6 +114,7 @@ export async function scheduleReminder(id: number, title: string, body: string, 
       channelId: channelId(preferences),
       smallIcon: VOW_NOTIFICATION_ICON,
       sound: preferences.sound ? 'default' : undefined,
+      extra: { vow: true },
       schedule: { at, allowWhileIdle: true },
     }],
   });
@@ -124,7 +130,7 @@ export async function cancelAllVowNotifications(): Promise<void> {
 
   const pending = await LocalNotifications.getPending();
   const ids = pending.notifications
-    .filter((notification) => isVowChannel(notification.channelId))
+    .filter((notification) => isVowNotification(notification))
     .map((notification) => notification.id);
 
   if (ids.length > 0) {
@@ -170,7 +176,7 @@ export async function syncUpcomingSessionNotifications(sessions: Session[]): Pro
   // completed, skipped and moved sessions.
   const pending = await LocalNotifications.getPending();
   const staleIds = pending.notifications
-    .filter((notification) => isVowChannel(notification.channelId) && !desiredIds.has(notification.id))
+    .filter((notification) => isVowNotification(notification) && !desiredIds.has(notification.id))
     .map((notification) => notification.id);
 
   if (staleIds.length > 0) {
