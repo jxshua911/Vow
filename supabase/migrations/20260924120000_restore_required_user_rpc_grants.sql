@@ -15,8 +15,5 @@ GRANT EXECUTE ON FUNCTION public.vow_claim_ai_guardrail(uuid,numeric) TO authent
 GRANT EXECUTE ON FUNCTION public.vow_release_ai_guardrail(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.vow_record_ai_usage(text,text,integer,text) TO authenticated;
 
--- This helper accepts an arbitrary user UUID, so clients do not need direct access to it.
--- Premium checks are performed internally by the user-scoped entitlement functions.
-REVOKE EXECUTE ON FUNCTION public.vow_is_premium(uuid) FROM anon, authenticated;
 
 COMMIT;
