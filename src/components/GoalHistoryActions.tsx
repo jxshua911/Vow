@@ -24,8 +24,17 @@ export function GoalHistoryActions() {
     if (!confirm(`Delete “${goal.outcome}”? This permanently removes the goal and its dependent milestones and sessions.`)) return;
     setDeleting(goal.id);
     const { error: deleteError } = await supabase.from('goals').delete().eq('id', goal.id).eq('user_id', session!.user.id);
-    if (deleteError) setError(`Could not delete "${goal.outcome}". ${deleteError.message}`.trim());
-    else { setGoals((current) => current.filter((item) => item.id !== goal.id)); setError(null); }
+    if (deleteError) {
+      setError(`Could not delete "${goal.outcome}". ${deleteError.message}`.trim());
+    } else {
+      setGoals((current) => current.filter((item) => item.id !== goal.id));
+      setError(null);
+      try {
+        await syncUserUpcomingSessionNotifications(session!.user.id);
+      } catch (syncError) {
+        console.warn('[VOW] Notification sync after goal deletion failed:', syncError);
+      }
+    }
     setDeleting(null);
   }
 
