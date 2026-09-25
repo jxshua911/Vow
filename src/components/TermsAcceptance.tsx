@@ -10,11 +10,11 @@ export function TermsAcceptance({ userId, onAccepted }: { userId: string; onAcce
   const [error, setError] = useState('');
 
   async function openTerms() {
-    await Browser.open({ url: 'https://vowglobal.lovable.app/terms' });
+    await Browser.open({ url: 'https://vowglobal.lovable.app/terms-and-services' });
   }
 
   async function openCopyright() {
-    await Browser.open({ url: 'https://vowglobal.lovable.app/copyright' });
+    await Browser.open({ url: 'https://vowglobal.lovable.app/terms-and-services' });
   }
 
   async function handleContinue() {
