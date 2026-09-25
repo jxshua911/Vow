@@ -1,12 +1,21 @@
 import { useState } from 'react';
+import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabase';
 
-export const VOW_TERMS_VERSION = 'v1.0';
+export const VOW_TERMS_VERSION = 'v1.1';
 
-export function TermsAcceptance({ userId, onAccepted, onReadLegal }: { userId: string; onAccepted: () => void; onReadLegal: () => void }) {
+export function TermsAcceptance({ userId, onAccepted }: { userId: string; onAccepted: () => void; onReadLegal: () => void }) {
   const [accepted, setAccepted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  async function openTerms() {
+    await Browser.open({ url: 'https://vowglobal.lovable.app/terms' });
+  }
+
+  async function openCopyright() {
+    await Browser.open({ url: 'https://vowglobal.lovable.app/copyright' });
+  }
 
   async function handleContinue() {
     if (!accepted || saving) return;
@@ -34,10 +43,10 @@ export function TermsAcceptance({ userId, onAccepted, onReadLegal }: { userId: s
         <h1 className="vow-heading text-3xl md:text-4xl text-vow-ink">Review VOW's terms and policies.</h1>
       </div>
       <div className="border border-vow-border p-6 md:p-8">
-        <p className="text-sm text-vow-muted leading-relaxed">VOW's EULA & Terms explain how the service works, your responsibilities, AI-generated content, Premium subscriptions, connected services, and other important conditions of use. The Copyright & DMCA Policy explains how copyright reports are handled.</p>
+        <p className="text-sm text-vow-muted leading-relaxed">VOW's EULA & Terms explain how the service works, your responsibilities, AI-generated content, Premium subscriptions, connected services, location and other important conditions of use. The Copyright & DMCA Policy explains how copyright reports are handled.</p>
         <div className="flex flex-wrap gap-3 mt-5">
-          <button type="button" onClick={onReadLegal} className="vow-btn-ghost">Read EULA & Terms</button>
-          <button type="button" onClick={onReadLegal} className="vow-btn-ghost">Read Copyright & DMCA</button>
+          <button type="button" onClick={openTerms} className="vow-btn-ghost">Read EULA & Terms</button>
+          <button type="button" onClick={openCopyright} className="vow-btn-ghost">Read Copyright & DMCA</button>
         </div>
         <label className="flex items-start gap-3 mt-7 cursor-pointer">
           <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1 h-4 w-4 accent-current" />
