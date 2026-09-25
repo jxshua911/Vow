@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal } from '@/types/database';
+import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 
 export function GoalHistoryActions() {
   const { session } = useAuth();
