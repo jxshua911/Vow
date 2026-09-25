@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="338" android:viewportHeight="379">
-    <group android:translateX="20" android:translateY="20">
-        <path android:fillColor="#FF000000" android:pathData="M 0,0 1,64 228,169 227,171 215,177 206,180 0,276 0,338 49,317 66,308 297,203 297,136 17,6 Z"/>
-    </group>
-</vector>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/vow_app_icon_source"
+    android:gravity="center" />
