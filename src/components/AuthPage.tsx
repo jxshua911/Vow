@@ -85,8 +85,7 @@ export function AuthPage() {
     <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
-          <BrandLogo className="mx-auto w-16 h-16 mb-5" />
-          <h1 className="vow-heading text-4xl text-vow-ink mb-2">VOW</h1>
+          <BrandLogo className="mx-auto w-28 h-auto mb-6" />
           <p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p>
         </div>
 
