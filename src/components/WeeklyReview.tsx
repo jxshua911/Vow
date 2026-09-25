@@ -7,6 +7,7 @@ import { detectPatterns } from '@/lib/patterns';
 import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
 import { Check, ArrowRight, RotateCcw } from '@/lib/ui-icons';
+import { syncUpcomingSessionNotifications } from '@/lib/notifications';
 
 export function ReviewPage() {
   const { session } = useAuth();
@@ -179,6 +180,17 @@ export function ReviewPage() {
           });
         }
       }
+
+      const { data: upcomingSessions, error: upcomingSessionError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'scheduled')
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true });
+      if (upcomingSessionError) throw upcomingSessionError;
+      await syncUpcomingSessionNotifications((upcomingSessions || []) as Session[]);
+
       await load();
     } catch (err) {
       console.error('Confirm failed:', err);
