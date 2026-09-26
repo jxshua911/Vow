@@ -3,9 +3,9 @@ import { ArrowLeft } from '@/lib/ui-icons';
 import { PageHeader } from './AppShell';
 
 const LEGAL_URLS = {
-  terms: 'https://vowglobal.lovable.app/terms-and-services',
-  privacy: 'https://vowglobal.lovable.app/terms-and-services',
-  copyright: 'https://vowglobal.lovable.app/terms-and-services',
+  terms: 'https://vowglobal.lovable.app/legal',
+  privacy: 'https://vowglobal.lovable.app/legal',
+  copyright: 'https://vowglobal.lovable.app/legal',
 } as const;
 
 export function LegalPage({ onBack }: { onBack?: () => void }) {
