@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
@@ -34,13 +35,14 @@ function AppContent() {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
-  const [showTermsLegal, setShowTermsLegal] = useState(false);
   const [viewHistory, setViewHistory] = useState<View[]>(['dashboard']);
   const viewHistoryRef = useRef<View[]>(['dashboard']);
   const [splashMounted, setSplashMounted] = useState(true);
   const [splashFadingOut, setSplashFadingOut] = useState(false);
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
   const view = viewHistory[viewHistory.length - 1];
+
+  const openLegalWebsite = useCallback(async () => { await Browser.open({ url: 'https://vowglobal.lovable.app/legal' }); }, []);
 
   const navigate = useCallback((next: View) => {
     setViewHistory((current) => {
@@ -140,8 +142,7 @@ function AppContent() {
   let content: React.ReactNode;
   if (loading || (session && (settingsLoading || termsLoading))) content = <AppLoading />;
   else if (!session) content = <AuthPage />;
-  else if (!termsAccepted && showTermsLegal) content = <LegalPage onBack={() => setShowTermsLegal(false)} />;
-  else if (!termsAccepted) content = <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} onReadLegal={() => setShowTermsLegal(true)} />;
+  else if (!termsAccepted) content = <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} onReadLegal={() => void openLegalWebsite()} />;
   else if (!settings || !settings.onboarding_complete) content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
   else if (view === 'legal') content = <LegalPage onBack={goBack} />;
   else content = <AppShell currentView={view} onNavigate={navigate}>
@@ -149,7 +150,7 @@ function AppContent() {
     {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
     {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
     {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
-    {view === 'profile' && <ProfilePage onLegal={() => navigate('legal')} onUpgrade={() => navigate('upgrade')} />}
+    {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => navigate('upgrade')} />}
     {view === 'upgrade' && <UpgradePage />}
   </AppShell>;
   return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</LanguageContext.Provider>;
