@@ -8,7 +8,7 @@ import Stripe from "npm:stripe@22.6.2";
 // - v2.account[.recipient].capability_status_updated
 //
 // Local listener example:
-// stripe listen --thin-events 'v2.core.account[requirements].updated,v2.core.account[.recipient].capability_status.updated' --forward-thin-to <YOUR_LOCAL_ENDPOINT>
+// stripe listen --thin-events 'v2.core.account[requirements].updated,v2.core.account[.recipient].capability_status_updated' --forward-thin-to <YOUR_LOCAL_ENDPOINT>
 //
 // The exact event names above should match the event names configured in the
 // Stripe Dashboard for your API/SDK generation.
