@@ -228,9 +228,7 @@ export function GoalPlanner({
       const goalId = await ensureDraft();
       const references = await loadReferences(goalId);
       const { data: currentSession } = await supabase.auth.getSession();
-      const { data: currentSession } = await supabase.auth.getSession();
       const { data, error: e } = await supabase.functions.invoke('vow-goal-ai', {
-        headers: currentSession.session?.access_token ? { Authorization: `Bearer ${currentSession.session.access_token}` } : undefined,
         headers: currentSession.session?.access_token ? { Authorization: `Bearer ${currentSession.session.access_token}` } : undefined,
         body: {
           mode: 'goal-clarify',
@@ -311,7 +309,9 @@ export function GoalPlanner({
       if (ie) throw ie;
       const references = await loadReferences(goalId);
       const start = nextMonday();
+      const { data: currentSession } = await supabase.auth.getSession();
       const { data, error: e } = await supabase.functions.invoke('vow-goal-ai', {
+        headers: currentSession.session?.access_token ? { Authorization: `Bearer ${currentSession.session.access_token}` } : undefined,
         body: {
           mode: 'goal-plan',
           goal: {
