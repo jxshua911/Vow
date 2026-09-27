@@ -1,0 +1,8 @@
+# Supabase Edge Function configuration.
+# User-facing VOW functions keep the default JWT verification.
+# Stripe sends its own signed webhook request, not a Supabase JWT, so only
+# the Stripe Connect thin-event webhook bypasses the platform JWT gate.
+# The webhook still verifies Stripe-Signature with STRIPE_CONNECT_WEBHOOK_SECRET.
+
+[functions.vow-stripe-connect-webhook]
+verify_jwt = false
