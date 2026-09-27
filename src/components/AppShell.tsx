@@ -3,7 +3,7 @@ import { useAuth } from '@/lib/auth';
 import type { ReactNode } from 'react';
 import { BrandLogo } from './BrandLogo';
 
-export type View = 'dashboard' | 'calendar' | 'goals' | 'review' | 'profile' | 'upgrade' | 'legal';
+export type View = 'dashboard' | 'calendar' | 'goals' | 'review' | 'profile' | 'upgrade' | 'legal' | 'support';
 
 interface AppShellProps { currentView: View; onNavigate: (view: View) => void; children: ReactNode; }
 
