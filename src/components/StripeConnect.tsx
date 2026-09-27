@@ -13,6 +13,11 @@ type AccountStatus = {
   requirementsStatus: string;
 };
 
+type ConnectedAccount = {
+  accountId: string;
+  displayName: string;
+};
+
 type Product = {
   id: string;
   stripe_product_id: string;
@@ -47,6 +52,7 @@ function money(cents: number, currency: string) {
 export function StripeConnectPage({ onBack }: { onBack: () => void }) {
   const [status, setStatus] = useState<AccountStatus | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
@@ -73,6 +79,7 @@ export function StripeConnectPage({ onBack }: { onBack: () => void }) {
       const productResult = await invoke("list-products");
       setStatus(accountStatus);
       setProducts(productResult.products || []);
+      setAccounts(productResult.accounts || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load Stripe Connect.");
     } finally {
@@ -327,6 +334,23 @@ export function StripeConnectPage({ onBack }: { onBack: () => void }) {
             </p>
           )}
         </form>
+      </section>
+
+      <section className="mb-6 border border-vow-border p-5">
+        <h2 className="text-sm font-medium text-vow-ink">Connected sellers</h2>
+        <p className="mt-1 text-xs text-vow-muted">Every connected account currently mapped to the VOW platform.</p>
+        {accounts.length === 0 ? (
+          <p className="mt-4 text-sm text-vow-muted">No connected sellers yet.</p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {accounts.map((account) => (
+              <div key={account.accountId} className="flex items-center justify-between gap-4 border border-vow-border p-3">
+                <span className="text-sm text-vow-ink">{account.displayName}</span>
+                <span className="font-mono text-[10px] text-vow-muted">{account.accountId}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="border border-vow-border p-5">
