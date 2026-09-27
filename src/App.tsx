@@ -43,7 +43,7 @@ function AppContent() {
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
   const view = viewHistory[viewHistory.length - 1];
 
-  const openLegalWebsite = useCallback(async () => { await Browser.open({ url: 'https://vowglobal.lovable.app/legal' }); }, []);
+  const openLegalWebsite = useCallback(() => { navigate('legal'); }, []);
 
   const navigate = useCallback((next: View) => {
     setViewHistory((current) => {
