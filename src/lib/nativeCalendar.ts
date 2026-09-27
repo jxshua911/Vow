@@ -37,6 +37,36 @@ export async function addSessionToNativeCalendar(session: Session, preferredAcco
   return id;
 }
 
+
+export type NativeCalendarEvent = {
+  id: string;
+  summary: string;
+  description?: string;
+  start: { dateTime?: string; date?: string };
+  end: { dateTime?: string; date?: string };
+};
+
+export async function listNativeCalendarEvents(from: Date, to: Date): Promise<NativeCalendarEvent[]> {
+  if (!Capacitor.isNativePlatform()) return [];
+  if (!await requestNativeCalendarAccess()) return [];
+  const { result } = await CapacitorCalendar.listEventsInRange({
+    from: from.getTime(),
+    to: to.getTime(),
+  });
+  return (result || []).map((event) => {
+    const value = event as unknown as Record<string, unknown>;
+    const startDate = typeof value.startDate === 'number' ? new Date(value.startDate).toISOString() : undefined;
+    const endDate = typeof value.endDate === 'number' ? new Date(value.endDate).toISOString() : undefined;
+    return {
+      id: String(value.id || crypto.randomUUID()),
+      summary: String(value.title || 'Calendar event'),
+      description: typeof value.description === 'string' ? value.description : undefined,
+      start: { dateTime: startDate },
+      end: { dateTime: endDate },
+    };
+  });
+}
+
 export async function syncSessionsToNativeCalendar(sessions: Session[], preferredAccountEmail?: string): Promise<number> {
   if (!Capacitor.isNativePlatform()) return 0;
   const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now() && !isSynced(session.id));
