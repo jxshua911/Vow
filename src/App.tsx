@@ -17,6 +17,7 @@ import { ReviewEntitlementBanner } from '@/components/ReviewEntitlementBanner';
 import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
+import { SupportPage } from '@/components/Support';
 import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
@@ -145,6 +146,7 @@ function AppContent() {
   else if (!termsAccepted) content = <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} onReadLegal={() => void openLegalWebsite()} />;
   else if (!settings || !settings.onboarding_complete) content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
   else if (view === 'legal') content = <LegalPage onBack={goBack} />;
+  else if (view === 'support') content = <SupportPage onBack={goBack} />;
   else content = <AppShell currentView={view} onNavigate={navigate}>
     {view === 'dashboard' && <Dashboard onNavigate={navigate} />}
     {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
