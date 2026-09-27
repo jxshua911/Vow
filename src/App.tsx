@@ -42,8 +42,6 @@ function AppContent() {
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
   const view = viewHistory[viewHistory.length - 1];
 
-  const openLegalWebsite = useCallback(() => { navigate('legal'); }, [navigate]);
-
   const navigate = useCallback((next: View) => {
     setViewHistory((current) => {
       if (current[current.length - 1] === next) return current;
@@ -53,6 +51,8 @@ function AppContent() {
       return nextHistory;
     });
   }, []);
+
+  const openLegalWebsite = useCallback(() => { navigate('legal'); }, [navigate]);
 
   const goBack = useCallback(() => {
     setViewHistory((current) => {
