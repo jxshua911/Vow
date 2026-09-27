@@ -118,9 +118,6 @@ export function AuthPage() {
               </button>
             </div>
 
-            <p className="text-xs text-vow-muted mt-10 text-center leading-relaxed">
-              Your goals and journal are private to your account. VOW only processes information needed to provide the service.
-            </p>
           </>
         ) : (
           <>
@@ -160,9 +157,6 @@ export function AuthPage() {
               </button>
             </form>
 
-            <p className="text-xs text-vow-muted mt-8 text-center leading-relaxed">
-              Your goals and journal are private to your account. VOW only processes information needed to provide the service.
-            </p>
           </>
         )}
       </div>
