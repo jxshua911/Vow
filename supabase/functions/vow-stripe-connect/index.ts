@@ -125,6 +125,65 @@ Deno.serve(async (req) => {
       return json({ products });
     }
 
+    // Checkout is intentionally available to storefront customers without
+    // requiring a VOW account. Seller/account-management actions remain protected.
+    if (action === "checkout") {
+      const productId = String(body?.productId || "").trim();
+      if (!productId) throw new Error("A product ID is required.");
+
+      const { data: product, error } = await db
+        .from("stripe_connect_products")
+        .select("stripe_product_id,connected_account_id,name,price_in_cents,currency,active")
+        .eq("stripe_product_id", productId)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!product) throw new Error("That product is no longer available.");
+
+      const seller = await accountStatus(stripe, product.connected_account_id);
+      if (!seller.readyToReceivePayments) {
+        throw new Error("This seller is not ready to receive payments yet.");
+      }
+
+      const feePercent = Number(Deno.env.get("STRIPE_APPLICATION_FEE_PERCENT") || "10");
+      if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent >= 100) {
+        throw new Error("Stripe application fee is not configured correctly: set STRIPE_APPLICATION_FEE_PERCENT to a number from 0 to below 100.");
+      }
+
+      const applicationFeeAmount = Math.floor(product.price_in_cents * feePercent / 100);
+      const base = appUrl(req);
+
+      // Destination Charge:
+      // 1. The customer pays through the platform's hosted Checkout.
+      // 2. Stripe transfers the charge to the destination account.
+      // 3. application_fee_amount remains with the platform.
+      const session = await stripe.checkout.sessions.create({
+        line_items: [{
+          price_data: {
+            currency: product.currency,
+            product: product.stripe_product_id,
+            unit_amount: product.price_in_cents,
+          },
+          quantity: 1,
+        }],
+        payment_intent_data: {
+          application_fee_amount: applicationFeeAmount,
+          transfer_data: { destination: product.connected_account_id },
+        },
+        mode: "payment",
+        success_url: base + "/?stripe=success&session_id={CHECKOUT_SESSION_ID}",
+        cancel_url: base + "/?stripe=cancelled",
+        metadata: {
+          vow_product_id: product.stripe_product_id,
+          vow_connected_account_id: product.connected_account_id,
+          vow_application_fee_amount: String(applicationFeeAmount),
+        },
+      });
+
+      return json({ url: session.url });
+    }
+
     const user = requireUser(await getUser(req));
 
     if (action === "create-account") {
@@ -236,6 +295,11 @@ Deno.serve(async (req) => {
       if (!/^[a-z]{3}$/.test(currency)) throw new Error("Currency must be a three-letter ISO currency code.");
       if (requestedAccountId !== accountId) throw new Error("You can only create products for your own connected account.");
 
+      const seller = await accountStatus(stripe, accountId);
+      if (!seller.onboardingComplete || !seller.readyToReceivePayments) {
+        throw new Error("Complete Stripe onboarding and make sure payments are enabled before creating a product.");
+      }
+
       const product = await stripe.products.create({
         name,
         description: description || undefined,
@@ -268,65 +332,6 @@ Deno.serve(async (req) => {
 
       if (error) throw error;
       return json({ productId: product.id, priceId });
-    }
-
-    if (action === "checkout") {
-      const productId = String(body?.productId || "").trim();
-      if (!productId) throw new Error("A product ID is required.");
-
-      const { data: product, error } = await db
-        .from("stripe_connect_products")
-        .select("stripe_product_id,connected_account_id,name,price_in_cents,currency,active")
-        .eq("stripe_product_id", productId)
-        .eq("active", true)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!product) throw new Error("That product is no longer available.");
-
-      const seller = await accountStatus(stripe, product.connected_account_id);
-      if (!seller.readyToReceivePayments) {
-        throw new Error("This seller is not ready to receive payments yet.");
-      }
-
-      const feePercent = Number(Deno.env.get("STRIPE_APPLICATION_FEE_PERCENT") || "10");
-      if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent >= 100) {
-        throw new Error("Stripe application fee is not configured correctly: set STRIPE_APPLICATION_FEE_PERCENT to a number from 0 to below 100.");
-      }
-
-      const applicationFeeAmount = Math.floor(product.price_in_cents * feePercent / 100);
-      const base = appUrl(req);
-
-      // Destination Charge:
-      // 1. The customer pays through the platform's hosted Checkout.
-      // 2. Stripe automatically transfers the charge to the destination account.
-      // 3. application_fee_amount remains with the platform.
-      const session = await stripe.checkout.sessions.create({
-        line_items: [{
-          price_data: {
-            currency: product.currency,
-            product: product.stripe_product_id,
-            unit_amount: product.price_in_cents,
-          },
-          quantity: 1,
-        }],
-        payment_intent_data: {
-          application_fee_amount: applicationFeeAmount,
-          transfer_data: {
-            destination: product.connected_account_id,
-          },
-        },
-        mode: "payment",
-        success_url: base + "/?stripe=success&session_id={CHECKOUT_SESSION_ID}",
-        cancel_url: base + "/?stripe=cancelled",
-        metadata: {
-          vow_product_id: product.stripe_product_id,
-          vow_connected_account_id: product.connected_account_id,
-          vow_application_fee_amount: String(applicationFeeAmount),
-        },
-      });
-
-      return json({ url: session.url });
     }
 
     return json({ error: "Unknown Stripe Connect action." }, 400);
