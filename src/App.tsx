@@ -43,7 +43,7 @@ function AppContent() {
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
   const view = viewHistory[viewHistory.length - 1];
 
-  const openLegalWebsite = useCallback(() => { navigate('legal'); }, []);
+  const openLegalWebsite = useCallback(() => { navigate('legal'); }, [navigate]);
 
   const navigate = useCallback((next: View) => {
     setViewHistory((current) => {
