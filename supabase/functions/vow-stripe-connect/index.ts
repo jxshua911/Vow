@@ -122,7 +122,31 @@ Deno.serve(async (req) => {
         }
       }));
 
-      return json({ products });
+      // Return the connected sellers separately as well, so the sample
+      // storefront can display the complete seller catalogue even if a seller
+      // currently has no active product.
+      const { data: mappings, error: mappingError } = await db
+        .from("stripe_connected_accounts")
+        .select("stripe_account_id")
+        .order("created_at", { ascending: false });
+      if (mappingError) throw mappingError;
+
+      const accounts = await Promise.all((mappings || []).map(async (mapping) => {
+        try {
+          const account = await stripe.v2.core.accounts.retrieve(mapping.stripe_account_id);
+          return {
+            accountId: mapping.stripe_account_id,
+            displayName: account.display_name || mapping.stripe_account_id,
+          };
+        } catch {
+          return {
+            accountId: mapping.stripe_account_id,
+            displayName: mapping.stripe_account_id,
+          };
+        }
+      }));
+
+      return json({ products, accounts });
     }
 
     // Checkout is intentionally available to storefront customers without
