@@ -7,8 +7,9 @@ import { PageHeader } from './AppShell';
 import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences } from '@/lib/notifications';
 import { getEntitlementSnapshot } from '@/lib/entitlements';
 import { VOW_LANGUAGES, LANGUAGE_STORAGE_KEY, languageName } from '@/lib/i18n';
+import { StripeConnectPage } from './StripeConnect';
 
-type ProfileSubpage = 'main' | 'shared' | 'customise' | 'language';
+type ProfileSubpage = 'main' | 'shared' | 'customise' | 'language' | 'stripe-connect';
 type IconColour = 'white' | 'black' | 'gold' | 'blue';
 
 type VowIconPlugin = {
@@ -133,6 +134,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
 
   if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
   if (subpage === 'customise') return <CustomisePage premium={premium} selectedIcon={selectedIcon} customBackground={customBackground} customForeground={customForeground} message={iconMessage} onIconChange={handleIconChange} onCustomIconChange={handleCustomIconChange} onBack={() => setSubpage('main')} onUpgrade={onUpgrade} />;
+  if (subpage === 'stripe-connect') return <StripeConnectPage onBack={() => setSubpage('main')} />;
   if (subpage === 'language') return <LanguagePage language={language} saving={languageSaving} message={languageMessage} onChange={async (next) => {
     setLanguageSaving(true); setLanguageMessage(''); setLanguage(next); localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
     if (session) {
@@ -147,6 +149,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
       <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle="Your account and preferences." />
       <div className="border border-vow-border divide-y divide-vow-border">
         <button onClick={() => premium ? setSubpage('customise') : onUpgrade?.()} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Customise</p><p className="text-xs text-vow-muted mt-1">{premium ? 'Personalise your VOW icon and app experience.' : 'Premium feature — personalise your VOW icon and app experience.'}</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
+        <button onClick={() => setSubpage('stripe-connect')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Stripe Connect</p><p className="text-xs text-vow-muted mt-1">Sample seller onboarding, product creation and hosted checkout.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
         <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
         <button onClick={() => setSubpage('language')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Language</p><p className="text-xs text-vow-muted mt-1">Choose the language VOW uses for the app and AI coaching.</p></div><span className="text-sm text-vow-muted">{VOW_LANGUAGES.find((item) => item.code === language)?.flag || '🌐'}</span></button>
         <button onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'support' }))} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Support</p><p className="text-xs text-vow-muted mt-1">Report an issue, ask a question, or send feedback.</p></button>
