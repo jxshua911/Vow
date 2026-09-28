@@ -295,7 +295,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
         },
         signal: c.signal,
         body: JSON.stringify({
-          model: "openai/gpt-oss-120b",
+          model: "openai/gpt-oss-20b",
           messages,
           max_completion_tokens: MAX[kind],
           temperature: 0.15,
