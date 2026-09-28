@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ArrowRight, ArrowLeft } from '@/lib/ui-icons';
 import { GoalPlanner } from './GoalPlanner';
+import { getTimeZoneLabel, getUserTimeZone } from '@/lib/dates';
 import { requestNotificationPermission } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 
@@ -56,7 +57,7 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [rawGoal, setRawGoal] = useState('');
   const [goalPlaceholder] = useState(getRandomPlaceholder);
   const [showPlanner, setShowPlanner] = useState(false);
-  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const [timezone] = useState(getUserTimeZone());
   const [preferredTimes, setPreferredTimes] = useState('9:00 am');
   const [notificationFreq, setNotificationFreq] = useState('weekly');
   const [saving, setSaving] = useState(false);
@@ -145,7 +146,7 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
             <h2 className="vow-heading text-2xl text-vow-ink mb-3">Tune how VOW works with you.</h2>
             <p className="text-vow-muted text-sm leading-relaxed mb-8">These preferences shape your planning rhythm. Your first goal will then go through VOW's full domain-aware AI planner.</p>
             <div className="space-y-6 mb-8">
-              <div><label className="vow-label block mb-2">Timezone</label><input value={timezone} onChange={(e) => setTimezone(e.target.value)} className="vow-input" /></div>
+              <div><label className="vow-label block mb-2">Timezone</label><div className="vow-input flex items-center min-h-11 text-sm">{getTimeZoneLabel(timezone)}</div><p className="text-xs text-vow-muted mt-2">Detected from this device so VOW schedules sessions in your local time.</p></div>
               <div><label className="vow-label block mb-2">Preferred session time</label><input value={preferredTimes} onChange={(e) => setPreferredTimes(e.target.value)} placeholder="e.g. 9:00 am" className="vow-input" /></div>
               <div>
                 <label className="vow-label block mb-2">How often should I check in?</label>
