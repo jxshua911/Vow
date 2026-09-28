@@ -249,7 +249,8 @@ function detectAmbiguousTerms(text: string): boolean {
 
   return false;
 }
-\nasync function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
+
+async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
   const requestId = await claimGuardrail(req);
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) {
