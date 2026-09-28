@@ -45,10 +45,10 @@ jobs:
         run: ./gradlew assembleDebug
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk VOW-free-debug.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk VOW Free APK
 
       - name: Upload Free APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW-Free
+          name: VOW Free APK
           path: VOW-free-debug.apk
