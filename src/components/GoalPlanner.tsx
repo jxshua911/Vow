@@ -127,9 +127,10 @@ function normalizePlan(raw: Plan, durationWeeks: number): Plan | null {
 }
 
 async function invokeGoalAI(body: Record<string, unknown>) {
+  const { data: sessionData } = await supabase.auth.getSession();
   const { data, error } = await supabase.functions.invoke('vow-goal-ai', {
-    headers: (await supabase.auth.getSession()).data.session?.access_token
-      ? { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` }
+    headers: sessionData.session?.access_token
+      ? { Authorization: `Bearer ${sessionData.session.access_token}` }
       : undefined,
     body,
   });
@@ -326,8 +327,7 @@ export function GoalPlanner({
       if (ie) throw ie;
       const references = await loadReferences(goalId);
       const start = nextMonday();
-      const { data: currentSession } = await supabase.auth.getSession();
-      const data = await invokeGoalAI({
+            const data = await invokeGoalAI({
           mode: 'goal-plan',
           goal: {
             id: goalId,
@@ -479,8 +479,7 @@ export function GoalPlanner({
       }
 
       try {
-        const { data: currentSession } = await supabase.auth.getSession();
-        const { error: calendarError } = await supabase.functions.invoke('google-calendar-sync-goal', {
+                const { error: calendarError } = await supabase.functions.invoke('google-calendar-sync-goal', {
           headers: currentSession.session?.access_token ? { Authorization: `Bearer ${currentSession.session.access_token}` } : undefined,
           body: { goalId: draftGoalId },
         });
