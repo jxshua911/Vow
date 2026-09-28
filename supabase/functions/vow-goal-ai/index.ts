@@ -685,7 +685,14 @@ Deno.serve(async (req) => {
           },
         });
       }
-      const validationError = validatePlan(\n        b,\n        w,\n        ds,\n        [str(g?.title || g?.outcome, 500), str(g?.why_it_matters, 300), message].filter(Boolean).join(" ")\n      );
+      const validationError = validatePlan(
+        b,
+        w,
+        ds,
+        [str(g?.title || g?.outcome, 500), str(g?.why_it_matters, 300), message]
+          .filter(Boolean)
+          .join(" ")
+      );
       if (validationError) {
         console.warn("plan validation failed", { validation_error: validationError });
         const qualityAlertType =
