@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { checkContentSafety } from '@/lib/contentSafety';
-import { consumeEntitlement, type EntitlementResult } from '@/lib/entitlements';
+import type { EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
 import type { Goal, Session } from '@/types/database';
 
@@ -49,12 +49,6 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
         if (safety.status === 'suspended' && session) await supabase.auth.signOut();
         return;
       }
-      const entitlement = await consumeEntitlement(featureForPrompt(question), { goal_id: goal?.id || null, prompt_type: featureForPrompt(question) });
-      if (!entitlement.allowed) {
-        setUpgrade(entitlement);
-        return;
-      }
-
       let upcoming: Session[] = [];
       const start = new Date();
       const end = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000);
@@ -79,8 +73,21 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
           instruction: 'You are VOW AI, a rigorous planning and accountability assistant. VOW\'s core promise is: Most apps help you track what you\'re doing. VOW helps you figure out what to do next. Always prioritise the user\'s next concrete action and explain why it is the right next step. Give useful, goal-specific reasoning, not motivational filler. Do not say “define what better looks like”, “stay consistent”, “break it into smaller steps”, or similar generic coaching phrases unless you immediately replace them with concrete actions, numbers, checkpoints, or decision rules tied to this exact goal. If the goal is measurable, identify the metric and a credible baseline/target. If it is skill-based, specify practice structure and progression. If it is a project, specify deliverables, dependencies and milestones. If it is a study goal, specify topics, workload and assessment. If it is a fitness goal, specify training variables and recovery considerations without pretending certainty. Use the supplied VOW calendar to find conflicts and realistic weekly capacity. Use attached goal references as evidence of the user\'s intended outcome; inspect public links when relevant. Use web research when current, specialised, empirical, or time-sensitive information would materially improve the answer, and cite or name the important sources/findings rather than pretending research was done. When circumstances change, adapt the plan rather than simply restating it. If critical information is missing, ask only the minimum necessary question; otherwise make a reasonable assumption and state it. Challenge unrealistic or contradictory goals instead of blindly encouraging them. Return a practical plan with: target, success metric, assumptions/baseline, milestone sequence, weekly workload, concrete actions/sessions, progression, checkpoints, risks and fallback rules. Be concise, specific and age-appropriate.',
         },
       });
+      const responseError =
+        data && typeof data === 'object' && 'error' in data
+          ? (data as Record<string, unknown>)
+          : null;
+      const responseEntitlement =
+        responseError?.entitlement && typeof responseError.entitlement === 'object'
+          ? (responseError.entitlement as EntitlementResult)
+          : null;
+      if (responseEntitlement && responseEntitlement.allowed === false) {
+        setUpgrade(responseEntitlement);
+        return;
+      }
       if (invokeError) throw new Error('VOW AI could not complete that request.');
-      if (data && typeof data === 'object' && 'error' in data && typeof (data as Record<string, unknown>).error === 'string') throw new Error('VOW AI is temporarily unavailable.');
+      if (responseError && typeof responseError.error === 'string')
+        throw new Error('VOW AI is temporarily unavailable.');
       const text = readAIText(data);
       if (!text) throw new Error('VOW AI did not return a usable response.');
       setAnswer(text);
