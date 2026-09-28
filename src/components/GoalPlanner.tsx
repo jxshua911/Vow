@@ -144,6 +144,7 @@ export function GoalPlanner({
   const [why, setWhy] = useState(initialWhy);
   const [durationWeeks, setDurationWeeks] = useState(8);
   const [availableDays, setAvailableDays] = useState<string[]>(['Monday', 'Wednesday', 'Saturday']);
+  const [preferredSessionTime, setPreferredSessionTime] = useState('09:00');
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -246,7 +247,7 @@ export function GoalPlanner({
           references,
         },
       });
-      if (e || !data?.structured) throw new Error(data?.error || e?.message || 'VOW AI could not prepare the follow-up questions.');
+      if (e || !data?.structured) throw new Error(data?.error || (e as any)?.context?.body?.error || e?.message || 'VOW AI could not prepare the follow-up questions.');
       const next = data.structured as Clarification;
       if (!Array.isArray(next.questions) || next.questions.length === 0)
         throw new Error('VOW AI returned no follow-up questions.');
@@ -326,13 +327,13 @@ export function GoalPlanner({
             weekly_commitment_target: availableDays.length,
             plan_generated_at: null,
           },
-          message: `Build a genuinely personalised ${armadillo.goal_type} plan. Methodology: ${armadillo.methodology}\nRequired inputs: ${armadillo.required_inputs.join('; ')}\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${durationLabel(durationWeeks)}. Available days are exactly: ${availableDays.join(', ')}. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions.`,
+          message: `Build a genuinely personalised ${armadillo.goal_type} plan. Methodology: ${armadillo.methodology}\nRequired inputs: ${armadillo.required_inputs.join('; ')}\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${durationLabel(durationWeeks)}. Available days are exactly: ${availableDays.join(', ')}. The user's preferred session time is exactly ${preferredSessionTime} in their device timezone and must be used consistently for every session unless VOW explicitly asks the user to change it. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions.`,
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
           references,
         },
       });
-      if (e || !data?.structured) throw new Error(data?.error || e?.message || 'VOW AI could not build the plan.');
+      if (e || !data?.structured) throw new Error(data?.error || (e as any)?.context?.body?.error || e?.message || 'VOW AI could not build the plan.');
       if (data.structured?.clarification_needed) {
         const followUp = data.structured as Clarification;
         setClarification(followUp);
@@ -364,7 +365,7 @@ export function GoalPlanner({
         const w = Math.max(1, Math.min(durationWeeks, week));
         const dayIndex = Math.max(0, DAYS.indexOf(day));
         const date = addDays(start, (w - 1) * 7 + dayIndex);
-        const match = /^(\d{1,2}):(\d{2})/.exec(preferredTime || '09:00');
+        const match = /^(\d{1,2}):(\d{2})/.exec(preferredSessionTime || preferredTime || '09:00');
         date.setHours(Math.min(23, Number(match?.[1] || 9)), Math.min(59, Number(match?.[2] || 0)), 0, 0);
         return date;
       }
@@ -429,7 +430,7 @@ export function GoalPlanner({
           plan_version: 1,
           plan_generated_at: new Date().toISOString(),
           planning_horizon_weeks: durationWeeks,
-          planning_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          planning_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         },
         p_milestones: milestoneRows,
         p_plan_items: planItemRows,
@@ -707,6 +708,12 @@ export function GoalPlanner({
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="vow-label block mb-3">Preferred session time</label>
+          <input type="time" value={preferredSessionTime} onChange={e => setPreferredSessionTime(e.target.value)} className="vow-input min-h-11" />
+          <p className="text-xs text-vow-muted mt-2">VOW will keep this time fixed across the generated schedule in your device timezone.</p>
         </div>
 
         <div>
