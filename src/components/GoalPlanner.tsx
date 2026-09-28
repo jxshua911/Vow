@@ -248,8 +248,7 @@ export function GoalPlanner({
       if (!(await checkCreateEntitlement())) return;
       const goalId = await ensureDraft();
       const references = await loadReferences(goalId);
-      const { data: currentSession } = await supabase.auth.getSession();
-      const data = await invokeGoalAI({
+            const data = await invokeGoalAI({
           mode: 'goal-clarify',
           goal: {
             id: goalId,
@@ -263,8 +262,7 @@ export function GoalPlanner({
           message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDomain: ${armadillo.category} / ${armadillo.goal_type}\nMethodology: ${armadillo.methodology}\nRequired information: ${armadillo.required_inputs.join('; ')}\nAI research required: ${armadillo.needs_ai_research ? 'YES — identify ambiguous terms/domain before planning and use live web research.' : 'NO — deterministic specialist match is sufficient unless current specialist research materially improves the plan.'}\nResearch reason: ${armadillo.research_reason || 'none'}\nDuration: ${durationLabel(durationWeeks)}.\nAvailable days: ${availableDays.join(', ')}\nAsk 2-3 high-value questions that resolve the most important missing inputs for this exact domain. Never ask generic questions.`,
           available_days: availableDays,
           references,
-        },
-      });
+        });
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not prepare the follow-up questions.');
       const next = data.structured as Clarification;
       if (!Array.isArray(next.questions) || next.questions.length === 0)
@@ -347,8 +345,7 @@ export function GoalPlanner({
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
           references,
-        },
-      });
+        });
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not build the plan.');
       if (data.structured?.clarification_needed) {
         const followUp = data.structured as Clarification;
