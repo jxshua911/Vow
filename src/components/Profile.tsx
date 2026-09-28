@@ -176,7 +176,27 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
 
 
 function LanguagePage({ language, saving, message, onChange, onBack }: { language: string; saving: boolean; message: string; onChange: (language: string) => void; onBack: () => void }) {
-  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Language" subtitle="VOW can adapt its coaching language to you." /><section className="border border-vow-border p-5"><div className="mb-5"><p className="vow-label mb-1">App language</p><p className="text-xs text-vow-muted">Search the VOW language catalogue. Languages are listed by name, without country flags.</p></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{VOW_LANGUAGES.map((item) => <button key={item.code} disabled={saving} onClick={() => onChange(item.code)} aria-pressed={language === item.code} className={`flex items-center gap-3 border p-3 text-left transition-colors ${language === item.code ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><span <span><span className="block text-sm text-vow-ink">{item.nativeName}</span><span className="block text-[11px] text-vow-muted">{item.name}</span></span>{language === item.code && <span className="ml-auto text-xs text-vow-ink">✓</span>}</button>)}</div>{message && <p className="text-xs text-vow-muted mt-4" role="status">{message}</p>}</section></div>;
+  const [query, setQuery] = useState('');
+  const filtered = VOW_LANGUAGES.filter((item) => {
+    const q = query.trim().toLocaleLowerCase();
+    return !q || item.name.toLocaleLowerCase().includes(q) || item.nativeName.toLocaleLowerCase().includes(q) || item.code.toLowerCase().includes(q);
+  });
+  return <div>
+    <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button>
+    <PageHeader title="Language" subtitle="Choose the language VOW uses for the app and AI coaching." />
+    <section className="border border-vow-border p-5">
+      <div className="mb-5"><p className="vow-label mb-1">App language</p><p className="text-xs text-vow-muted">Search by language name, native name, or language code. No country flags.</p></div>
+      <input value={query} onChange={(e) => setQuery(e.target.value)} className="vow-input mb-4" placeholder="Search languages…" aria-label="Search languages" />
+      <div className="max-h-[55vh] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {filtered.map((item) => <button key={item.code} disabled={saving} onClick={() => onChange(item.code)} aria-pressed={language === item.code} className={`flex items-center gap-3 border p-3 text-left transition-colors ${language === item.code ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}>
+          <span><span className="block text-sm text-vow-ink">{item.name}</span><span className="block text-[11px] text-vow-muted">{item.nativeName}</span></span>
+          {language === item.code && <span className="ml-auto text-xs text-vow-ink">✓</span>}
+        </button>)}
+      </div>
+      {!filtered.length && <p className="text-sm text-vow-muted py-6 text-center">No language matched “{query}”.</p>}
+      {message && <p className="text-xs text-vow-muted mt-4" role="status">{message}</p>}
+    </section>
+  </div>;
 }
 
 function CustomisePage({ premium, selectedIcon, customBackground, customForeground, message, onIconChange, onCustomIconChange, onBack, onUpgrade }: {
