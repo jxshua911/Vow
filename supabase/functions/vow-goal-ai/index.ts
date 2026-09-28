@@ -209,7 +209,47 @@ async function releaseGuardrail(req: Request, requestId: string) {
   if (error) console.warn("AI guardrail release failed", error.message);
 }
 
-async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
+function detectAmbiguousTerms(text: string): boolean {
+  if (!text) return false;
+
+  // 1. Uppercase acronyms (3+ letters). Keep a small allowlist of common terms.
+  const acronymPattern = /\b[A-Z]{3,}\b/g;
+  const acronyms = text.match(acronymPattern) || [];
+  const commonAcronyms = [
+    "USA", "FBI", "CIA", "NYC", "DNA", "RNA", "API", "HTTP", "JSON",
+    "HTML", "CSS", "URL", "SQL", "CPU", "GPU", "RAM", "PDF",
+  ];
+  if (acronyms.some((acronym) => !commonAcronyms.includes(acronym))) return true;
+
+  const lowerText = text.toLowerCase();
+
+  // 2. Competition and event language often needs domain-specific context.
+  const competitionKeywords = [
+    "championship", "champion", "tournament", "tourney", "competition",
+    "compete", "league", "cup", "series", "playoff", "playoffs", "event",
+    "finals", "qualifier", "qualifiers", "grand slam", "major",
+    "world championship", "world cup",
+  ];
+  if (competitionKeywords.some((keyword) => lowerText.includes(keyword))) return true;
+
+  // 3. Current/time-sensitive language benefits from live research.
+  const timeKeywords = [
+    "latest", "current", "upcoming", "this year", "this season",
+    "deadline", "season", "trending", "viral", "2026", "2027", "2028",
+  ];
+  if (timeKeywords.some((keyword) => lowerText.includes(keyword))) return true;
+
+  // 4. Goal phrasing that commonly introduces a niche/specialist domain.
+  const technicalPatterns = [
+    /\b(professional|competitive|amateur|beginner)\s+\w+/i,
+    /\b(learn|master|become|win|champion)\s+\w+\s+(at|in)\s+\w+/i,
+    /\b(improve|get\s+better)\s+at\s+\w+/i,
+  ];
+  if (technicalPatterns.some((pattern) => pattern.test(text))) return true;
+
+  return false;
+}
+\nasync function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
   const requestId = await claimGuardrail(req);
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) {
@@ -479,8 +519,8 @@ Deno.serve(async (req) => {
     const knowledge = await searchKnowledge(knowledgeQuery);
     const researchRequired =
       domain?.needs_ai_research === true ||
-      /\b[A-Z]{2,8}\b/.test(message) ||
-      /\b(latest|current|today|this week|event|competition|tournament|league|championship|deadline|release)\b/i.test(message);
+      detectAmbiguousTerms(message) ||
+      detectAmbiguousTerms(g?.outcome || "");
     const context = {
       goal: {
         title: str(g?.title || g?.outcome, 300),
