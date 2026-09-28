@@ -229,7 +229,7 @@ function detectAmbiguousTerms(text: string): boolean {
   const acronymPattern = /\b[A-Z]{3,}\b/g;
   const acronyms = text.match(acronymPattern) || [];
   const commonAcronyms = [
-    "USA", "FBI", "CIA", "NYC", "DNA", "RNA", "API", "HTTP", "JSON",
+    "USA", "FBI", "CIA", "NYC", "DNA", "API", "HTTP", "JSON",
     "HTML", "CSS", "URL", "SQL", "CPU", "GPU", "RAM", "PDF",
   ];
   if (acronyms.some((acronym) => !commonAcronyms.includes(acronym))) return true;
@@ -588,7 +588,6 @@ Deno.serve(async (req) => {
     const knowledge = await searchKnowledge(knowledgeQuery);
     const researchRequired =
       domain?.needs_ai_research === true ||
-      knowledge.length === 0 ||
       detectAmbiguousTerms(message) ||
       detectAmbiguousTerms(g?.outcome || "");
     const context = {
