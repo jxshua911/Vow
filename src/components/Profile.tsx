@@ -8,7 +8,7 @@ import { getNotificationPermission, requestNotificationPermission, syncUpcomingS
 import { getEntitlementSnapshot } from '@/lib/entitlements';
 import { VOW_LANGUAGES, LANGUAGE_STORAGE_KEY, languageName } from '@/lib/i18n';
 
-type ProfileSubpage = 'main' | 'shared' | 'customise' | 'language';
+type ProfileSubpage = 'main' | 'shared' | 'customise' | 'language' | 'quality';
 type IconColour = 'white' | 'black' | 'gold' | 'blue';
 
 type VowIconPlugin = {
@@ -51,10 +51,18 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const [language, setLanguage] = useState(() => localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'en');
   const [languageSaving, setLanguageSaving] = useState(false);
   const [languageMessage, setLanguageMessage] = useState('');
+  const [qualityAlerts, setQualityAlerts] = useState<Array<{ id: string; alert_type: string; validation_code: string | null; goal_title: string | null; created_at: string; resolved_at: string | null }>>([]);
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
   useEffect(() => { getEntitlementSnapshot().then(snapshot => setPremium(Boolean(snapshot && snapshot.plan === 'premium'))).catch(() => setPremium(false)); }, []);
+  useEffect(() => {
+    if (!session) return;
+    void supabase.from('vow_ai_quality_alerts').select('id,alert_type,validation_code,goal_title,created_at,resolved_at').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(20).then(({ data, error }) => {
+      if (error) console.warn('[VOW] AI quality alerts could not be loaded:', error.message);
+      setQualityAlerts((data || []) as typeof qualityAlerts);
+    });
+  }, [session]);
 
   async function handleEnableNotifications() {
     setRequesting(true);
@@ -133,6 +141,10 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
 
   if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
   if (subpage === 'customise') return <CustomisePage premium={premium} selectedIcon={selectedIcon} customBackground={customBackground} customForeground={customForeground} message={iconMessage} onIconChange={handleIconChange} onCustomIconChange={handleCustomIconChange} onBack={() => setSubpage('main')} onUpgrade={onUpgrade} />;
+  if (subpage === 'quality') return <QualityAlertsPage alerts={qualityAlerts} onBack={() => setSubpage('main')} onResolve={async (id) => {
+    const { error } = await supabase.from('vow_ai_quality_alerts').update({ resolved_at: new Date().toISOString() }).eq('id', id).eq('user_id', session?.user?.id || '');
+    if (!error) setQualityAlerts((current) => current.map((alert) => alert.id === id ? { ...alert, resolved_at: new Date().toISOString() } : alert));
+  }} />;
   if (subpage === 'language') return <LanguagePage language={language} saving={languageSaving} message={languageMessage} onChange={async (next) => {
     setLanguageSaving(true); setLanguageMessage(''); setLanguage(next); localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
     if (session) {
@@ -218,4 +230,29 @@ function SharedInformationPage({ session, displayName, onBack }: { session: Retu
     { label: 'Phone Calendar', value: phoneCalendarConnected ? 'Connected' : 'Not connected' },
   ];
   return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Account information" subtitle="A clear view of the account details and calendar connections currently available to VOW." /><div className="border border-vow-border divide-y divide-vow-border">{rows.map((row) => <div key={row.label} className="p-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2"><p className="text-xs text-vow-muted uppercase tracking-wide">{row.label}</p><p className="text-sm text-vow-ink sm:text-right break-words max-w-md">{row.value}</p></div>)}</div></div>;
+}
+
+
+function QualityAlertsPage({ alerts, onBack, onResolve }: {
+  alerts: Array<{ id: string; alert_type: string; validation_code: string | null; goal_title: string | null; created_at: string; resolved_at: string | null }>;
+  onBack: () => void;
+  onResolve: (id: string) => void;
+}) {
+  const open = alerts.filter(alert => !alert.resolved_at);
+  return <div>
+    <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button>
+    <PageHeader title="AI quality alerts" subtitle="VOW records plan-quality failures so generic output can be investigated instead of silently accepted." />
+    <section className="border border-vow-border divide-y divide-vow-border">
+      {!alerts.length && <div className="p-6"><p className="text-sm text-vow-ink">No quality alerts recorded.</p><p className="text-xs text-vow-muted mt-2">When VOW blocks a generic or repetitive plan, it will appear here.</p></div>}
+      {alerts.map((alert) => <div key={alert.id} className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div><p className="text-sm font-medium text-vow-ink">{alert.alert_type === 'generic_plan_blocked' ? 'Generic plan blocked' : alert.alert_type === 'repetitive_plan_blocked' ? 'Repetitive plan blocked' : 'Plan quality issue'}</p>
+          <p className="text-xs text-vow-muted mt-1">{alert.goal_title || 'Unnamed goal'} · {alert.validation_code || 'quality check'}</p></div>
+          {!alert.resolved_at && <button onClick={() => onResolve(alert.id)} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">Mark seen</button>}
+        </div>
+        <p className="text-[11px] text-vow-muted mt-3">{new Date(alert.created_at).toLocaleString()}</p>
+      </div>)}
+    </section>
+    {open.length > 0 && <p className="text-xs text-vow-muted mt-4">{open.length} unresolved alert{open.length === 1 ? '' : 's'}.</p>}
+  </div>;
 }
