@@ -43,26 +43,23 @@ jobs:
         run: npm run build
       - name: Sync Capacitor Android
         run: npx cap sync android
-      - name: Assemble universal debug APK
+      - name: Assemble free and premium QA APKs
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
-      - name: Verify APK
+          ./gradlew assembleProductionDebug assembleFreeTestDebug assemblePremiumTestDebug --no-daemon --stacktrace
+      - name: Verify APKs and labels
         run: |
-          APK="android/app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK"
-          echo "APK size: $(stat -c%s "$APK") bytes"
-      - name: Verify Android application label
-        run: |
+          test -s android/app/build/outputs/apk/freeTest/debug/app-freeTest-debug.apk
+          test -s android/app/build/outputs/apk/premiumTest/debug/app-premiumTest-debug.apk
           grep -q '<string name="app_name">VOW</string>' android/app/src/main/res/values/strings.xml
           grep -q 'android:label="@string/app_name"' android/app/src/main/AndroidManifest.xml
-      - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "VOW APK 1.4.apk"
-      - name: Upload APK
+      - name: Upload QA APKs
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.4-debug
-          path: "VOW APK 1.4.apk"
+          name: VOW QA APKs 1.4
+          path: |
+            android/app/build/outputs/apk/freeTest/debug/app-freeTest-debug.apk
+            android/app/build/outputs/apk/premiumTest/debug/app-premiumTest-debug.apk
           if-no-files-found: error
           retention-days: 14
