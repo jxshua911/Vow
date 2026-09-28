@@ -153,6 +153,19 @@ async function record(
   });
   if (error) console.warn("AI usage telemetry failed", error.message);
 }
+async function recordQualityAlert(req: Request, uid: string, goalId: string | null, mode: string, alertType: string, validationCode: string, goalTitle: string, details: Record<string, unknown>) {
+  const { error } = await client(req).rpc("vow_record_ai_quality_alert", {
+    p_user_id: uid,
+    p_goal_id: goalId,
+    p_mode: mode,
+    p_alert_type: alertType,
+    p_validation_code: validationCode,
+    p_goal_title: goalTitle,
+    p_details: details,
+  });
+  if (error) console.warn("AI quality alert recording failed", error.message);
+}
+
 async function searchKnowledge(query: string) {
   if (!query.trim()) return [];
   try {
@@ -620,12 +633,34 @@ Deno.serve(async (req) => {
       const validationError = validatePlan(b, w, ds);
       if (validationError) {
         console.warn("plan validation failed", { validation_error: validationError });
+        const qualityAlertType =
+          validationError === "GENERIC_SESSION_TASK"
+            ? "generic_plan_blocked"
+            : validationError === "REPETITIVE_SCHEDULE"
+            ? "repetitive_plan_blocked"
+            : "plan_quality_blocked";
+        await recordQualityAlert(
+          req,
+          uid,
+          typeof p?.goal_id === "string" ? p.goal_id : null,
+          "goal-plan",
+          qualityAlertType,
+          validationError,
+          str(g?.title || g?.outcome, 300),
+          {
+            available_days: ds,
+            duration_weeks: w,
+            research_required: researchRequired,
+            knowledge_entries: knowledge.length,
+          }
+        );
         await releasePlanningEntitlement(req, entitlementReservationId);
         entitlementReservationId = null;
         return json(
           {
             error: "VOW AI returned a plan that did not meet VOW's planning quality checks. Please try again.",
             code: validationError,
+            quality_alert: qualityAlertType,
           },
           502
         );
