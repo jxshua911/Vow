@@ -21,10 +21,6 @@ const quickPrompts = [
   'Make this week more realistic.',
 ];
 
-function featureForPrompt(question: string) {
-  return /missed|rebuild|changed|realistic|adapt|schedule/i.test(question) ? 'adaptive_replan' as const : 'planning_action' as const;
-}
-
 export function GoalAI({ goal }: { goal?: Goal | null }) {
   const { session } = useAuth();
   const [message, setMessage] = useState('');
