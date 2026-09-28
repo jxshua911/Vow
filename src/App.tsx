@@ -23,6 +23,7 @@ import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
@@ -142,18 +143,28 @@ function AppContent() {
   let content: React.ReactNode;
   if (loading || (session && (settingsLoading || termsLoading))) content = <AppLoading />;
   else if (!session) content = <AuthPage />;
-  else if (!termsAccepted) content = <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} onReadLegal={() => void openLegalWebsite()} />;
-  else if (!settings || !settings.onboarding_complete) content = <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />;
-  else if (view === 'legal') content = <LegalPage onBack={goBack} />;
-  else if (view === 'support') content = <SupportPage onBack={goBack} />;
-  else content = <AppShell currentView={view} onNavigate={navigate}>
-    {view === 'dashboard' && <Dashboard onNavigate={navigate} />}
-    {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
-    {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
-    {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
-    {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => navigate('upgrade')} />}
-    {view === 'upgrade' && <UpgradePage />}
-  </AppShell>;
+  else content = (
+    <ProtectedRoute fallback={<AuthPage />}>
+      {!termsAccepted ? (
+        <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} onReadLegal={() => void openLegalWebsite()} />
+      ) : !settings || !settings.onboarding_complete ? (
+        <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />
+      ) : view === 'legal' ? (
+        <LegalPage onBack={goBack} />
+      ) : view === 'support' ? (
+        <SupportPage onBack={goBack} />
+      ) : (
+        <AppShell currentView={view} onNavigate={navigate}>
+          {view === 'dashboard' && <Dashboard onNavigate={navigate} />}
+          {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
+          {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
+          {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
+          {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => navigate('upgrade')} />}
+          {view === 'upgrade' && <UpgradePage />}
+        </AppShell>
+      )}
+    </ProtectedRoute>
+  );
   return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</LanguageContext.Provider>;
 }
 
