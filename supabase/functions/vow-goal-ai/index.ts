@@ -263,6 +263,18 @@ function detectAmbiguousTerms(text: string): boolean {
   return false;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelayMs(response: Response, attempt: number) {
+  const raw = response.headers.get("retry-after");
+  const seconds = raw ? Number(raw) : NaN;
+  if (Number.isFinite(seconds) && seconds >= 0)
+    return Math.min(10000, Math.max(500, Math.round(seconds * 1000)));
+  return Math.min(8000, 1000 * 2 ** attempt);
+}
+
 async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
   const requestId = await claimGuardrail(req);
   const key = Deno.env.get("GROQ_API_KEY");
@@ -273,49 +285,70 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
   const c = new AbortController(),
     timer = setTimeout(() => c.abort(), 35000);
   try {
-    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-        "Groq-Model-Version": "latest",
-      },
-      signal: c.signal,
-      body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
-        messages,
-        max_completion_tokens: MAX[kind],
-        temperature: 0.15,
-        reasoning_effort: "low",
-        tools: [{ type: "browser_search" }],
-        tool_choice: researchRequired ? "required" : "auto",
-      }),
-    });
-    const raw = await r.text();
-    if (!r.ok) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+          "Groq-Model-Version": "latest",
+        },
+        signal: c.signal,
+        body: JSON.stringify({
+          model: "openai/gpt-oss-120b",
+          messages,
+          max_completion_tokens: MAX[kind],
+          temperature: 0.15,
+          reasoning_effort: "low",
+          tools: [{ type: "browser_search" }],
+          tool_choice: researchRequired ? "required" : "auto",
+        }),
+      });
+      const raw = await r.text();
+      if (r.ok) {
+        const payload = JSON.parse(raw);
+        const message = payload?.choices?.[0]?.message;
+        const executedTools = Array.isArray(message?.executed_tools) ? message.executed_tools : [];
+        const usedWebSearch = executedTools.some((tool: any) => {
+          const serialized = JSON.stringify(tool).toLowerCase();
+          return serialized.includes("web_search") || serialized.includes("browser_search");
+        });
+        if (researchRequired && !usedWebSearch)
+          throw new Error("AI_RESEARCH_NOT_PERFORMED");
+        const content = message?.content;
+        if (typeof content !== "string" || !content.trim())
+          throw new Error("GROQ_EMPTY_RESPONSE");
+        return parse(content);
+      }
+      if (r.status === 429 && attempt === 0) {
+        const delay = retryDelayMs(r, attempt);
+        console.warn("Groq rate limited; retrying once", { delay_ms: delay });
+        await sleep(delay);
+        continue;
+      }
       console.error("Groq provider error", { status: r.status });
       if (r.status === 429) throw new Error("GROQ_429");
       throw new Error(`GROQ_PROVIDER_ERROR_${r.status}`);
     }
-    const payload = JSON.parse(raw);
-    const message = payload?.choices?.[0]?.message;
-    const executedTools = Array.isArray(message?.executed_tools) ? message.executed_tools : [];
-    const usedWebSearch = executedTools.some((tool: any) => {
-      const serialized = JSON.stringify(tool).toLowerCase();
-      return serialized.includes("web_search") || serialized.includes("browser_search");
-    });
-    if (researchRequired && !usedWebSearch)
-      throw new Error("AI_RESEARCH_NOT_PERFORMED");
-    const content = message?.content;
-    if (typeof content !== "string" || !content.trim())
-      throw new Error("GROQ_EMPTY_RESPONSE");
-    return parse(content);
+    throw new Error("GROQ_429");
   } finally {
     clearTimeout(timer);
     await releaseGuardrail(req, requestId);
   }
 }
-function validatePlan(b: any, w: number, ds: string[]) {
+function meaningfulTokens(text: string) {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\\s-]/g, " ")
+      .split(/\\s+/)
+      .map((x) => x.trim())
+      .filter((x) => x.length >= 4)
+      .filter((x) => !["your", "with", "from", "that", "this", "week", "session", "practice", "practise", "learn", "work"].includes(x))
+  );
+}
+
+function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
   const milestones = Array.isArray(b?.milestones) ? b.milestones : [];
   const focus = Array.isArray(b?.weekly_focus) ? b.weekly_focus : [];
   const weekly = Array.isArray(b?.weekly_session_templates) ? b.weekly_session_templates : [];
@@ -330,8 +363,30 @@ function validatePlan(b: any, w: number, ds: string[]) {
   const unique = new Set(tasks);
   if (tasks.length >= 8 && unique.size / tasks.length < 0.55) return "REPETITIVE_SCHEDULE";
 
-  const generic = /^(work on|make progress on|continue working on|review your goal|do your task|practice more)/i;
-  if (planned.some((x: any) => generic.test(str(x.task, 350)))) return "GENERIC_SESSION_TASK";
+  const generic = /^(work on|make progress on|continue working on|review your goal|do your task|practice more|practise more|keep practicing|keep practising|spend (some )?time|focus on improving|work through|learn more about|study the topic|practice the basics|practise the basics)\\b/i;
+  const vague = /^(do|work|practice|practise|study|learn|review|focus)\\s+(this|that|it|more|better|the goal|your goal|the topic)\\b/i;
+  if (planned.some((x: any) => {
+    const task = str(x.task, 350);
+    return generic.test(task) || vague.test(task) || task.split(/\\s+/).filter(Boolean).length < 6;
+  })) return "GENERIC_SESSION_TASK";
+
+  const contextTokens = meaningfulTokens([
+    goalContext,
+    ...focus.map((x: any) => str(x, 350)),
+    str(b?.outcome, 500),
+    str(b?.success_metric, 350),
+  ].join(" "));
+  let weakSpecificity = 0;
+  for (const item of planned) {
+    const task = str(item.task, 350);
+    const taskTokens = meaningfulTokens(task);
+    const overlapsContext = [...taskTokens].some((token) => contextTokens.has(token));
+    const hasMeasure = /\\b\\d+(?:[.,]\\d+)?\\s*(?:%|minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\\b/i.test(task);
+    const hasConcreteVerb = /\\b(analy[sz]e|build|calculate|complete|create|draft|edit|film|identify|measure|mix|outline|perform|record|solve|write|draw|bake|knead|shape|letter|paint|run|cycle|swim|lift|code|debug|test|revise|compare|read|summari[sz]e|translate|memorise|memorize|recite|drill|trace|copy|compose|schedule|plan|track|time|score|review)\\b/i.test(task);
+    if (!overlapsContext && !hasMeasure) weakSpecificity++;
+    else if (!hasConcreteVerb && !hasMeasure) weakSpecificity++;
+  }
+  if (planned.length && weakSpecificity / planned.length > 0.25) return "GENERIC_SESSION_TASK";
   return null;
 }
 
@@ -630,7 +685,7 @@ Deno.serve(async (req) => {
           },
         });
       }
-      const validationError = validatePlan(b, w, ds);
+      const validationError = validatePlan(\n        b,\n        w,\n        ds,\n        [str(g?.title || g?.outcome, 500), str(g?.why_it_matters, 300), message].filter(Boolean).join(" ")\n      );
       if (validationError) {
         console.warn("plan validation failed", { validation_error: validationError });
         const qualityAlertType =
