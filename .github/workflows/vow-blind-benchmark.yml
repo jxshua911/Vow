@@ -1,0 +1,21 @@
+name: VOW blind benchmark
+on:
+  push:
+    branches: [capacitor-mobile]
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Run 100-category blind benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --max-time 1100             "https://vqsrdausvmfjayffxiuh.supabase.co/functions/v1/vow-blind-benchmark?token=Rgfo_WWR4is-m9ITst6ixXqM0APHBbvUfQtxBaYOrUg"             -o benchmark-result.json
+          cat benchmark-result.json
+      - name: Upload benchmark result
+        uses: actions/upload-artifact@v4
+        with:
+          name: vow-blind-benchmark-result
+          path: benchmark-result.json
+          retention-days: 1
