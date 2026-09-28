@@ -4,6 +4,6 @@
     <string name="app_name_free_test">VOW Free</string>
     <string name="app_name_premium_test">VOW Premium</string>
     <string name="title_activity_main">VOW</string>
-    <string name="package_name">com.vow.app</string>
-    <string name="custom_url_scheme">com.vow.app</string>
+    <string name="package_name">VOW</string>
+    <string name="custom_url_scheme">vow</string>
 </resources>
