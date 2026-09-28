@@ -228,7 +228,7 @@ function detectAmbiguousTerms(text: string): boolean {
     "championship", "champion", "tournament", "tourney", "competition",
     "compete", "league", "cup", "series", "playoff", "playoffs", "event",
     "finals", "qualifier", "qualifiers", "grand slam", "major",
-    "world championship", "world cup",
+    "world championship", "world cup", "world record",
   ];
   if (competitionKeywords.some((keyword) => lowerText.includes(keyword))) return true;
 
@@ -520,6 +520,7 @@ Deno.serve(async (req) => {
     const knowledge = await searchKnowledge(knowledgeQuery);
     const researchRequired =
       domain?.needs_ai_research === true ||
+      knowledge.length === 0 ||
       detectAmbiguousTerms(message) ||
       detectAmbiguousTerms(g?.outcome || "");
     const context = {
