@@ -45,10 +45,10 @@ jobs:
         run: ./gradlew assembleDebug
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk VOW-premium-debug.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk VOW Premium APK
 
       - name: Upload Premium APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW-Premium
+          name: VOW Premium APK
           path: VOW-premium-debug.apk
