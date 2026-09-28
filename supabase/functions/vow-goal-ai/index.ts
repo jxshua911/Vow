@@ -340,8 +340,8 @@ function meaningfulTokens(text: string) {
   return new Set(
     text
       .toLowerCase()
-      .replace(/[^a-z0-9\\s-]/g, " ")
-      .split(/\\s+/)
+      .replace(/[^a-z0-9\s-]/g, " ")
+      .split(/\s+/)
       .map((x) => x.trim())
       .filter((x) => x.length >= 4)
       .filter((x) => !["your", "with", "from", "that", "this", "week", "session", "practice", "practise", "learn", "work"].includes(x))
@@ -363,11 +363,11 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
   const unique = new Set(tasks);
   if (tasks.length >= 8 && unique.size / tasks.length < 0.55) return "REPETITIVE_SCHEDULE";
 
-  const generic = /^(work on|make progress on|continue working on|review your goal|do your task|practice more|practise more|keep practicing|keep practising|spend (some )?time|focus on improving|work through|learn more about|study the topic|practice the basics|practise the basics)\\b/i;
-  const vague = /^(do|work|practice|practise|study|learn|review|focus)\\s+(this|that|it|more|better|the goal|your goal|the topic)\\b/i;
+  const generic = /^(work on|make progress on|continue working on|review your goal|do your task|practice more|practise more|keep practicing|keep practising|spend (some )?time|focus on improving|work through|learn more about|study the topic|practice the basics|practise the basics)\b/i;
+  const vague = /^(do|work|practice|practise|study|learn|review|focus)\s+(this|that|it|more|better|the goal|your goal|the topic)\b/i;
   if (planned.some((x: any) => {
     const task = str(x.task, 350);
-    return generic.test(task) || vague.test(task) || task.split(/\\s+/).filter(Boolean).length < 6;
+    return generic.test(task) || vague.test(task) || task.split(/\s+/).filter(Boolean).length < 6;
   })) return "GENERIC_SESSION_TASK";
 
   const contextTokens = meaningfulTokens([
@@ -381,8 +381,8 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
     const task = str(item.task, 350);
     const taskTokens = meaningfulTokens(task);
     const overlapsContext = [...taskTokens].some((token) => contextTokens.has(token));
-    const hasMeasure = /\\b\\d+(?:[.,]\\d+)?\\s*(?:%|minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\\b/i.test(task);
-    const hasConcreteVerb = /\\b(analy[sz]e|build|calculate|complete|create|draft|edit|film|identify|measure|mix|outline|perform|record|solve|write|draw|bake|knead|shape|letter|paint|run|cycle|swim|lift|code|debug|test|revise|compare|read|summari[sz]e|translate|memorise|memorize|recite|drill|trace|copy|compose|schedule|plan|track|time|score|review)\\b/i.test(task);
+    const hasMeasure = /\b\d+(?:[.,]\d+)?\s*(?:%|minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\b/i.test(task);
+    const hasConcreteVerb = /\b(analy[sz]e|build|calculate|complete|create|draft|edit|film|identify|measure|mix|outline|perform|record|solve|write|draw|bake|knead|shape|letter|paint|run|cycle|swim|lift|code|debug|test|revise|compare|read|summari[sz]e|translate|memorise|memorize|recite|drill|trace|copy|compose|schedule|plan|track|time|score|review)\b/i.test(task);
     if (!overlapsContext && !hasMeasure) weakSpecificity++;
     else if (!hasConcreteVerb && !hasMeasure) weakSpecificity++;
   }
@@ -452,7 +452,7 @@ function schedule(b: any, w: number, ds: string[], startDate: string) {
         purpose: [str(template?.purpose, 350), f].filter(Boolean).join(" "),
         target_metric: str(template?.target_metric, 180) || str(b?.success_metric, 180) || "Complete the planned work",
         duration_minutes: Math.max(5, Math.min(240, Number(template?.duration_minutes) || 30)),
-        preferred_time: /^\\d{1,2}:\\d{2}$/.test(str(template?.preferred_time, 10))
+        preferred_time: /^\d{1,2}:\d{2}$/.test(str(template?.preferred_time, 10))
           ? template.preferred_time
           : "09:00",
         scheduled_at: d.toISOString(),
