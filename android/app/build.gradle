@@ -13,8 +13,24 @@ android {
         aaptOptions {
              ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
-        // Keep the debug APK universal. No ABI filter is applied so Capacitor and
-        // any native dependencies can package every ABI they support.
+        // Keep every APK universal. No ABI filter is applied so Capacitor and
+        // native dependencies can package every supported ABI.
+    }
+    flavorDimensions += "tier"
+    productFlavors {
+        production {
+            dimension "tier"
+        }
+        freeTest {
+            dimension "tier"
+            applicationIdSuffix ".free"
+            versionNameSuffix "-free-test"
+        }
+        premiumTest {
+            dimension "tier"
+            applicationIdSuffix ".premium"
+            versionNameSuffix "-premium-test"
+        }
     }
     buildTypes {
         debug {
