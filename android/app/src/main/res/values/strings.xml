@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">VOW</string>
+    <string name="app_name_free_test">VOW Free</string>
+    <string name="app_name_premium_test">VOW Premium</string>
     <string name="title_activity_main">VOW</string>
     <string name="package_name">com.vow.app</string>
     <string name="custom_url_scheme">com.vow.app</string>
