@@ -126,6 +126,26 @@ function normalizePlan(raw: Plan, durationWeeks: number): Plan | null {
   };
 }
 
+async function invokeGoalAI(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('vow-goal-ai', {
+    headers: (await supabase.auth.getSession()).data.session?.access_token
+      ? { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` }
+      : undefined,
+    body,
+  });
+  if (!error) return data;
+  const context = (error as any)?.context;
+  try {
+    if (context?.clone) {
+      const payload = await context.clone().json();
+      if (payload?.error) throw new Error(String(payload.error));
+    }
+  } catch (contextError) {
+    if (contextError instanceof Error && contextError.message !== error.message) throw contextError;
+  }
+  throw error;
+}
+
 export function GoalPlanner({
   userId,
   onCreated,
@@ -229,9 +249,7 @@ export function GoalPlanner({
       const goalId = await ensureDraft();
       const references = await loadReferences(goalId);
       const { data: currentSession } = await supabase.auth.getSession();
-      const { data, error: e } = await supabase.functions.invoke('vow-goal-ai', {
-        headers: currentSession.session?.access_token ? { Authorization: `Bearer ${currentSession.session.access_token}` } : undefined,
-        body: {
+      const data = await invokeGoalAI({
           mode: 'goal-clarify',
           goal: {
             id: goalId,
@@ -247,7 +265,7 @@ export function GoalPlanner({
           references,
         },
       });
-      if (e || !data?.structured) throw new Error(data?.error || (e as any)?.context?.body?.error || e?.message || 'VOW AI could not prepare the follow-up questions.');
+      if (!data?.structured) throw new Error(data?.error || 'VOW AI could not prepare the follow-up questions.');
       const next = data.structured as Clarification;
       if (!Array.isArray(next.questions) || next.questions.length === 0)
         throw new Error('VOW AI returned no follow-up questions.');
@@ -311,9 +329,7 @@ export function GoalPlanner({
       const references = await loadReferences(goalId);
       const start = nextMonday();
       const { data: currentSession } = await supabase.auth.getSession();
-      const { data, error: e } = await supabase.functions.invoke('vow-goal-ai', {
-        headers: currentSession.session?.access_token ? { Authorization: `Bearer ${currentSession.session.access_token}` } : undefined,
-        body: {
+      const data = await invokeGoalAI({
           mode: 'goal-plan',
           goal: {
             id: goalId,
@@ -333,7 +349,7 @@ export function GoalPlanner({
           references,
         },
       });
-      if (e || !data?.structured) throw new Error(data?.error || (e as any)?.context?.body?.error || e?.message || 'VOW AI could not build the plan.');
+      if (!data?.structured) throw new Error(data?.error || 'VOW AI could not build the plan.');
       if (data.structured?.clarification_needed) {
         const followUp = data.structured as Clarification;
         setClarification(followUp);
