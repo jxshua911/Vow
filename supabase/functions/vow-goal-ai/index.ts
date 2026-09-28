@@ -107,21 +107,36 @@ async function cooldown(uid: string, k: keyof typeof COOLDOWN) {
     throw new Error("AI_USAGE_CHECK_FAILED");
   return wait;
 }
-async function consumePlanningEntitlement(
+async function reservePlanningEntitlement(
   req: Request,
   feature: "planning_action" | "adaptive_replan",
   metadata: Record<string, unknown>
 ) {
-  const { data, error } = await client(req).rpc("vow_consume_entitlement", {
+  const { data, error } = await client(req).rpc("vow_reserve_entitlement", {
     p_feature: feature,
     p_metadata: metadata,
   });
-  if (error) throw new Error("ENTITLEMENT_CHECK_FAILED");
+  if (error) throw new Error("ENTITLEMENT_RESERVATION_FAILED");
   if (!data || typeof data !== "object")
-    throw new Error("ENTITLEMENT_CHECK_FAILED");
-  return (data as Record<string, unknown>).allowed === true
-    ? null
-    : (data as Record<string, unknown>);
+    throw new Error("ENTITLEMENT_RESERVATION_FAILED");
+  return data as Record<string, unknown>;
+}
+
+async function finalizePlanningEntitlement(req: Request, reservationId: string | null) {
+  if (!reservationId) return;
+  const { data, error } = await client(req).rpc("vow_finalize_entitlement_reservation", {
+    p_reservation_id: reservationId,
+  });
+  if (error || !data || (data as Record<string, unknown>).finalized !== true)
+    throw new Error("ENTITLEMENT_FINALIZE_FAILED");
+}
+
+async function releasePlanningEntitlement(req: Request, reservationId: string | null) {
+  if (!reservationId) return;
+  const { error } = await client(req).rpc("vow_release_entitlement_reservation", {
+    p_reservation_id: reservationId,
+  });
+  if (error) console.warn("entitlement reservation release failed", error.message);
 }
 async function record(
   req: Request,
@@ -213,13 +228,13 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
       },
       signal: c.signal,
       body: JSON.stringify({
-        model: "groq/compound",
+        model: "openai/gpt-oss-120b",
         messages,
         max_completion_tokens: MAX[kind],
         temperature: 0.15,
-        compound_custom: {
-          tools: { enabled_tools: ["web_search", "visit_website"] },
-        },
+        reasoning_effort: "low",
+        tools: [{ type: "browser_search" }],
+        tool_choice: researchRequired ? "required" : "auto",
       }),
     });
     const raw = await r.text();
@@ -231,9 +246,10 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
     const payload = JSON.parse(raw);
     const message = payload?.choices?.[0]?.message;
     const executedTools = Array.isArray(message?.executed_tools) ? message.executed_tools : [];
-    const usedWebSearch = executedTools.some((tool: any) =>
-      JSON.stringify(tool).toLowerCase().includes("web_search")
-    );
+    const usedWebSearch = executedTools.some((tool: any) => {
+      const serialized = JSON.stringify(tool).toLowerCase();
+      return serialized.includes("web_search") || serialized.includes("browser_search");
+    });
     if (researchRequired && !usedWebSearch)
       throw new Error("AI_RESEARCH_NOT_PERFORMED");
     const content = message?.content;
@@ -343,6 +359,8 @@ Deno.serve(async (req) => {
   let mode = "chat";
   let uid = "";
   const startedAt = Date.now();
+  let entitlementReservationId: string | null = null;
+  let entitlementFinalized = false;
   try {
     if (!(req.headers.get("Authorization") || "").startsWith("Bearer "))
       return json({ error: "Authentication required." }, 401);
@@ -414,11 +432,12 @@ Deno.serve(async (req) => {
       );
     const adaptive = mode === "chat" && /missed|rebuild|changed|realistic|adapt|schedule/i.test(message0);
     const feature = adaptive ? "adaptive_replan" : "planning_action";
-    const entitlement = await consumePlanningEntitlement(req, feature, {
+    const entitlement = await reservePlanningEntitlement(req, feature, {
       goal_id: typeof p?.goal_id === "string" ? p.goal_id : null,
       prompt_type: feature,
+      request_id: crypto.randomUUID(),
     });
-    if (entitlement)
+    if (entitlement.allowed !== true)
       return json(
         {
           error: "This VOW AI feature is not available on your current plan.",
@@ -426,6 +445,8 @@ Deno.serve(async (req) => {
         },
         403
       );
+    entitlementReservationId =
+      typeof entitlement.reservation_id === "string" ? entitlement.reservation_id : null;
     const w = weeks(g),
       ds = days(p?.available_days, g?.weekly_commitment_target || 3),
       answers = Array.isArray(p?.answers)
@@ -456,7 +477,10 @@ Deno.serve(async (req) => {
       .filter(Boolean)
       .join(" ");
     const knowledge = await searchKnowledge(knowledgeQuery);
-    const researchRequired = domain?.needs_ai_research === true;
+    const researchRequired =
+      domain?.needs_ai_research === true ||
+      /\b[A-Z]{2,8}\b/.test(message) ||
+      /\b(latest|current|today|this week|event|competition|tournament|league|championship|deadline|release)\b/i.test(message);
     const context = {
       goal: {
         title: str(g?.title || g?.outcome, 300),
@@ -492,6 +516,8 @@ Deno.serve(async (req) => {
       }
       const questions = arr(r.questions, 3).slice(0, 3);
       if (questions.length < 2) {
+        await releasePlanningEntitlement(req, entitlementReservationId);
+        entitlementReservationId = null;
         return json(
           { error: "VOW AI returned insufficient clarification questions. Please try again." },
           502
@@ -504,6 +530,8 @@ Deno.serve(async (req) => {
       );
       r.rationale = str(r.rationale, 500);
       await record(req, "goal-clarify", "success", Date.now() - startedAt);
+      await finalizePlanningEntitlement(req, entitlementReservationId);
+      entitlementFinalized = true;
       return json({ structured: r, text: JSON.stringify(r) });
     }
     if (mode === "goal-plan") {
@@ -529,11 +557,15 @@ Deno.serve(async (req) => {
       if (b?.clarification_needed === true) {
         const followupQuestions = arr(b.questions, 3).slice(0, 3);
         if (followupQuestions.length < 2) {
+          await releasePlanningEntitlement(req, entitlementReservationId);
+          entitlementReservationId = null;
           return json(
             { error: "VOW needs more context before it can build a reliable personalised plan. Please add more detail and try again." },
             502
           );
         }
+        await releasePlanningEntitlement(req, entitlementReservationId);
+        entitlementReservationId = null;
         return json({
           structured: {
             clarification_needed: true,
@@ -546,6 +578,8 @@ Deno.serve(async (req) => {
       const validationError = validatePlan(b, w, ds);
       if (validationError) {
         console.warn("plan validation failed", { validation_error: validationError });
+        await releasePlanningEntitlement(req, entitlementReservationId);
+        entitlementReservationId = null;
         return json(
           {
             error: "VOW AI returned a plan that did not meet VOW's planning quality checks. Please try again.",
@@ -566,6 +600,8 @@ Deno.serve(async (req) => {
             .filter((m: any) => m.title)
         : [];
       if (!milestones.length) {
+        await releasePlanningEntitlement(req, entitlementReservationId);
+        entitlementReservationId = null;
         return json(
           { error: "VOW AI returned a plan without valid milestones. Please try again." },
           502
@@ -585,6 +621,8 @@ Deno.serve(async (req) => {
         ),
       };
       await record(req, "goal-plan", "success", Date.now() - startedAt);
+      await finalizePlanningEntitlement(req, entitlementReservationId);
+      entitlementFinalized = true;
       return json({ structured: result, text: JSON.stringify(result) });
     }
     let r: any;
@@ -599,17 +637,23 @@ Deno.serve(async (req) => {
           { role: "user", content: JSON.stringify({ message, ...context }) },
         ],
         "chat",
-        false
+        researchRequired
       );
     } catch (e) {
       console.warn("chat AI failed", e);
       throw e;
     }
     await record(req, "chat", "success", Date.now() - startedAt);
+    await finalizePlanningEntitlement(req, entitlementReservationId);
+    entitlementFinalized = true;
     return json({
       text: str(r?.text, 1600) || "I couldn't generate a response right now.",
     });
   } catch (e) {
+    if (entitlementReservationId && !entitlementFinalized) {
+      await releasePlanningEntitlement(req, entitlementReservationId);
+      entitlementReservationId = null;
+    }
     const m = e instanceof Error ? e.message : String(e);
     const telemetryMode =
       mode === "goal-clarify" || mode === "goal-plan" || mode === "chat"
@@ -634,6 +678,8 @@ Deno.serve(async (req) => {
             "AI_GLOBAL_DAILY_BUDGET",
             "AI_GLOBAL_MONTHLY_BUDGET",
             "ENTITLEMENT_CHECK_FAILED",
+            "ENTITLEMENT_RESERVATION_FAILED",
+            "ENTITLEMENT_FINALIZE_FAILED",
             "GROQ_API_KEY_MISSING",
             "AI_RESEARCH_NOT_PERFORMED",
             "GROQ_EMPTY_RESPONSE",
@@ -672,7 +718,7 @@ Deno.serve(async (req) => {
       return json({ error: "You have reached your VOW AI usage limit for this period." }, 429);
     if (m === "AI_GLOBAL_DAILY_BUDGET" || m === "AI_GLOBAL_MONTHLY_BUDGET")
       return json({ error: "VOW AI is temporarily at its usage safety limit. Please try again later." }, 503);
-    if (m === "ENTITLEMENT_CHECK_FAILED")
+    if (m === "ENTITLEMENT_CHECK_FAILED" || m === "ENTITLEMENT_RESERVATION_FAILED" || m === "ENTITLEMENT_FINALIZE_FAILED")
       return json(
         { error: "VOW AI could not verify your plan. Please try again." },
         503
