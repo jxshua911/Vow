@@ -1,5 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type PermissionStatus } from '@capacitor/local-notifications';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { VOW_BUILD_TIER } from '@/lib/buildTier';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@/types/database';
 
@@ -10,6 +12,7 @@ const CHANNEL_PREFIX = 'vow-reminders';
 const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
 const PREF_KEY = 'vow:notification-preferences';
 const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: true, sound: true, vibration: true };
+const PUSH_TOKEN_KEY = 'vow:fcm-token';
 
 function channelId(preferences: NotificationPreferences): string {
   const sound = preferences.sound ? 'sound' : 'silent';
@@ -94,7 +97,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   return result.display;
 }
 
-export async function scheduleReminder(id: number, title: string, body: string, at: Date): Promise<void> {
+export async function scheduleReminder(id: number, title: string, body: string, at: Date, sessionId?: string): Promise<void> {
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
 
   const preferences = getNotificationPreferences();
@@ -114,7 +117,7 @@ export async function scheduleReminder(id: number, title: string, body: string, 
       channelId: channelId(preferences),
       smallIcon: VOW_NOTIFICATION_ICON,
       sound: preferences.sound ? 'default' : undefined,
-      extra: { vow: true, sessionId: id },
+      extra: { vow: true, ...(sessionId ? { sessionId } : {}) },
       schedule: { at, allowWhileIdle: true },
     }],
   });
@@ -196,6 +199,7 @@ export async function syncUpcomingSessionNotifications(sessions: Session[]): Pro
       `VOW · ${session.title}`,
       `${session.duration_minutes} min commitment. This is the time you set aside for it.`,
       new Date(session.scheduled_at),
+      session.id,
     );
   }
 }
@@ -225,4 +229,73 @@ export async function syncUserUpcomingSessionNotifications(userId: string): Prom
 
   if (error) throw error;
   await syncUpcomingSessionNotifications((data || []) as Session[]);
+}
+
+
+async function getStoredPushToken(): Promise<string | null> {
+  try { return localStorage.getItem(PUSH_TOKEN_KEY); } catch { return null; }
+}
+
+async function clearStoredPushToken(): Promise<void> {
+  try { localStorage.removeItem(PUSH_TOKEN_KEY); } catch { /* ignore */ }
+}
+
+export async function setupCloudPushNotifications(): Promise<void> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+  if (!getNotificationPreferences().enabled) return;
+
+  try {
+    const permission = await PushNotifications.checkPermissions();
+    if (permission.receive !== 'granted') {
+      const requested = await PushNotifications.requestPermissions();
+      if (requested.receive !== 'granted') return;
+    }
+
+    await PushNotifications.addListener('registration', async ({ value }) => {
+      try {
+        localStorage.setItem(PUSH_TOKEN_KEY, value);
+        const { error } = await supabase.rpc('vow_touch_push_device', {
+          p_token: value,
+          p_build_tier: VOW_BUILD_TIER,
+        });
+        if (error) console.warn('[VOW] Push registration sync failed:', error.message);
+      } catch (error) {
+        console.warn('[VOW] Push registration sync failed:', error);
+      }
+    });
+
+    await PushNotifications.addListener('registrationError', (error) => {
+      console.warn('[VOW] Push registration failed:', error);
+    });
+
+    await PushNotifications.register();
+  } catch (error) {
+    console.warn('[VOW] Cloud push setup skipped:', error);
+  }
+}
+
+export async function clearCloudPushRegistration(): Promise<void> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+
+  const token = await getStoredPushToken();
+  try {
+    if (token) {
+      await supabase.from('vow_push_devices').delete().eq('token', token);
+    }
+  } catch (error) {
+    console.warn('[VOW] Push registration cleanup failed:', error);
+  }
+
+  try { await PushNotifications.unregister(); } catch { /* ignore */ }
+  await clearStoredPushToken();
+}
+
+export async function setupCloudPushActionListener(onNavigate: (sessionId?: string) => void): Promise<() => void> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return () => undefined;
+
+  const handle = await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
+    const sessionId = typeof notification.data?.sessionId === 'string' ? notification.data.sessionId : undefined;
+    onNavigate(sessionId);
+  });
+  return () => { void handle.remove(); };
 }
