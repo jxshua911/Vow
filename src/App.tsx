@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
@@ -18,7 +20,7 @@ import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelAllVowNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
@@ -85,6 +87,20 @@ function AppContent() {
   }, [navigate]);
 
   useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+      const extra = event.notification.extra;
+      const sessionId = extra && typeof extra === 'object' && 'sessionId' in extra
+        ? (extra as { sessionId?: unknown }).sessionId
+        : undefined;
+      if (typeof sessionId === 'string' && sessionId) {
+        window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'goals' }));
+      }
+    });
+    return () => { listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     if (!session) {
       setSettings(null);
@@ -138,7 +154,10 @@ function AppContent() {
         console.warn('[VOW] Account status check failed:', error.message);
         return;
       }
-      if (data === false) await supabase.auth.signOut({ scope: 'local' });
+      if (data === false) {
+        await cancelAllVowNotifications();
+        await supabase.auth.signOut({ scope: 'local' });
+      }
     };
     void validateAccount();
     const listener = CapacitorApp.addListener('resume', () => { void validateAccount(); });
