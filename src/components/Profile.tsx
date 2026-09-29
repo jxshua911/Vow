@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import { PageHeader } from './AppShell';
-import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences } from '@/lib/notifications';
+import { cancelAllVowNotifications, getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences } from '@/lib/notifications';
 import { getEntitlementSnapshot } from '@/lib/entitlements';
 import { VOW_LANGUAGES, LANGUAGE_STORAGE_KEY, languageName } from '@/lib/i18n';
 
@@ -121,11 +121,12 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     if (!error) setEditingName(false);
   }
 
-  async function handleSignOut() { setConfirmSignOut(false); await supabase.auth.signOut(); }
+  async function handleSignOut() { setConfirmSignOut(false); await cancelAllVowNotifications(); await supabase.auth.signOut(); }
 
   async function handleDeleteAccount() {
     if (deleting) return;
     setDeleting(true); setDeleteError('');
+    await cancelAllVowNotifications();
     const { data, error } = await supabase.functions.invoke('vow-account-delete', { body: { confirm: true } });
     if (error || !data?.deleted) {
       setDeleteError(data?.error || error?.message || 'VOW could not complete account deletion.');
