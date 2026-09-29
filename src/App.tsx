@@ -129,6 +129,28 @@ function AppContent() {
   }, [session]);
 
   useEffect(() => {
+    if (!session) return;
+    let active = true;
+    const validateAccount = async () => {
+      const { data, error } = await supabase.rpc('vow_account_is_active');
+      if (!active) return;
+      if (error) {
+        console.warn('[VOW] Account status check failed:', error.message);
+        return;
+      }
+      if (data === false) await supabase.auth.signOut({ scope: 'local' });
+    };
+    void validateAccount();
+    const listener = CapacitorApp.addListener('resume', () => { void validateAccount(); });
+    const interval = window.setInterval(() => { void validateAccount(); }, 5 * 60 * 1000);
+    return () => {
+      active = false;
+      listener.then((handle) => handle.remove());
+      window.clearInterval(interval);
+    };
+  }, [session]);
+
+  useEffect(() => {
     if (!session || !termsAccepted) return;
     const sync = () => { void syncUserUpcomingSessionNotifications(session.user.id).catch((err) => console.warn('[VOW] Notification sync failed:', err)); };
     sync();
