@@ -369,6 +369,7 @@ export function GoalPlanner({
 
   async function handleCreate() {
     if (!plan || !draftGoalId || saving) return;
+    const { data: sessionData } = await supabase.auth.getSession();
     setSaving(true);
     setError('');
     try {
@@ -480,7 +481,7 @@ export function GoalPlanner({
 
       try {
                 const { error: calendarError } = await supabase.functions.invoke('google-calendar-sync-goal', {
-          headers: currentSession.session?.access_token ? { Authorization: `Bearer ${currentSession.session.access_token}` } : undefined,
+          headers: sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : undefined,
           body: { goalId: draftGoalId },
         });
         if (calendarError) console.warn('[VOW] Google Calendar sync could not be completed:', calendarError.message);
