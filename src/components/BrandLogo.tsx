@@ -1,17 +1,15 @@
 import type { ImgHTMLAttributes } from 'react';
 
 /**
- * Canonical VOW brand mark.
- *
- * This asset is intentionally rendered without filters, colour transforms,
- * or alternate marks. The canonical logo must remain visually unchanged.
+ * Canonical VOW wordmark. This is the same source artwork used for the
+ * branded splash/auth surfaces; do not substitute generated or filtered marks.
  */
 export function BrandLogo(props: Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'>) {
   const { style, ...rest } = props;
   return (
     <img
       {...rest}
-      src="/vow-logo-source.webp"
+      src="/vow-logo.svg"
       alt={props.alt || 'VOW'}
       draggable={false}
       decoding="async"
