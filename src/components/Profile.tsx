@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import { PageHeader } from './AppShell';
-import { cancelAllVowNotifications, getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences } from '@/lib/notifications';
 import { getEntitlementSnapshot } from '@/lib/entitlements';
 import { VOW_LANGUAGES, LANGUAGE_STORAGE_KEY, languageName } from '@/lib/i18n';
 
@@ -121,7 +121,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     if (!error) setEditingName(false);
   }
 
-  async function handleSignOut() { setConfirmSignOut(false); await cancelAllVowNotifications(); await supabase.auth.signOut(); }
+  async function handleSignOut() { setConfirmSignOut(false); await cancelAllVowNotifications(); await clearCloudPushRegistration(); await supabase.auth.signOut(); }
 
   async function handleDeleteAccount() {
     if (deleting) return;
@@ -133,6 +133,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
       return;
     }
     await cancelAllVowNotifications();
+    await clearCloudPushRegistration();
     await supabase.auth.signOut();
     setDeleting(false);
   }
