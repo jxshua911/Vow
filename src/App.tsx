@@ -20,7 +20,7 @@ import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { cancelAllVowNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
@@ -156,6 +156,7 @@ function AppContent() {
       }
       if (data === false) {
         await cancelAllVowNotifications();
+        await clearCloudPushRegistration();
         await supabase.auth.signOut({ scope: 'local' });
       }
     };
@@ -168,6 +169,16 @@ function AppContent() {
       window.clearInterval(interval);
     };
   }, [session]);
+
+  useEffect(() => {
+    if (!session || !termsAccepted) return;
+    void setupCloudPushNotifications();
+    let cleanupPushAction: (() => void) | null = null;
+    void setupCloudPushActionListener(() => {
+      window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'goals' }));
+    }).then((cleanup) => { cleanupPushAction = cleanup; });
+    return () => { cleanupPushAction?.(); };
+  }, [session, termsAccepted]);
 
   useEffect(() => {
     if (!session || !termsAccepted) return;
