@@ -17,7 +17,6 @@ import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
-import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
@@ -159,8 +158,7 @@ function AppContent() {
           {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
           {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
           {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
-          {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => navigate('upgrade')} />}
-          {view === 'upgrade' && <UpgradePage />}
+          {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => undefined} />}
         </AppShell>
       )}
     </ProtectedRoute>
