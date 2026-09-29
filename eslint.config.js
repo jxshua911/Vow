@@ -13,6 +13,7 @@ export default tseslint.config(
       'components/**',
       '.pnpm-store/**',
       'node_modules/**',
+      'supabase/functions/**',
     ],
   },
   {
