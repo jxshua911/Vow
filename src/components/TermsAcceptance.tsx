@@ -11,7 +11,7 @@ async function openLegal(url: string) {
   try { await Browser.open({ url }); } catch { window.open(url, '_blank', 'noopener,noreferrer'); }
 }
 
-export function TermsAcceptance({ userId, onAccepted, onReadLegal }: { userId: string; onAccepted: () => void; onReadLegal: () => void }) {
+export function TermsAcceptance({ userId, onAccepted }: { userId: string; onAccepted: () => void }) {
   const [accepted, setAccepted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
