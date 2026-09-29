@@ -23,6 +23,7 @@ import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { VOW_BUILD_TIER } from '@/lib/buildTier';
 
 const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
@@ -118,6 +119,13 @@ function AppContent() {
       }
     })();
     return () => { cancelled = true; };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    void supabase.rpc('vow_sync_personal_build_entitlement', { p_build_tier: VOW_BUILD_TIER }).then(({ error }) => {
+      if (error) console.warn('[VOW] Personal build entitlement sync skipped:', error.message);
+    });
   }, [session]);
 
   useEffect(() => {
