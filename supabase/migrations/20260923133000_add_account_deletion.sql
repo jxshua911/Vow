@@ -39,6 +39,7 @@ begin
   delete from public.vow_payment_events where user_id = p_user_id;
   delete from public.vow_subscription_records where user_id = p_user_id;
   delete from public.vow_terms_acceptances where user_id = p_user_id;
+  delete from public.vow_account_deletion_requests where user_id = p_user_id;
   delete from public.data_requests where user_id = p_user_id;
   delete from public.user_settings where user_id = p_user_id;
   delete from public.goals where user_id = p_user_id;
