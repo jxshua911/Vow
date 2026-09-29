@@ -1,4 +1,5 @@
 name: Build VOW Premium APK
+# Personal QA variant: Premium features are enabled for the designated QA account.
 
 on:
   push:
