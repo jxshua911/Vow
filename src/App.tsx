@@ -175,7 +175,7 @@ function AppContent() {
   else content = (
     <ProtectedRoute fallback={<AuthPage />}>
       {!termsAccepted ? (
-        <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} onReadLegal={() => void openLegalWebsite()} />
+        <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} />
       ) : !settings || !settings.onboarding_complete ? (
         <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />
       ) : view === 'legal' ? (
