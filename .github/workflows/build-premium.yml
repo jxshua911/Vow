@@ -72,7 +72,7 @@ jobs:
       - name: Upload Premium APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW Premium APK 1.4
+          name: VOW Premium APK
           path: android/app/build/outputs/apk/premiumTest/debug/app-premiumTest-debug.apk
           if-no-files-found: error
           retention-days: 14
