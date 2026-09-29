@@ -126,13 +126,13 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   async function handleDeleteAccount() {
     if (deleting) return;
     setDeleting(true); setDeleteError('');
-    await cancelAllVowNotifications();
     const { data, error } = await supabase.functions.invoke('vow-account-delete', { body: { confirm: true } });
     if (error || !data?.deleted) {
       setDeleteError(data?.error || error?.message || 'VOW could not complete account deletion.');
       setDeleting(false);
       return;
     }
+    await cancelAllVowNotifications();
     await supabase.auth.signOut();
     setDeleting(false);
   }
