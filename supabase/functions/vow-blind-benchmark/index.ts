@@ -1,5 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
+type BenchmarkPlan = {
+  milestones?: unknown[];
+  sessions?: unknown[];
+  schedule?: unknown[];
+  [key: string]: unknown;
+};
+
 type Body = {
   run_id?: string;
   seq?: number;
@@ -78,9 +85,11 @@ Deno.serve(async (req) => {
     const content = raw?.choices?.[0]?.message?.content;
     if (!content) throw new Error("EMPTY_MODEL_OUTPUT");
 
-    let plan: any;
+    let plan: BenchmarkPlan;
     try {
-      plan = JSON.parse(content);
+      const parsed: unknown = JSON.parse(content);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("INVALID_JSON");
+      plan = parsed as BenchmarkPlan;
     } catch {
       throw new Error("INVALID_JSON");
     }
