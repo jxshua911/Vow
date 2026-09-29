@@ -135,9 +135,9 @@ async function invokeGoalAI(body: Record<string, unknown>) {
     body,
   });
   if (!error) return data;
-  const context = (error as any)?.context;
+  const context = (error as { context?: unknown }).context;
   try {
-    if (context?.clone) {
+    if (context instanceof Response) {
       const payload = await context.clone().json();
       if (payload?.error) throw new Error(String(payload.error));
     }
