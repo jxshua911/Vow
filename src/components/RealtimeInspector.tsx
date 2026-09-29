@@ -5,9 +5,14 @@ export function RealtimeInspector() {
   const [events, setEvents] = useState<RealtimeInspectorEvent[]>([]);
   const [open, setOpen] = useState(false);
 
-  useEffect(() => subscribeRealtimeInspector((event) => {
-    setEvents((current) => [event, ...current].slice(0, 100));
-  }), []);
+  useEffect(() => {
+    const unsubscribe = subscribeRealtimeInspector((event) => {
+      setEvents((current) => [event, ...current].slice(0, 100));
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="fixed right-4 bottom-20 z-50 border border-vow-border bg-vow-bg px-3 py-2 text-xs text-vow-muted shadow-sm">Realtime Inspector</button>;
 
