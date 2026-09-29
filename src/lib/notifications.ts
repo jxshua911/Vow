@@ -13,6 +13,7 @@ const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
 const PREF_KEY = 'vow:notification-preferences';
 const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: true, sound: true, vibration: true };
 const PUSH_TOKEN_KEY = 'vow:fcm-token';
+let pushListenersReady = false;
 
 function channelId(preferences: NotificationPreferences): string {
   const sound = preferences.sound ? 'sound' : 'silent';
@@ -54,11 +55,13 @@ export async function setNotificationPreferences(preferences: Partial<Notificati
 
   if (!next.enabled) {
     await cancelAllVowNotifications();
+    await clearCloudPushRegistration();
     return next;
   }
 
   if (await getNotificationPermission() === 'granted') {
     await syncCurrentUserUpcomingSessionNotifications();
+    await setupCloudPushNotifications();
   }
   return next;
 }
@@ -251,23 +254,28 @@ export async function setupCloudPushNotifications(): Promise<void> {
       if (requested.receive !== 'granted') return;
     }
 
-    await PushNotifications.addListener('registration', async ({ value }) => {
-      try {
-        localStorage.setItem(PUSH_TOKEN_KEY, value);
-        const { error } = await supabase.rpc('vow_touch_push_device', {
-          p_token: value,
-          p_build_tier: VOW_BUILD_TIER,
-        });
-        if (error) console.warn('[VOW] Push registration sync failed:', error.message);
-      } catch (error) {
-        console.warn('[VOW] Push registration sync failed:', error);
-      }
-    });
+    if (!pushListenersReady) {
+      await PushNotifications.addListener('registration', async ({ value }) => {
+        try {
+          localStorage.setItem(PUSH_TOKEN_KEY, value);
+          const { error } = await supabase.rpc('vow_touch_push_device', {
+            p_token: value,
+            p_build_tier: VOW_BUILD_TIER,
+          });
+          if (error) console.warn('[VOW] Push registration sync failed:', error.message);
+        } catch (error) {
+          console.warn('[VOW] Push registration sync failed:', error);
+        }
+      });
 
-    await PushNotifications.addListener('registrationError', (error) => {
-      console.warn('[VOW] Push registration failed:', error);
-    });
+      await PushNotifications.addListener('registrationError', (error) => {
+        console.warn('[VOW] Push registration failed:', error);
+      });
 
+      pushListenersReady = true;
+    }
+
+    await setupNotifications(getNotificationPreferences());
     await PushNotifications.register();
   } catch (error) {
     console.warn('[VOW] Cloud push setup skipped:', error);
