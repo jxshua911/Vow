@@ -114,7 +114,7 @@ export async function scheduleReminder(id: number, title: string, body: string, 
       channelId: channelId(preferences),
       smallIcon: VOW_NOTIFICATION_ICON,
       sound: preferences.sound ? 'default' : undefined,
-      extra: { vow: true },
+      extra: { vow: true, sessionId: id },
       schedule: { at, allowWhileIdle: true },
     }],
   });
