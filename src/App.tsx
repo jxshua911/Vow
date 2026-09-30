@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { track } from '@/lib/telemetry';
+import { getEntitlementSnapshot, subscribeToEntitlementChanges } from '@/lib/entitlements';
 import { AuthPage } from '@/components/AuthPage';
 import { Onboarding } from '@/components/Onboarding';
 import { TermsAcceptance, VOW_TERMS_VERSION } from '@/components/TermsAcceptance';
@@ -99,6 +100,24 @@ function AppContent() {
     });
     return () => { listener.then((handle) => handle.remove()); };
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    void getEntitlementSnapshot().then((snapshot) => {
+      if (active && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('vow:entitlement-changed', { detail: snapshot }));
+      }
+    });
+    const unsubscribe = subscribeToEntitlementChanges(session.user.id, (snapshot) => {
+      if (!active) return;
+      window.dispatchEvent(new CustomEvent('vow:entitlement-changed', { detail: snapshot }));
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [session]);
 
   useEffect(() => {
     let cancelled = false;
