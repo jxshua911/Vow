@@ -6,6 +6,7 @@ import {
   VOW_PREMIUM_YEARLY,
   VOW_PREMIUM_YEARLY_BASE_PLAN,
 } from './premiumConfig';
+import { refreshEntitlementSnapshot } from './entitlements';
 
 async function accountToken(userId: string) {
   const bytes = new TextEncoder().encode(userId);
@@ -64,6 +65,7 @@ export async function purchasePremium(
   }
 
   // Backend verification and acknowledgement are authoritative on Android.
+  await refreshEntitlementSnapshot();
   return data;
 }
 
@@ -107,6 +109,7 @@ export async function restorePremium() {
     throw new Error(data?.error ?? verifyError?.message ?? 'PURCHASE_VERIFICATION_FAILED');
   }
 
+  await refreshEntitlementSnapshot();
   return { ...data, restored: true };
 }
 
