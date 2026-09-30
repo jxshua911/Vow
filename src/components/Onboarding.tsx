@@ -15,7 +15,7 @@ function getRandomPlaceholder() { return goalPlaceholders[Math.floor(Math.random
 
 export function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [step, setStep] = useState(0); const [rawGoal, setRawGoal] = useState(''); const [goalPlaceholder] = useState(getRandomPlaceholder);
-  const [showPlanner, setShowPlanner] = useState(false); const [timezone, setTimezone] = useState(getUserTimeZone());
+  const [showPlanner, setShowPlanner] = useState(false); const [timezone] = useState(getUserTimeZone());
   const [notificationFreq, setNotificationFreq] = useState('weekly');
   const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
 
