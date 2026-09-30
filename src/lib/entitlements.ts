@@ -38,6 +38,39 @@ export async function getEntitlementSnapshot(): Promise<EntitlementSnapshot | nu
   return data as EntitlementSnapshot;
 }
 
+export async function refreshEntitlementSnapshot(): Promise<EntitlementSnapshot | null> {
+  const snapshot = await getEntitlementSnapshot();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('vow:entitlement-changed', { detail: snapshot }));
+  }
+  return snapshot;
+}
+
+export function subscribeToEntitlementChanges(
+  userId: string,
+  onChange: (snapshot: EntitlementSnapshot | null) => void,
+) {
+  const channel = supabase
+    .channel(`vow-entitlement-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'vow_subscription_records',
+        filter: `user_id=eq.${userId}`,
+      },
+      () => {
+        void refreshEntitlementSnapshot().then(onChange);
+      },
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+
 export async function consumeEntitlement(feature: EntitlementFeature, metadata: Record<string, unknown> = {}): Promise<EntitlementResult> {
   const { data, error } = await supabase.rpc('vow_consume_entitlement', {
     p_feature: feature,
