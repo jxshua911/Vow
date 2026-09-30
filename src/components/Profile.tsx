@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import { PageHeader } from './AppShell';
 import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences } from '@/lib/notifications';
-import { getEntitlementSnapshot } from '@/lib/entitlements';
+import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { VOW_LANGUAGES, LANGUAGE_STORAGE_KEY, languageName } from '@/lib/i18n';
 
 type ProfileSubpage = 'main' | 'shared' | 'customise' | 'language' | 'quality';
@@ -53,7 +53,17 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
-  useEffect(() => { getEntitlementSnapshot().then(snapshot => setPremium(Boolean(snapshot && snapshot.plan === 'premium'))).catch(() => setPremium(false)); }, []);
+  useEffect(() => {
+    const applyEntitlement = (snapshot: EntitlementSnapshot | null) => {
+      setPremium(Boolean(snapshot && snapshot.plan === 'premium'));
+    };
+    void getEntitlementSnapshot().then(applyEntitlement).catch(() => setPremium(false));
+    const listener = (event: Event) => {
+      applyEntitlement((event as CustomEvent<EntitlementSnapshot | null>).detail ?? null);
+    };
+    window.addEventListener('vow:entitlement-changed', listener);
+    return () => window.removeEventListener('vow:entitlement-changed', listener);
+  }, []);
   useEffect(() => {
     if (!session) return;
     void supabase.from('vow_ai_quality_alerts').select('id,alert_type,validation_code,goal_title,created_at,resolved_at').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(20).then(({ data, error }) => {
