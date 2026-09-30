@@ -96,7 +96,18 @@ Deno.serve(async (req) => {
     .select("message_id")
     .maybeSingle();
 
-  if (insertError?.code === "23505") return json(204, {});
+  if (insertError?.code === "23505") {
+    const { data: existing, error: existingError } = await serviceClient
+      .from("vow_google_play_notifications")
+      .select("message_id, processed_at")
+      .eq("message_id", messageId)
+      .maybeSingle();
+
+    if (existingError) return json(500, { error: "NOTIFICATION_LEDGER_CHECK_FAILED" });
+    if (existing?.processed_at) return json(204, {});
+    return json(500, { error: "NOTIFICATION_PROCESSING_IN_PROGRESS" });
+  }
+
   if (insertError || !inserted) return json(500, { error: "NOTIFICATION_LEDGER_FAILED" });
 
   try {
@@ -176,7 +187,6 @@ Deno.serve(async (req) => {
 
     return json(204, {});
   } catch (error) {
-    // Return non-2xx so Pub/Sub retries transient failures.
     await serviceClient.from("vow_google_play_notifications")
       .delete()
       .eq("message_id", messageId);
