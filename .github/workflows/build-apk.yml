@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vow-android-debug-${{ github.ref }}
+  group: vow-android-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -54,7 +54,7 @@ jobs:
           test -n "$VOW_RELEASE_KEYSTORE_BASE64"
           echo "$VOW_RELEASE_KEYSTORE_BASE64" | base64 --decode > android/vow-release.keystore
           chmod 600 android/vow-release.keystore
-      - name: Assemble production and QA APKs
+      - name: Assemble normal VOW release APK
         working-directory: android
         env:
           VOW_VERSION_CODE: "15"
@@ -68,22 +68,19 @@ jobs:
           test -n "$VOW_RELEASE_KEY_ALIAS"
           test -n "$VOW_RELEASE_KEY_PASSWORD"
           chmod +x gradlew
-          ./gradlew assembleProductionRelease assembleFreeTestDebug assemblePremiumTestDebug --no-daemon --stacktrace
+          ./gradlew assembleProductionRelease --no-daemon --stacktrace
       - name: Remove production release keystore
         if: always()
         run: rm -f android/vow-release.keystore
-      - name: Verify APKs and labels
+      - name: Verify normal VOW APK
         run: |
-          test -s android/app/build/outputs/apk/freeTest/debug/app-freeTest-debug.apk
-          test -s android/app/build/outputs/apk/premiumTest/debug/app-premiumTest-debug.apk
+          test -s android/app/build/outputs/apk/production/release/app-production-release.apk
           grep -q '<string name="app_name">VOW</string>' android/app/src/main/res/values/strings.xml
           grep -q 'android:label="@string/app_name"' android/app/src/main/AndroidManifest.xml
-      - name: Upload QA APKs
+      - name: Upload normal VOW APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW QA APKs 1.4
-          path: |
-            android/app/build/outputs/apk/freeTest/debug/app-freeTest-debug.apk
-            android/app/build/outputs/apk/premiumTest/debug/app-premiumTest-debug.apk
+          name: VOW APK 1.4
+          path: android/app/build/outputs/apk/production/release/app-production-release.apk
           if-no-files-found: error
           retention-days: 14
