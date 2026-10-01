@@ -57,6 +57,8 @@ jobs:
       - name: Assemble production and QA APKs
         working-directory: android
         env:
+          VOW_VERSION_CODE: "15"
+          VOW_VERSION_NAME: "1.4"
           VOW_RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/android/vow-release.keystore
           VOW_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.VOW_RELEASE_KEYSTORE_PASSWORD }}
           VOW_RELEASE_KEY_ALIAS: ${{ secrets.VOW_RELEASE_KEY_ALIAS }}
