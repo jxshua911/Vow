@@ -2,6 +2,10 @@ apply plugin: 'com.android.application'
 
 def vowVersionCode = System.getenv("VOW_VERSION_CODE") ?: "15"
 def vowVersionName = System.getenv("VOW_VERSION_NAME") ?: "1.4"
+def releaseKeystorePath = System.getenv("VOW_RELEASE_KEYSTORE_PATH")
+def releaseKeystorePassword = System.getenv("VOW_RELEASE_KEYSTORE_PASSWORD")
+def releaseKeyAlias = System.getenv("VOW_RELEASE_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("VOW_RELEASE_KEY_PASSWORD")
 
 android {
     namespace = "com.vow.app"
@@ -39,10 +43,18 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file(System.getenv("VOW_RELEASE_KEYSTORE_PATH"))
-            storePassword System.getenv("VOW_RELEASE_KEYSTORE_PASSWORD")
-            keyAlias System.getenv("VOW_RELEASE_KEY_ALIAS")
-            keyPassword System.getenv("VOW_RELEASE_KEY_PASSWORD")
+            if (releaseKeystorePath) {
+                storeFile file(releaseKeystorePath)
+            }
+            if (releaseKeystorePassword) {
+                storePassword releaseKeystorePassword
+            }
+            if (releaseKeyAlias) {
+                keyAlias releaseKeyAlias
+            }
+            if (releaseKeyPassword) {
+                keyPassword releaseKeyPassword
+            }
         }
     }
 
@@ -73,7 +85,7 @@ dependencies {
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
-    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoVersion"
     implementation project(':capacitor-cordova-android-plugins')
 }
 
