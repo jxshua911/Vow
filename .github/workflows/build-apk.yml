@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vow-android-release-${{ github.ref }}
+  group: vow-android-qa-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -47,40 +47,23 @@ jobs:
         run: npm run build
       - name: Sync Capacitor Android
         run: npx cap sync android
-      - name: Prepare production release keystore
-        env:
-          VOW_RELEASE_KEYSTORE_BASE64: ${{ secrets.VOW_RELEASE_KEYSTORE_BASE64 }}
-        run: |
-          test -n "$VOW_RELEASE_KEYSTORE_BASE64"
-          echo "$VOW_RELEASE_KEYSTORE_BASE64" | base64 --decode > android/vow-release.keystore
-          chmod 600 android/vow-release.keystore
-      - name: Assemble normal VOW release APK
+      - name: Assemble normal VOW QA APK
         working-directory: android
         env:
           VOW_VERSION_CODE: "15"
           VOW_VERSION_NAME: "1.4"
-          VOW_RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/android/vow-release.keystore
-          VOW_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.VOW_RELEASE_KEYSTORE_PASSWORD }}
-          VOW_RELEASE_KEY_ALIAS: ${{ secrets.VOW_RELEASE_KEY_ALIAS }}
-          VOW_RELEASE_KEY_PASSWORD: ${{ secrets.VOW_RELEASE_KEY_PASSWORD }}
         run: |
-          test -n "$VOW_RELEASE_KEYSTORE_PASSWORD"
-          test -n "$VOW_RELEASE_KEY_ALIAS"
-          test -n "$VOW_RELEASE_KEY_PASSWORD"
           chmod +x gradlew
-          ./gradlew assembleProductionRelease --no-daemon --stacktrace
-      - name: Remove production release keystore
-        if: always()
-        run: rm -f android/vow-release.keystore
-      - name: Verify normal VOW APK
+          ./gradlew assembleProductionDebug --no-daemon --stacktrace
+      - name: Verify normal VOW QA APK
         run: |
-          test -s android/app/build/outputs/apk/production/release/app-production-release.apk
+          test -s android/app/build/outputs/apk/production/debug/app-production-debug.apk
           grep -q '<string name="app_name">VOW</string>' android/app/src/main/res/values/strings.xml
           grep -q 'android:label="@string/app_name"' android/app/src/main/AndroidManifest.xml
-      - name: Upload normal VOW APK
+      - name: Upload normal VOW QA APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.4
-          path: android/app/build/outputs/apk/production/release/app-production-release.apk
+          name: VOW APK 1.4 QA
+          path: android/app/build/outputs/apk/production/debug/app-production-debug.apk
           if-no-files-found: error
           retention-days: 14
