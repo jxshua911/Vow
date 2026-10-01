@@ -6,6 +6,7 @@ import { getTimeZoneLabel, getUserTimeZone } from '@/lib/dates';
 import { requestNotificationPermission } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from './BrandLogo';
+import { userFacingError } from '@/lib/userFacingError';
 
 interface OnboardingProps { userId: string; onComplete: () => void; }
 
@@ -26,7 +27,7 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
       const settings: Partial<UserSettings> = { user_id: userId, timezone, preferred_session_times: null, notification_frequency: notificationFreq, coaching_tone: 'honest_encouraging', onboarding_complete: true };
       const { error: settingsError } = await supabase.from('user_settings').upsert(settings);
       if (settingsError) throw settingsError; setShowPlanner(true);
-    } catch (err) { setError(err instanceof Error ? err.message : 'Failed to save. Please try again.'); } finally { setSaving(false); }
+    } catch (err) { setError(userFacingError(err, 'We could not save your onboarding preferences. Please try again.')); } finally { setSaving(false); }
   }
   if (showPlanner) return <GoalPlanner userId={userId} initialGoal={rawGoal} initialWhy="" onCreated={async () => { try { await requestNotificationPermission(); } catch (notificationError) { console.warn('[VOW] Notification permission was not granted:', notificationError); } onComplete(); }} onCancel={onComplete} />;
   const steps = ['What do you want to achieve?', 'Timezone and check-ins'];
