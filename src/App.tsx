@@ -21,7 +21,7 @@ import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { cancelAllVowNotifications, clearCloudPushRegistration, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
@@ -66,7 +66,7 @@ function AppContent() {
       void track('view_changed', { screen: nextHistory[nextHistory.length - 1] });
       return nextHistory;
     });
-  }, []);
+  }, [navigate]);
 
   useEffect(() => { viewHistoryRef.current = viewHistory; }, [viewHistory]);
   useEffect(() => {
@@ -191,11 +191,20 @@ function AppContent() {
 
   useEffect(() => {
     if (!session || !termsAccepted) return;
-    void setupCloudPushNotifications();
+
     let cleanupPushAction: (() => void) | null = null;
+
+    // Only setup push if permission already granted
+    void getNotificationPermission().then((permission) => {
+      if (permission === 'granted') {
+        void setupCloudPushNotifications();
+      }
+    });
+
     void setupCloudPushActionListener(() => {
       window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'goals' }));
     }).then((cleanup) => { cleanupPushAction = cleanup; });
+
     return () => { cleanupPushAction?.(); };
   }, [session, termsAccepted]);
 
