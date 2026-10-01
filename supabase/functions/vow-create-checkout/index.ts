@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const priceId = billing === "yearly"
       ? Deno.env.get("STRIPE_PRICE_ID_YEARLY")
       : Deno.env.get("STRIPE_PRICE_ID_MONTHLY");
-    if (!priceId) return json({ error: `VOW Premium ${billing} pricing is not configured yet.` }, 503);
+    if (!priceId) return json({ error: `VOW ${billing} pricing is not configured yet.` }, 503);
 
     const body = new URLSearchParams({
       mode: "subscription",

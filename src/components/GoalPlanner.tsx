@@ -611,13 +611,6 @@ export function GoalPlanner({
           subtitle="VOW uses your answers to make the commitment genuinely yours."
         />
         <div className="max-w-xl space-y-6">
-          {/* Armadillo domain context */}
-          <div className="border border-vow-border p-4 space-y-1">
-            <p className="text-xs text-vow-muted uppercase tracking-wider">
-              {armadillo.category} · {armadillo.goal_type}
-            </p>
-            <p className="text-sm text-vow-ink">{armadillo.methodology}</p>
-          </div>
           {clarification.questions.map((question, index) => (
             <div key={`${index}-${question}`}>
               <label className="vow-label block mb-2">{question}</label>
@@ -669,20 +662,6 @@ export function GoalPlanner({
           autoFocus
         />
 
-        {/* Armadillo live domain signal — visible as soon as 3+ chars typed */}
-        {rawInput.trim().length >= 3 && (
-          <div className="border border-vow-border p-4 space-y-1">
-            <p className="text-xs text-vow-muted uppercase tracking-wider">
-              Detected · {armadillo.category} — {armadillo.goal_type}
-            </p>
-            <p className="text-sm text-vow-ink">{armadillo.methodology}</p>
-            {armadillo.required_inputs.length > 0 && (
-              <p className="text-xs text-vow-muted mt-1">
-                VOW will ask: {armadillo.required_inputs.slice(0, 2).join(' · ')}
-              </p>
-            )}
-          </div>
-        )}
 
         <div>
           <label className="vow-label block mb-2">Why does this matter?</label>
@@ -726,7 +705,7 @@ export function GoalPlanner({
         <div>
           <label className="vow-label block mb-3">Preferred session time</label>
           <input type="time" value={preferredSessionTime} onChange={e => setPreferredSessionTime(e.target.value)} className="vow-input min-h-11" />
-          <p className="text-xs text-vow-muted mt-2">VOW will keep this time fixed across the generated schedule in your device timezone.</p>
+          <p className="text-xs text-vow-muted mt-2">Choose when you prefer to work on this.</p>
         </div>
 
         <div>

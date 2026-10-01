@@ -50,14 +50,14 @@ DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('cycle 100 km'); A
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('swim 2 km in 45 minutes'); ASSERT r->>'category'='Sports'; ASSERT r->>'goal_type'='Swimming'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('pass chemistry'); ASSERT r->>'category'='Education'; ASSERT r->>'goal_type'='Study'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('get a B grade in maths'); ASSERT r->>'category'='Education'; ASSERT r->>'goal_type'='Study'; END $$;
-DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('get a distinction in my course'); ASSERT r->>'category'='General'; ASSERT r->>'goal_type'='Goal'; END $$;
+DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('get a distinction in my course'); ASSERT r->>'category'='Unknown'; ASSERT r->>'goal_type'='Goal'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('read 50 pages'); ASSERT r->>'category'='Reading'; ASSERT r->>'goal_type'='Reading'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('write 1000 words'); ASSERT r->>'category'='Creative Skills'; ASSERT r->>'goal_type'='Writing'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('bake a cake'); ASSERT r->>'category'='Practical Skills'; ASSERT r->>'goal_type'='Cooking'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('build furniture'); ASSERT r->>'category'='Practical Skills'; ASSERT r->>'goal_type'='Woodworking'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('create a website'); ASSERT r->>'category'='Technology/Projects'; ASSERT r->>'goal_type'='Programming'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('save $500'); ASSERT r->>'category'='Finance'; ASSERT r->>'goal_type'='Saving'; END $$;
-DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('launch a startup'); ASSERT r->>'category'='General'; ASSERT r->>'goal_type'='Goal'; END $$;
+DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('launch a startup'); ASSERT r->>'category'='Unknown'; ASSERT r->>'goal_type'='Goal'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('focus better'); ASSERT r->>'category'='Productivity'; ASSERT r->>'goal_type'='Productivity'; END $$;
 DO $$ DECLARE r jsonb; BEGIN r:=public.armadillo_analyse_goal('improve my confidence'); ASSERT r->>'category'='Personal Development'; ASSERT r->>'goal_type'='Personal Development'; END $$;
 
@@ -87,7 +87,7 @@ BEGIN
  ASSERT r->'intents' @> '[{"domain":"Technology/Projects","type":"Programming"}]'::jsonb, 'programming intent';
  r:=public.armadillo_analyse_goal('get fit');
  ASSERT (r->>'confidence')::numeric < 0.60, 'generic confidence';
- ASSERT r->>'category'='General', 'generic category';
+ ASSERT r->>'category'='Unknown', 'generic category';
  r:=public.armadillo_analyse_goal('run a marathon tomorrow with no training');
  ASSERT (r->>'safety_flag')::boolean IS TRUE, 'marathon safety flag';
  ASSERT r->>'safety_severity'='high', 'marathon safety severity';
@@ -103,12 +103,12 @@ DO $$
 DECLARE r jsonb;
 BEGIN
  r:=public.armadillo_analyse_goal('');
- ASSERT r->>'category'='General', 'empty string fallback';
+ ASSERT r->>'category'='Unknown', 'empty string fallback';
  r:=public.armadillo_analyse_goal('run');
  ASSERT r->>'goal_type'='Running', 'single word routing';
  ASSERT (r->>'confidence')::numeric < 0.70, 'single word confidence';
  r:=public.armadillo_analyse_goal('🚀🔥');
- ASSERT r->>'category'='General', 'emoji fallback';
+ ASSERT r->>'category'='Unknown', 'emoji fallback';
  r:=public.armadillo_analyse_goal(repeat('build an app ', 300));
  ASSERT r->>'goal_type'='Programming', 'long text routing';
  r:=public.armadillo_analyse_goal('learn Python and save money');

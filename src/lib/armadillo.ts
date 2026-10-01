@@ -132,7 +132,7 @@ export function analyseGoalForEvidence(input: {
 
   if (!match)
     return {
-      category: 'General',
+      category: 'Unknown',
       goal_type: hasAmbiguousSignal ? 'Needs clarification' : 'Needs research',
       metric: 'measurable progress toward the stated outcome',
       evidence: ['user clarification', 'manual progress updates', 'goal milestones'],

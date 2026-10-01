@@ -15,7 +15,7 @@ export function UpgradePrompt({ result, title = 'Keep VOW working for you', comp
           <p className="text-sm font-medium text-vow-ink">{title}</p>
           <p className="text-xs text-vow-muted mt-1 leading-relaxed">{message}</p>
           <button type="button" onClick={openUpgrade} className="mt-3 vow-btn-primary text-xs inline-flex items-center gap-2">
-            See VOW Premium <span aria-hidden="true">→</span>
+            See VOW <span aria-hidden="true">→</span>
           </button>
         </div>
       </div>

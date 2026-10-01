@@ -128,11 +128,19 @@ export function ReviewPage() {
         status: 'draft' as const,
       };
 
-      const { data, error } = await supabase.from('reviews').insert(reviewData).select().maybeSingle();
-      if (error) throw error;
-      if (data) {
-        setReview(data as Review);
-        setExistingReview(data as Review);
+      let savedReview;
+      if (existingReview) {
+        const { data, error } = await supabase.from('reviews').update(reviewData).eq('id', existingReview.id).select().maybeSingle();
+        if (error) throw error;
+        savedReview = data;
+      } else {
+        const { data, error } = await supabase.from('reviews').insert(reviewData).select().maybeSingle();
+        if (error) throw error;
+        savedReview = data;
+      }
+      if (savedReview) {
+        setReview(savedReview as Review);
+        setExistingReview(savedReview as Review);
       }
     } catch (err) {
       console.error('Review generation failed:', err);

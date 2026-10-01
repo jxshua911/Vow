@@ -23,24 +23,7 @@ android {
         // Keep every APK universal. No ABI filter is applied so Capacitor and
         // native dependencies can package every supported ABI.
     }
-    flavorDimensions += "tier"
-    productFlavors {
-        production {
-            dimension "tier"
-        }
-        freeTest {
-            dimension "tier"
-            applicationIdSuffix ".free"
-            versionNameSuffix "-free-test"
-            resValue "string", "app_name", "VOW Free"
-        }
-        premiumTest {
-            dimension "tier"
-            applicationIdSuffix ".premium"
-            versionNameSuffix "-premium-test"
-            resValue "string", "app_name", "VOW Premium"
-        }
-    }
+
     signingConfigs {
         release {
             if (releaseKeystorePath) {

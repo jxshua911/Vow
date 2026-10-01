@@ -63,7 +63,7 @@ export function UpgradePage() {
     setRestoreState('');
     try {
       const result = await restorePremium();
-      setRestoreState(result.restored ? 'Your Premium purchase has been restored.' : 'No active VOW Premium purchase was found.');
+      setRestoreState(result.restored ? 'Your Premium purchase has been restored.' : 'No active VOW purchase was found.');
       if (result.restored) setUsage(await getEntitlementSnapshot());
     } catch (err) {
       setRestoreState(userFacingError(err, 'We could not restore your Premium purchase. Please try again.'));
@@ -92,7 +92,7 @@ export function UpgradePage() {
   }
 
   return <div>
-    <PageHeader title="VOW Premium" subtitle="More planning power, deeper guidance and room to keep meaningful goals moving." />
+    <PageHeader title="VOW" subtitle="More planning power, deeper guidance and room to keep meaningful goals moving." />
 
     <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
       <p className="vow-label mb-3">Premium</p>
@@ -151,7 +151,7 @@ export function UpgradePage() {
       {manageState && <p role="alert" className="text-xs text-vow-muted mt-3">{manageState}</p>}
     </section>
 
-    <section className="border-t border-vow-border pt-7"><p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Built for real goals</p><p className="text-sm text-vow-muted leading-relaxed max-w-2xl">Run a 10K. Make ravioli. Learn Spanish. Build a robot. Pass your exams. Launch an app. VOW Premium is about the planning intelligence underneath the goal — not the category itself.</p></section>
+    <section className="border-t border-vow-border pt-7"><p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Built for real goals</p><p className="text-sm text-vow-muted leading-relaxed max-w-2xl">Run a 10K. Make ravioli. Learn Spanish. Build a robot. Pass your exams. Launch an app. VOW is about the planning intelligence underneath the goal — not the category itself.</p></section>
 
     {confirmCancel && <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-premium-title">
       <div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full rounded-xl">

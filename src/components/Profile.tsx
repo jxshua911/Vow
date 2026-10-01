@@ -222,7 +222,7 @@ function CustomisePage({ premium, selectedIcon, customBackground, customForegrou
   onBack: () => void;
   onUpgrade?: () => void;
 }) {
-  if (!premium) return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Customise" subtitle="Custom app icons are a Premium feature." /><div className="border border-vow-border p-6"><p className="text-sm text-vow-ink mb-2">VOW icon customisation</p><p className="text-sm text-vow-muted leading-relaxed mb-5">Choose a preset or create your own launcher icon after upgrading to VOW Premium.</p><button onClick={onUpgrade} className="vow-btn-primary">View Premium</button></div></div>;
+  if (!premium) return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Customise" subtitle="Custom app icons are a Premium feature." /><div className="border border-vow-border p-6"><p className="text-sm text-vow-ink mb-2">VOW icon customisation</p><p className="text-sm text-vow-muted leading-relaxed mb-5">Choose a preset or create your own launcher icon after upgrading to VOW.</p><button onClick={onUpgrade} className="vow-btn-primary">View Premium</button></div></div>;
 
   const customActive = Boolean(localStorage.getItem('vow:custom-icon'));
   return <div>

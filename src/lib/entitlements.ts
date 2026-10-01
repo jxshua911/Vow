@@ -85,6 +85,6 @@ export function entitlementMessage(result: EntitlementResult): string {
   if (result.feature === 'planning_action' || result.reason === 'usage_limit' && result.feature === 'planning_action') return 'You have used your 10 free planning actions this month. Premium unlocks unlimited planning.';
   if (result.feature === 'adaptive_replan' || result.reason === 'usage_limit' && result.feature === 'adaptive_replan') return 'You have used your free adaptive replan this month. Premium keeps VOW adapting your plan when life changes.';
   if (result.feature === 'advanced_review' || result.reason === 'usage_limit' && result.feature === 'advanced_review') return 'You have used your free advanced review this month. Premium unlocks ongoing weekly analysis.';
-  if (result.reason === 'premium_required') return 'This is part of VOW Premium.';
+  if (result.reason === 'premium_required') return 'This is part of VOW.';
   return 'Unlock the full VOW planning experience with Premium.';
 }

@@ -605,6 +605,33 @@ Deno.serve(async (req) => {
       preferred_language: preferredLanguage,
       knowledge,
     };
+    let fallbackCategory = domain?.category;
+    if (fallbackCategory === "Unknown" || fallbackCategory === "General") {
+      try {
+        const classResult = await ai(req, [
+          {
+            role: "system",
+            content: `Classify the user's goal into exactly one of these supported categories: Sports, Languages, Crafts/Hobbies, Education, Reading, Mindfulness, Technology/Projects, Career/Projects, Personal Development, Life Admin, Communication, Wellbeing, Creative Skills, Travel, Learning, Practical Skills, Finance, Productivity. If the goal involves a specific event, competition, or ambiguous term, use web search to understand it first. Return ONLY JSON: {"category": "string"}. Do not return 'General'.`
+          },
+          { role: "user", content: `Goal: ${str(g?.title || g?.outcome, 300)}. Context: ${str(g?.why_it_matters, 500)}` }
+        ], "clarify", researchRequired);
+        
+        const validCategories = ["Sports", "Languages", "Crafts/Hobbies", "Education", "Reading", "Mindfulness", "Technology/Projects", "Career/Projects", "Personal Development", "Life Admin", "Communication", "Wellbeing", "Creative Skills", "Travel", "Learning", "Practical Skills", "Finance", "Productivity"];
+        
+        if (classResult && typeof classResult.category === "string" && validCategories.includes(classResult.category)) {
+           fallbackCategory = classResult.category;
+           domain.category = fallbackCategory;
+        } else {
+           fallbackCategory = "Personal Development";
+           domain.category = fallbackCategory;
+        }
+      } catch (e) {
+        console.warn("Groq fallback classification failed", e);
+        fallbackCategory = "Personal Development";
+        domain.category = fallbackCategory;
+      }
+    }
+
     if (mode === "goal-clarify") {
       let r: any;
       try {
