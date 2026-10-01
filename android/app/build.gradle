@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+def vowVersionCode = System.getenv("VOW_VERSION_CODE") ?: "15"
+def vowVersionName = System.getenv("VOW_VERSION_NAME") ?: "1.4"
+
 android {
     namespace = "com.vow.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +10,8 @@ android {
         applicationId "com.vow.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 15
-        versionName "1.4"
+        versionCode vowVersionCode.toInteger()
+        versionName vowVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
