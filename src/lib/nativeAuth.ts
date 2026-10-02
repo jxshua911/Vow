@@ -61,6 +61,7 @@ export async function initNativeAuthListener() {
       }
 
       console.log('[VOW OAuth] Session established successfully.');
+      window.dispatchEvent(new CustomEvent('vow:oauth-success'));
     } catch (error) {
       console.error('[VOW OAuth] Callback handling failed:', error);
       window.dispatchEvent(new CustomEvent('vow:oauth-error', {
