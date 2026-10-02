@@ -37,9 +37,15 @@ export function SupportPage({ onBack }: Props) {
 
   return (
     <div>
-      <button type="button" onClick={onBack} className="mb-6 flex items-center gap-2 text-sm text-vow-muted hover:text-vow-ink">
+      <button
+        type="button"
+        onClick={onBack}
+        className="fixed left-4 top-[calc(env(safe-area-inset-top)+1rem)] z-40 flex min-h-11 items-center gap-2 border border-vow-border bg-vow-bg/95 px-3 text-sm text-vow-muted shadow-sm backdrop-blur hover:border-vow-ink hover:text-vow-ink sm:left-6"
+        aria-label="Back to profile"
+      >
         <ArrowLeft className="h-4 w-4" /> Back to profile
       </button>
+      <div className="pt-16 sm:pt-14">
       <PageHeader title="Support" subtitle="Report an issue, ask a question, or send feedback." />
       <section className="border border-vow-border p-5 md:p-7">
         {status === 'success' && <div role="status" className="mb-6 border-l-2 border-vow-ink bg-vow-surface/60 px-4 py-3 text-sm leading-6">Your support request was sent. We’ll get back to you.</div>}
@@ -53,6 +59,7 @@ export function SupportPage({ onBack }: Props) {
         </form>
         <div className="mt-8 border-t border-vow-border pt-5"><p className="text-xs text-vow-muted">Prefer email?</p><a href="mailto:vowglobalapp@gmail.com" className="mt-1 inline-block text-sm text-vow-ink underline underline-offset-4">vowglobalapp@gmail.com</a></div>
       </section>
+      </div>
     </div>
   );
 }
