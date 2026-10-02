@@ -9,7 +9,6 @@ export type NotificationPermission = PermissionStatus['display'];
 export type NotificationPreferences = { enabled: boolean; sound: boolean; vibration: boolean };
 
 const CHANNEL_PREFIX = 'vow-reminders';
-const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
 const PREF_KEY = 'vow:notification-preferences';
 const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: true, sound: true, vibration: true };
 const PUSH_TOKEN_KEY = 'vow:fcm-token';
@@ -118,7 +117,6 @@ export async function scheduleReminder(id: number, title: string, body: string, 
       title,
       body,
       channelId: channelId(preferences),
-      smallIcon: VOW_NOTIFICATION_ICON,
       sound: preferences.sound ? 'default' : undefined,
       extra: { vow: true, ...(sessionId ? { sessionId } : {}) },
       schedule: { at, allowWhileIdle: true },
