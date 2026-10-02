@@ -83,10 +83,10 @@ jobs:
           VOW_VERSION_NAME: "1.4"
         run: |
           chmod +x gradlew
-          ./gradlew assembleProductionRelease --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace
       - name: Verify VOW production release APK
         run: |
-          test -s android/app/build/outputs/apk/production/release/app-production-release.apk
+          test -s android/app/build/outputs/apk/release/app-release.apk
           grep -q '<string name="app_name">VOW</string>' android/app/src/main/res/values/strings.xml
           grep -q 'android:label="@string/app_name"' android/app/src/main/AndroidManifest.xml
       - name: Upload VOW production release APK
