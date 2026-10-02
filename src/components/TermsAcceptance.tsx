@@ -5,7 +5,7 @@ import { BrandLogo } from './BrandLogo';
 
 export const VOW_TERMS_VERSION = 'v1.1';
 
-const LEGAL_URLS = { terms: 'https://vowglobalwebsite.lovable.app/#/terms', privacy: 'https://vowglobalwebsite.lovable.app/#/privacy' } as const;
+const LEGAL_URLS = { terms: 'https://vowglobal.online/terms', privacy: 'https://vowglobal.online/privacy' } as const;
 
 async function openLegal(url: string) {
   try { await Browser.open({ url }); } catch { window.open(url, '_blank', 'noopener,noreferrer'); }

@@ -3,9 +3,9 @@ import { ArrowLeft } from '@/lib/ui-icons';
 import { PageHeader } from './AppShell';
 
 const LEGAL_URLS = {
-  terms: 'https://vowglobalwebsite.lovable.app/#/terms',
-  privacy: 'https://vowglobalwebsite.lovable.app/#/privacy',
-  copyright: 'https://vowglobalwebsite.lovable.app/#/copyright',
+  terms: 'https://vowglobal.online/terms',
+  privacy: 'https://vowglobal.online/privacy',
+  copyright: 'https://vowglobal.online/copyright',
 } as const;
 
 async function open(url: string) {
