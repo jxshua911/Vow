@@ -60,7 +60,6 @@ export async function setNotificationPreferences(preferences: Partial<Notificati
 
   if (await getNotificationPermission() === 'granted') {
     await syncCurrentUserUpcomingSessionNotifications();
-    await setupCloudPushNotifications();
   }
   return next;
 }
