@@ -103,21 +103,12 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
     const { error } = await supabase.from('vow_ai_quality_alerts').update({ resolved_at: new Date().toISOString() }).eq('id', id).eq('user_id', session?.user?.id || '');
     if (!error) setQualityAlerts((current) => current.map((alert) => alert.id === id ? { ...alert, resolved_at: new Date().toISOString() } : alert));
   }} />;
-  if (subpage === 'language') return <LanguagePage language={language} saving={languageSaving} message={languageMessage} onChange={async (next) => {
-    setLanguageSaving(true); setLanguageMessage(''); setLanguage(next); localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
-    if (session) {
-      const { error } = await supabase.from('user_settings').update({ preferred_language: next }).eq('user_id', session.user.id);
-      setLanguageMessage(error ? 'Language saved on this device. Account sync will retry later.' : `${languageName(next)} selected.`);
-    } else setLanguageMessage(`${languageName(next)} selected.`);
-    setLanguageSaving(false);
-  }} onBack={() => setSubpage('main')} />;
-
   return (
     <div>
       <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle="Your account and preferences." />
       <div className="border border-vow-border divide-y divide-vow-border">
         <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
-        <button type="button" disabled aria-disabled="true" className="w-full flex items-center justify-between gap-4 p-5 text-left opacity-60 cursor-not-allowed"><div><p className="text-sm text-vow-ink">Language</p><p className="text-xs text-vow-muted mt-1">Language selection is temporarily unavailable.</p></div><span className="text-sm text-vow-muted">{languageName(language)}</span></button>
+        <button type="button" disabled aria-disabled="true" className="w-full flex items-center justify-between gap-4 p-5 text-left opacity-60 cursor-not-allowed"><div><p className="text-sm text-vow-ink">Language</p><p className="text-xs text-vow-muted mt-1">Language selection is temporarily unavailable.</p></div><span className="text-sm text-vow-muted">Unavailable</span></button>
         <button onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'support' }))} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Support</p><p className="text-xs text-vow-muted mt-1">Report an issue, ask a question, or send feedback.</p></button>
                 <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">EULA, copyright and service policies.</p></button>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
