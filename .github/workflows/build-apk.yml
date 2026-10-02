@@ -50,19 +50,37 @@ jobs:
       - name: Prepare release signing key
         env:
           VOW_RELEASE_KEYSTORE_B64: ${{ secrets.VOW_RELEASE_KEYSTORE_B64 }}
+          VOW_RELEASE_KEYSTORE_PASSWORD_SECRET: ${{ secrets.VOW_RELEASE_KEYSTORE_PASSWORD }}
+          VOW_RELEASE_KEY_ALIAS_SECRET: ${{ secrets.VOW_RELEASE_KEY_ALIAS }}
+          VOW_RELEASE_KEY_PASSWORD_SECRET: ${{ secrets.VOW_RELEASE_KEY_PASSWORD }}
         run: |
-          test -n "$VOW_RELEASE_KEYSTORE_B64"
-          echo "$VOW_RELEASE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/vow-release.keystore"
-          test -s "$RUNNER_TEMP/vow-release.keystore"
+          if [ -n "$VOW_RELEASE_KEYSTORE_B64" ] && [ -n "$VOW_RELEASE_KEYSTORE_PASSWORD_SECRET" ] && [ -n "$VOW_RELEASE_KEY_ALIAS_SECRET" ] && [ -n "$VOW_RELEASE_KEY_PASSWORD_SECRET" ]; then
+            echo "$VOW_RELEASE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/vow-release.keystore"
+            test -s "$RUNNER_TEMP/vow-release.keystore"
+            {
+              echo "VOW_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/vow-release.keystore"
+              echo "VOW_RELEASE_KEYSTORE_PASSWORD=$VOW_RELEASE_KEYSTORE_PASSWORD_SECRET"
+              echo "VOW_RELEASE_KEY_ALIAS=$VOW_RELEASE_KEY_ALIAS_SECRET"
+              echo "VOW_RELEASE_KEY_PASSWORD=$VOW_RELEASE_KEY_PASSWORD_SECRET"
+              echo "VOW_SIGNING_MODE=persistent"
+            } >> "$GITHUB_ENV"
+          else
+            echo "Persistent VOW release signing secrets are not configured; generating an ephemeral CI-only signing key for device-test builds."
+            keytool -genkeypair -v -keystore "$RUNNER_TEMP/vow-ci-release.keystore" -storepass "vow-ci-only" -keypass "vow-ci-only" -alias "vow-ci" -keyalg RSA -keysize 2048 -validity 7 -dname "CN=VOW CI, OU=QA, O=VOW, L=CI, ST=CI, C=GB"
+            test -s "$RUNNER_TEMP/vow-ci-release.keystore"
+            {
+              echo "VOW_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/vow-ci-release.keystore"
+              echo "VOW_RELEASE_KEYSTORE_PASSWORD=vow-ci-only"
+              echo "VOW_RELEASE_KEY_ALIAS=vow-ci"
+              echo "VOW_RELEASE_KEY_PASSWORD=vow-ci-only"
+              echo "VOW_SIGNING_MODE=ephemeral-ci"
+            } >> "$GITHUB_ENV"
+          fi
       - name: Assemble VOW production release APK
         working-directory: android
         env:
           VOW_VERSION_CODE: "15"
           VOW_VERSION_NAME: "1.4"
-          VOW_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/vow-release.keystore
-          VOW_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.VOW_RELEASE_KEYSTORE_PASSWORD }}
-          VOW_RELEASE_KEY_ALIAS: ${{ secrets.VOW_RELEASE_KEY_ALIAS }}
-          VOW_RELEASE_KEY_PASSWORD: ${{ secrets.VOW_RELEASE_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew assembleProductionRelease --no-daemon --stacktrace
@@ -74,7 +92,7 @@ jobs:
       - name: Upload VOW production release APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.4 Production
+          name: VOW APK 1.4 Production CI
           path: android/app/build/outputs/apk/production/release/app-production-release.apk
           if-no-files-found: error
           retention-days: 14
