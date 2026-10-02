@@ -4,12 +4,12 @@ import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import { PageHeader } from './AppShell';
 import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences } from '@/lib/notifications';
-import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 
 type ProfileSubpage = 'main' | 'shared' | 'quality';
 
 export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUpgrade?: () => void }) {
   const { session, displayName, updateDisplayName } = useAuth();
+  void onUpgrade;
   const { theme, toggleTheme } = useTheme();
   const [subpage, setSubpage] = useState<ProfileSubpage>('main');
   const [notificationStatus, setNotificationStatus] = useState<string>('checking');
@@ -23,22 +23,10 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const [premium, setPremium] = useState(false);
   const [qualityAlerts, setQualityAlerts] = useState<Array<{ id: string; alert_type: string; validation_code: string | null; goal_title: string | null; created_at: string; resolved_at: string | null }>>([]);
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
-  useEffect(() => {
-    const applyEntitlement = (snapshot: EntitlementSnapshot | null) => {
-      setPremium(Boolean(snapshot && snapshot.plan === 'premium'));
-    };
-    void getEntitlementSnapshot().then(applyEntitlement).catch(() => setPremium(false));
-    const listener = (event: Event) => {
-      applyEntitlement((event as CustomEvent<EntitlementSnapshot | null>).detail ?? null);
-    };
-    window.addEventListener('vow:entitlement-changed', listener);
-    return () => window.removeEventListener('vow:entitlement-changed', listener);
-  }, []);
   useEffect(() => {
     if (!session) return;
     void supabase.from('vow_ai_quality_alerts').select('id,alert_type,validation_code,goal_title,created_at,resolved_at').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(20).then(({ data, error }) => {
