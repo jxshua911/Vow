@@ -56,9 +56,6 @@
 @keyframes vow-theme-splash-in { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
 @keyframes vow-dot { 0%, 100% { opacity: .2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .vow-splash-logo, .vow-theme-splash-logo, .vow-loading-dots span { animation: none; } .vow-splash-overlay { transition: none; } }
-.vow-calendar-editor-enter { animation: vow-calendar-editor-enter 320ms cubic-bezier(.2,.7,.2,1) both; }
-@keyframes vow-calendar-editor-enter { from { opacity: 0; transform: translateY(18px) scale(.995); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@media (prefers-reduced-motion: reduce) { .vow-calendar-editor-enter { animation: none; } }
 
 @layer components {
   .vow-error { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; border-left:2px solid rgb(var(--vow-ink)); background:rgb(var(--vow-surface) / 0.45); padding:0.75rem 0.875rem; font-size:0.8125rem; line-height:1.45; color:rgb(var(--vow-ink)); }

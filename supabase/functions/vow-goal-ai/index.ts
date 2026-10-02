@@ -585,6 +585,20 @@ Deno.serve(async (req) => {
     ]
       .filter(Boolean)
       .join(" ");
+    const { data: userGoals } = await client(req)
+      .from("goals")
+      .select("title, outcome, why_it_matters, created_at")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    const { data: userJournal } = await client(req)
+      .from("journal_entries")
+      .select("body, created_at, linked_goal_id")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
     const knowledge = await searchKnowledge(knowledgeQuery);
     const researchRequired =
       domain?.needs_ai_research === true ||
@@ -603,6 +617,8 @@ Deno.serve(async (req) => {
       answers,
       references: refs,
       preferred_language: preferredLanguage,
+      previousGoals: userGoals || [],
+      journalEntries: userJournal || [],
       knowledge,
     };
     let fallbackCategory = domain?.category;
@@ -639,7 +655,7 @@ Deno.serve(async (req) => {
           [
             {
               role: "system",
-              content: `You are VOW's specialist goal-discovery researcher. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Use the supplied VOW knowledge base and domain profile as your first planning reference. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string}. Ask high-value questions that resolve the most important missing inputs for this exact domain. If AI research is required, you MUST use the built-in web_search tool before deciding what an ambiguous abbreviation, event, competition, slang term, or specialist phrase means. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
+              content: `You are VOW's specialist goal-discovery researcher. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Use the supplied VOW knowledge base, domain profile, previous goals, and recent journal context as your first planning reference. Use previous goals and journal entries only to personalise the plan when they are relevant to the current goal. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string}. Ask high-value questions that resolve the most important missing inputs for this exact domain. If AI research is required, you MUST use the built-in web_search tool before deciding what an ambiguous abbreviation, event, competition, slang term, or specialist phrase means. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
             },
             { role: "user", content: JSON.stringify({ message, ...context }) },
           ],
@@ -677,7 +693,7 @@ Deno.serve(async (req) => {
           [
             {
               role: "system",
-              content: `You are VOW's expert planning and research engine. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base and domain profile are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. If AI research is required, you MUST perform at least one web_search before selecting or finalising the specialist domain; do not guess what an abbreviation, event, competition, slang term, or specialist phrase means. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. If a required input is genuinely missing, return JSON with clarification_needed:true and questions instead of a generic plan. Never fill missing personal context with boilerplate. Return a references array only for genuinely relevant public resources, preferably a useful YouTube resource when one materially helps the exact goal and level. Duration (${w} weeks) and available days (${ds.join(
+              content: `You are VOW's expert planning and research engine. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base, domain profile, previous goals, and recent journal context are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. If AI research is required, you MUST perform at least one web_search before selecting or finalising the specialist domain; do not guess what an abbreviation, event, competition, slang term, or specialist phrase means. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. If a required input is genuinely missing, return JSON with clarification_needed:true and questions instead of a generic plan. Use previous goals and recent journal entries as personal context when relevant, but never expose unrelated private details or assume that past goals must continue. Never fill missing personal context with boilerplate. Return a references array only for genuinely relevant public resources, preferably a useful YouTube resource when one materially helps the exact goal and level. Duration (${w} weeks) and available days (${ds.join(
                 ", "
               )}) are HARD constraints. Follow-up answers are HARD personal context. Domain profile: ${JSON.stringify(domain)}. Return ONLY JSON with outcome, success_metric, baseline, assumptions, milestones (2-8 objects with title,description,week), weekly_session_templates (one object per week, each containing week and sessions; sessions must contain one concrete, distinct session for each selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), session_templates (fallback template per selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), weekly_focus (exactly one string per week), progression, checkpoints (3-8), risks (3-8), fallback_rules (2-6), summary, references (0-4 objects with url,title,resource_type). Make the plan genuinely domain-specific. Do not invent specialist claims when the knowledge/research does not support them. Each week's sessions must advance that week's focus rather than repeating the same task. Sessions must be concrete enough that the user can execute them without guessing what "work on it" means. Every week must meaningfully progress toward the outcome.`,
             },
