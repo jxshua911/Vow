@@ -20,8 +20,9 @@ import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
+import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
@@ -191,25 +192,6 @@ function AppContent() {
 
   useEffect(() => {
     if (!session || !termsAccepted) return;
-
-    let cleanupPushAction: (() => void) | null = null;
-
-    // Only setup push if permission already granted
-    void getNotificationPermission().then((permission) => {
-      if (permission === 'granted') {
-        void setupCloudPushNotifications();
-      }
-    });
-
-    void setupCloudPushActionListener(() => {
-      window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'goals' }));
-    }).then((cleanup) => { cleanupPushAction = cleanup; });
-
-    return () => { cleanupPushAction?.(); };
-  }, [session, termsAccepted]);
-
-  useEffect(() => {
-    if (!session || !termsAccepted) return;
     const sync = () => { void syncUserUpcomingSessionNotifications(session.user.id).catch((err) => console.warn('[VOW] Notification sync failed:', err)); };
     sync();
     const listener = CapacitorApp.addListener('resume', sync);
@@ -246,7 +228,8 @@ function AppContent() {
           {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
           {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
           {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
-          {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => undefined} />}
+          {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => navigate('upgrade')} />}
+          {view === 'upgrade' && <UpgradePage />}
         </AppShell>
       )}
     </ProtectedRoute>
