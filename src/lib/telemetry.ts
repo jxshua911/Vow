@@ -15,7 +15,7 @@ export type VowTelemetryEvent =
   | 'app_error'
   | 'ai_error';
 
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 
 function platform(): 'android' | 'ios' | 'web' | 'unknown' {
   const p = Capacitor.getPlatform();
