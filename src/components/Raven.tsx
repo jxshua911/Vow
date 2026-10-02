@@ -53,7 +53,7 @@ export function RavenPage() {
       setGoals(allGoals);
       setSessions(allSessions);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Raven could not load your progress.');
+      setError(err instanceof Error ? err.message : 'Progress could not load right now.');
     } finally {
       setLoading(false);
     }
@@ -63,25 +63,25 @@ export function RavenPage() {
 
   const progress = useMemo(() => snapshot ? goalProgress(sessions, goals).filter((x) => x.total > 0) : [], [snapshot, sessions, goals]);
 
-  if (loading) return <div><PageHeader title="Raven" subtitle="Your progress, as it actually happened." /><div className="text-sm text-vow-muted">Raven is reading your progress...</div></div>;
-  if (!snapshot) return <div><PageHeader title="Raven" subtitle="Your progress, as it actually happened." /><div className="border border-vow-border p-12 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">Nothing to measure yet.</p><p className="text-sm text-vow-muted">Complete your first tracked session and Raven will start learning your pattern.</p></div></div>;
+  if (loading) return <div><PageHeader title="Progress" subtitle="Your progress, as it actually happened." /><div className="text-sm text-vow-muted">Reading your progress...</div></div>;
+  if (!snapshot) return <div><PageHeader title="Progress" subtitle="Your progress, as it actually happened." /><div className="border border-vow-border p-12 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">Nothing to measure yet.</p><p className="text-sm text-vow-muted">Complete your first tracked session and VOW will start learning your pattern.</p></div></div>;
 
   const trendSymbol = snapshot.trend === 'up' ? '↗' : snapshot.trend === 'down' ? '↘' : '—';
   const trendText = snapshot.trend === 'new' ? 'New baseline' : snapshot.trend === 'up' ? `Up ${snapshot.score_delta} points` : snapshot.trend === 'down' ? `Down ${Math.abs(snapshot.score_delta || 0)} points` : 'Holding steady';
 
   return <div>
-    <PageHeader title="Raven" subtitle="Your progress, as it actually happened." action={<button onClick={load} className="text-xs text-vow-muted hover:text-vow-ink">Refresh</button>} />
+    <PageHeader title="Progress" subtitle="Your progress, as it actually happened." action={<button onClick={load} className="text-xs text-vow-muted hover:text-vow-ink">Refresh</button>} />
 
     {error && <div className="border-l-2 border-vow-ink pl-3 mb-8"><p className="text-xs text-vow-muted">{error}</p></div>}
 
     <section className="border border-vow-border p-6 mb-8">
       <div className="flex items-start justify-between gap-6">
-        <div><p className="vow-label mb-2">Raven score</p><div className="flex items-end gap-3"><span className="vow-heading text-5xl text-vow-ink">{snapshot.score}</span><span className="text-sm text-vow-muted mb-2">/ 100</span></div><div className="flex items-center gap-1 mt-3 text-xs text-vow-muted"><span aria-hidden="true">{trendSymbol}</span>{trendText}</div></div>
+        <div><p className="vow-label mb-2">Progress score</p><div className="flex items-end gap-3"><span className="vow-heading text-5xl text-vow-ink">{snapshot.score}</span><span className="text-sm text-vow-muted mb-2">/ 100</span></div><div className="flex items-center gap-1 mt-3 text-xs text-vow-muted"><span aria-hidden="true">{trendSymbol}</span>{trendText}</div></div>
         <div className="text-right"><p className="vow-label mb-2">Current streak</p><div className="flex items-center justify-end gap-2"><span aria-hidden="true">♨</span><span className="vow-heading text-3xl text-vow-ink">{snapshot.current_streak}</span><span className="text-xs text-vow-muted">days</span></div><p className="text-xs text-vow-muted mt-2">Best: {snapshot.best_streak} days</p></div>
       </div>
       <div className="mt-6 h-1 bg-vow-border overflow-hidden"><div className="h-full bg-vow-ink transition-all duration-700" style={{ width: `${snapshot.score}%` }} /></div>
-      {snapshot.trend === 'down' && <div className="mt-5 border-t border-vow-border pt-5"><p className="text-sm text-vow-ink font-medium">Your score went down. What’s happening, bro?</p><p className="text-xs text-vow-muted mt-1">Raven noticed the change. It’s a signal to understand, not a reason to beat yourself up.</p></div>}
-      {snapshot.trend === 'up' && <div className="mt-5 border-t border-vow-border pt-5"><p className="text-sm text-vow-ink font-medium">Your consistency is moving up.</p><p className="text-xs text-vow-muted mt-1">Keep doing the work. Raven is tracking the pattern.</p></div>}
+      {snapshot.trend === 'down' && <div className="mt-5 border-t border-vow-border pt-5"><p className="text-sm text-vow-ink font-medium">Your score went down. What’s happening, bro?</p><p className="text-xs text-vow-muted mt-1">VOW noticed the change. It’s a signal to understand, not a reason to beat yourself up.</p></div>}
+      {snapshot.trend === 'up' && <div className="mt-5 border-t border-vow-border pt-5"><p className="text-sm text-vow-ink font-medium">Your consistency is moving up.</p><p className="text-xs text-vow-muted mt-1">Keep doing the work. VOW is tracking the pattern.</p></div>}
     </section>
 
     <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border border border-vow-border mb-10">
@@ -91,7 +91,7 @@ export function RavenPage() {
       <Metric label="Weeks tracked" value={snapshot.weeks_observed} />
     </div>
 
-    {snapshot.signals.length > 0 && <section className="border-t border-vow-border pt-8 mb-10"><p className="vow-label mb-4">What Raven noticed</p><div className="space-y-3">{snapshot.signals.map((signal) => <div key={signal} className="text-sm text-vow-ink border-l border-vow-border pl-3">{signal}</div>)}</div></section>}
+    {snapshot.signals.length > 0 && <section className="border-t border-vow-border pt-8 mb-10"><p className="vow-label mb-4">What VOW noticed</p><div className="space-y-3">{snapshot.signals.map((signal) => <div key={signal} className="text-sm text-vow-ink border-l border-vow-border pl-3">{signal}</div>)}</div></section>}
 
     {progress.length > 0 && <section className="border-t border-vow-border pt-8 mb-10"><p className="vow-label mb-4">Goal progress</p><div className="space-y-5">{progress.map(({ goal, completed, total, pct }) => <div key={goal.id}><div className="flex items-center justify-between gap-4 mb-2"><p className="text-sm text-vow-ink truncate">{goal.outcome}</p><p className="text-xs text-vow-muted shrink-0">{completed}/{total} · {pct}%</p></div><div className="h-1 bg-vow-border"><div className="h-full bg-vow-ink" style={{ width: `${pct}%` }} /></div></div>)}</div></section>}
 
