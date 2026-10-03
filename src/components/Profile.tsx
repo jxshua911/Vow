@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
+import { NATIVE_OAUTH_REDIRECT } from '@/lib/nativeAuth';
+import { userFacingError } from '@/lib/userFacingError';
 import { PageHeader } from './AppShell';
 import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationPreferences, setNotificationPreferences } from '@/lib/notifications';
 
@@ -24,8 +28,71 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [qualityAlerts, setQualityAlerts] = useState<Array<{ id: string; alert_type: string; validation_code: string | null; goal_title: string | null; created_at: string; resolved_at: string | null }>>([]);
+  const [identities, setIdentities] = useState<Array<{ id: string; provider: string; email?: string }>>([]);
+  const [identityLoading, setIdentityLoading] = useState(true);
+  const [identityLinking, setIdentityLinking] = useState(false);
+  const [identityMessage, setIdentityMessage] = useState('');
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus); }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadIdentities = async () => {
+      if (!session) {
+        setIdentities([]);
+        setIdentityLoading(false);
+        return;
+      }
+      setIdentityLoading(true);
+      const { data, error } = await supabase.auth.getUserIdentities();
+      if (!active) return;
+      if (error) {
+        console.warn('[VOW] Failed to load connected sign-in methods:', error.message);
+        setIdentityMessage('Could not load connected sign-in methods.');
+        setIdentities([]);
+      } else {
+        setIdentities((data?.identities || []).map((identity) => ({
+          id: identity.id,
+          provider: identity.provider,
+          email: identity.identity_data?.email,
+        })));
+      }
+      setIdentityLoading(false);
+    };
+    void loadIdentities();
+    const onOAuthSuccess = () => { void loadIdentities(); };
+    window.addEventListener('vow:oauth-success', onOAuthSuccess);
+    return () => {
+      active = false;
+      window.removeEventListener('vow:oauth-success', onOAuthSuccess);
+    };
+  }, [session]);
+
+  async function handleLinkGoogle() {
+    if (!session || identityLinking) return;
+    setIdentityLinking(true);
+    setIdentityMessage('');
+    try {
+      const options = Capacitor.isNativePlatform()
+        ? { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true }
+        : { redirectTo: window.location.origin };
+      const { data, error } = await supabase.auth.linkIdentity({ provider: 'google', options });
+      if (error) throw error;
+      if (Capacitor.isNativePlatform() && data?.url) {
+        const finishedListener = await Browser.addListener('browserFinished', () => {
+          setIdentityLinking(false);
+          void finishedListener.remove();
+        });
+        await Browser.open({ url: data.url });
+      } else {
+        setIdentityMessage('Finish Google sign-in to connect it to this VOW account.');
+        setIdentityLinking(false);
+      }
+    } catch (error) {
+      setIdentityMessage(userFacingError(error, 'Could not connect Google. Please try again.'));
+      setIdentityLinking(false);
+    }
+  }
   useEffect(() => { setName(displayName); }, [displayName]);
   useEffect(() => {
     if (!session) return;
@@ -96,13 +163,28 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
       <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle="Your account and preferences." />
       <div className="border border-vow-border divide-y divide-vow-border">
         <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
-        <button type="button" disabled aria-disabled="true" className="w-full flex items-center justify-between gap-4 p-5 text-left opacity-60 cursor-not-allowed"><div><p className="text-sm text-vow-ink">Language</p><p className="text-xs text-vow-muted mt-1">Language selection is temporarily unavailable.</p></div><span className="text-sm text-vow-muted">Unavailable</span></button>
         <button onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'support' }))} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Support</p><p className="text-xs text-vow-muted mt-1">Report an issue, ask a question, or send feedback.</p></button>
                 <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">EULA, copyright and service policies.</p></button>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">VOW reminders use sound and vibration automatically when notifications are allowed.</p></div>{notificationsGranted && notificationsEnabled && <span className="text-xs text-vow-ink">Enabled</span>}</div><p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus} · {notificationsEnabled ? 'reminders on' : 'reminders off'}</p><div className="flex flex-wrap gap-2 mt-4">{(!notificationsGranted || !notificationsEnabled) && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft disabled:opacity-50">{requesting ? 'Requesting…' : 'Enable notifications'}</button>}{notificationsGranted && notificationsEnabled && <button onClick={() => void handleDisableNotifications()} className="vow-btn-soft">Disable reminders</button>}</div></div>
         <div className="p-5"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">My name</p><p className="text-xs text-vow-muted mt-1 truncate">{name || 'Not provided'}</p></div><button onClick={() => { setEditingName(true); setNameMessage(''); }} className="vow-btn-soft shrink-0">Change Name</button></div>{editingName && <div className="mt-4 border-t border-vow-border pt-4"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus className="vow-input" placeholder="What should VOW call you?" /><div className="flex gap-2 mt-2"><button onClick={handleSaveName} disabled={savingName || !name.trim()} className="vow-btn-primary disabled:opacity-50">{savingName ? 'Saving…' : 'Save name'}</button><button onClick={() => { setEditingName(false); setName(displayName); }} className="vow-btn-ghost">Cancel</button></div>{nameMessage && <p className="text-xs text-vow-muted mt-2">{nameMessage}</p>}</div>}</div>
-        <div className="p-5"><p className="text-sm text-vow-ink">Account email</p><p className="text-xs text-vow-muted mt-1 break-words">{session?.user?.email || 'Not provided'}</p></div>
+        <div className="p-5">
+          <p className="text-sm text-vow-ink">Account email</p>
+          <p className="text-xs text-vow-muted mt-1 break-words">{session?.user?.email || 'Not provided'}</p>
+          <div className="mt-5 border-t border-vow-border pt-5">
+            <p className="text-sm text-vow-ink">Sign-in methods</p>
+            <p className="text-xs text-vow-muted mt-1">Email and Google can be connected to the same VOW account, so your goals and progress stay under one user identity.</p>
+            {identityLoading ? <p className="text-xs text-vow-muted mt-3">Checking connected methods…</p> : <div className="mt-4 space-y-2">
+              {identities.map((identity) => <div key={identity.id} className="flex items-center justify-between gap-3 text-xs border border-vow-border px-3 py-2">
+                <span className="text-vow-ink capitalize">{identity.provider === 'email' ? 'Email' : identity.provider}</span>
+                <span className="text-vow-muted truncate">{identity.email || session?.user?.email || 'Connected'}</span>
+              </div>)}
+              {!identities.some((identity) => identity.provider === 'google') && <button type="button" onClick={() => void handleLinkGoogle()} disabled={identityLinking} className="vow-btn-soft mt-2 disabled:opacity-50">{identityLinking ? 'Connecting…' : 'Connect Google'}</button>}
+              {identities.some((identity) => identity.provider === 'google') && <p className="text-xs text-vow-ink mt-2">Google is connected to this VOW account.</p>}
+              {identityMessage && <p className="text-xs text-vow-muted mt-2" role="status">{identityMessage}</p>}
+            </div>}
+          </div>
+        </div>
         <button onClick={() => setConfirmSignOut(true)} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Sign out</p><p className="text-xs text-vow-muted mt-1">Sign out of this VOW account.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
         <button onClick={() => { setDeleteError(''); setConfirmDelete(true); }} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Delete account</p><p className="text-xs text-vow-muted mt-1">Permanently delete your VOW account and associated account data.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       </div>

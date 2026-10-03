@@ -20,6 +20,7 @@ import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
 import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
+import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
 import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
@@ -195,11 +196,15 @@ function AppContent() {
     let cleanupPushAction: (() => void) | null = null;
 
     // Only setup push if permission already granted
-    void getNotificationPermission().then((permission) => {
-      if (permission === 'granted') {
-        void setupCloudPushNotifications();
-      }
-    });
+    void getNotificationPermission()
+      .then((permission) => {
+        if (permission === 'granted') {
+          return setupCloudPushNotifications();
+        }
+      })
+      .catch((err) => {
+        console.warn('[VOW] Cloud push setup failed:', err);
+      });
 
     void setupCloudPushActionListener(() => {
       window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'goals' }));
@@ -246,7 +251,8 @@ function AppContent() {
           {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
           {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
           {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
-          {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => undefined} />}
+          {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} onUpgrade={() => navigate('upgrade')} />}
+          {view === 'upgrade' && <UpgradePage />}
         </AppShell>
       )}
     </ProtectedRoute>

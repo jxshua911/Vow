@@ -6,7 +6,7 @@ import { weekRange, toDateString, formatDate, startOfWeek, endOfWeek, addDays } 
 import { detectPatterns } from '@/lib/patterns';
 import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
-import { Check, ArrowRight, RotateCcw } from '@/lib/ui-icons';
+import { ArrowRight } from '@/lib/ui-icons';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
 
 export function ReviewPage() {
@@ -242,9 +242,9 @@ export function ReviewPage() {
           ))}
         </div>
         <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg">Confirming locks these commitments into your immutable commitment log and schedules next week's sessions. You can adjust before confirming.</p>
-        <div className="flex gap-3">
-          <button onClick={generateReview} disabled={generating} className="vow-btn-ghost"><RotateCcw className="w-4 h-4" />Regenerate</button>
-          <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1"><Check className="w-4 h-4" />{confirming ? 'Locking in...' : 'Lock in next week'}</button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button onClick={generateReview} disabled={generating} className="vow-btn-ghost">Regenerate</button>
+          <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1">{confirming ? 'Locking in...' : 'Lock in next week'}</button>
         </div>
       </div>
     </div>
@@ -256,7 +256,7 @@ function ReviewContent({ review }: { review: Review }) {
   const commitments = (review.proposed_commitments || []) as unknown as ProposedCommitment[];
   return (
     <div className="space-y-10">
-      <div className="grid grid-cols-4 gap-px bg-vow-border border border-vow-border"><MetricCell label="Committed" value={review.committed_count} /><MetricCell label="Completed" value={review.completed_count} /><MetricCell label="Missed" value={review.missed_count} /><MetricCell label="Moved" value={review.moved_count} /></div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border border border-vow-border"><MetricCell label="Committed" value={review.committed_count} /><MetricCell label="Completed" value={review.completed_count} /><MetricCell label="Missed" value={review.missed_count} /><MetricCell label="Moved" value={review.moved_count} /></div>
       <div className="flex items-center gap-8"><div className="relative w-20 h-20 flex-shrink-0"><svg className="w-20 h-20 -rotate-90" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="#E2E2DF" strokeWidth="2" /><circle cx="50" cy="50" r="44" fill="none" stroke="#111111" strokeWidth="2" strokeLinecap="square" strokeDasharray={`${(review.completion_pct / 100) * 276.46} 276.46`} className="transition-all duration-1000" /></svg><div className="absolute inset-0 flex items-center justify-center"><span className="text-lg vow-heading text-vow-ink">{Math.round(review.completion_pct)}%</span></div></div><div><p className="vow-label mb-1">Completion rate</p><p className="text-sm text-vow-ink">{review.committed_count > 0 ? `You completed ${review.completed_count} of ${review.committed_count} sessions.` : 'No sessions were scheduled this week.'}</p></div></div>
       <div className="grid md:grid-cols-2 gap-px bg-vow-border border border-vow-border">{review.biggest_win && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest win</p><p className="text-sm text-vow-ink">{review.biggest_win}</p></div>}{review.biggest_setback && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest setback</p><p className="text-sm text-vow-ink">{review.biggest_setback}</p></div>}</div>
       <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Your coach</p><div className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{review.coaching_text}</div></div>

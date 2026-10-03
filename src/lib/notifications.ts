@@ -60,7 +60,6 @@ export async function setNotificationPreferences(preferences: Partial<Notificati
 
   if (await getNotificationPermission() === 'granted') {
     await syncCurrentUserUpcomingSessionNotifications();
-    await setupCloudPushNotifications();
   }
   return next;
 }
@@ -88,15 +87,31 @@ export async function getNotificationPermission(): Promise<NotificationPermissio
 export async function requestNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
   if (!Capacitor.isNativePlatform()) return 'unsupported';
 
-  const current = await LocalNotifications.checkPermissions();
-  if (current.display === 'granted') {
-    await setupNotifications();
-    return current.display;
-  }
+  try {
+    const current = await LocalNotifications.checkPermissions();
+    if (current.display === 'granted') {
+      try {
+        await setupNotifications();
+      } catch (error) {
+        console.warn('[VOW] Notification channel setup failed (non-critical):', error);
+      }
+      return current.display;
+    }
 
-  const result = await LocalNotifications.requestPermissions();
-  if (result.display === 'granted') await setupNotifications();
-  return result.display;
+    const result = await LocalNotifications.requestPermissions();
+    if (result.display === 'granted') {
+      try {
+        await setupNotifications();
+      } catch (error) {
+        console.warn('[VOW] Notification channel setup failed (non-critical):', error);
+      }
+    }
+
+    return result.display;
+  } catch (error) {
+    console.error('[VOW] Notification permission request crashed:', error);
+    return 'denied';
+  }
 }
 
 export async function scheduleReminder(id: number, title: string, body: string, at: Date, sessionId?: string): Promise<void> {
