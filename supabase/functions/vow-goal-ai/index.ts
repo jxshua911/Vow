@@ -275,15 +275,12 @@ function retryDelayMs(response: Response, attempt: number) {
   return Math.min(8000, 1000 * 2 ** attempt);
 }
 
-async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
-  const requestId = await claimGuardrail(req);
+async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired: boolean) {
   const key = Deno.env.get("GROQ_API_KEY");
-  if (!key) {
-    await releaseGuardrail(req, requestId);
-    throw new Error("GROQ_API_KEY_MISSING");
-  }
-  const c = new AbortController(),
-    timer = setTimeout(() => c.abort(), 35000);
+  if (!key) throw new Error("GROQ_API_KEY_MISSING");
+
+  const c = new AbortController();
+  const timer = setTimeout(() => c.abort(), 35000);
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -304,6 +301,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
           tool_choice: researchRequired ? "required" : "auto",
         }),
       });
+
       const raw = await r.text();
       if (r.ok) {
         const payload = JSON.parse(raw);
@@ -313,26 +311,101 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
           const serialized = JSON.stringify(tool).toLowerCase();
           return serialized.includes("web_search") || serialized.includes("browser_search");
         });
-        if (researchRequired && !usedWebSearch)
-          throw new Error("AI_RESEARCH_NOT_PERFORMED");
+        if (researchRequired && !usedWebSearch) throw new Error("AI_RESEARCH_NOT_PERFORMED");
+
         const content = message?.content;
-        if (typeof content !== "string" || !content.trim())
-          throw new Error("GROQ_EMPTY_RESPONSE");
+        if (typeof content !== "string" || !content.trim()) throw new Error("GROQ_EMPTY_RESPONSE");
         return parse(content);
       }
+
       if (r.status === 429 && attempt === 0) {
         const delay = retryDelayMs(r, attempt);
         console.warn("Groq rate limited; retrying once", { delay_ms: delay });
         await sleep(delay);
         continue;
       }
+
       console.error("Groq provider error", { status: r.status });
       if (r.status === 429) throw new Error("GROQ_429");
       throw new Error(`GROQ_PROVIDER_ERROR_${r.status}`);
     }
+
     throw new Error("GROQ_429");
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX) {
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (!key) throw new Error("OPENAI_API_KEY_MISSING");
+
+  const c = new AbortController();
+  const timer = setTimeout(() => c.abort(), 35000);
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      signal: c.signal,
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages,
+        max_completion_tokens: MAX[kind],
+        temperature: 0.15,
+      }),
+    });
+
+    const raw = await r.text();
+    if (r.ok) {
+      const payload = JSON.parse(raw);
+      const message = payload?.choices?.[0]?.message;
+      const content = message?.content;
+      if (typeof content !== "string" || !content.trim()) throw new Error("OPENAI_EMPTY_RESPONSE");
+      return parse(content);
+    }
+
+    console.error("OpenAI provider error", { status: r.status });
+    throw new Error(`OPENAI_PROVIDER_ERROR_${r.status}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
+  const requestId = await claimGuardrail(req);
+  try {
+    try {
+      return await callGroq(req, messages, kind, researchRequired);
+    } catch (groqError) {
+      console.warn(
+        "Groq failed, attempting OpenAI fallback...",
+        groqError instanceof Error ? groqError.message : String(groqError)
+      );
+
+      // OpenAI Chat Completions does not provide the browser-search tool used by
+      // the Groq path, so never claim research was performed when it was required.
+      if (researchRequired) throw groqError;
+
+      if (Deno.env.get("OPENAI_API_KEY")) {
+        try {
+          const result = await callOpenAI(req, messages, kind);
+          console.log("OpenAI fallback succeeded after Groq failure");
+          return result;
+        } catch (openaiError) {
+          console.error(
+            "OpenAI fallback also failed",
+            openaiError instanceof Error ? openaiError.message : String(openaiError)
+          );
+          throw groqError;
+        }
+      }
+
+      throw groqError;
+    }
+  } finally {
     await releaseGuardrail(req, requestId);
   }
 }
