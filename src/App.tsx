@@ -67,7 +67,7 @@ function AppContent() {
       void track('view_changed', { screen: nextHistory[nextHistory.length - 1] });
       return nextHistory;
     });
-  }, [navigate]);
+  }, []);
 
   useEffect(() => { viewHistoryRef.current = viewHistory; }, [viewHistory]);
   useEffect(() => {
