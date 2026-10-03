@@ -935,6 +935,7 @@ Deno.serve(async (req) => {
             "ENTITLEMENT_RESERVATION_FAILED",
             "ENTITLEMENT_FINALIZE_FAILED",
             "GROQ_API_KEY_MISSING",
+            "OPENAI_API_KEY_MISSING",
             "AI_RESEARCH_NOT_PERFORMED",
             "GROQ_EMPTY_RESPONSE",
             "INVALID_AI_JSON",
