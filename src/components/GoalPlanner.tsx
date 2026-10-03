@@ -7,13 +7,18 @@ import { UpgradePrompt } from './UpgradePrompt';
 import { checkContentSafety } from '@/lib/contentSafety';
 import type { Session } from '@/types/database';
 import { PageHeader } from './AppShell';
-import { analyseGoalForEvidence, type ArmadilloResult } from '@/lib/armadillo';
+import { normalizeGoalCategory, type GoalCategory } from '@/lib/goalCategories';
+import { userFacingError } from '@/lib/userFacingError';
 
 type Clarification = {
   questions: string[];
   recommended_duration_weeks: number;
   rationale: string;
+  category?: unknown;
+  goal_type?: unknown;
+  classification_confidence?: unknown;
 };
+type GoalDomain = { category: GoalCategory; goal_type: string };
 type PlanItem = {
   week: number;
   day: string;
@@ -30,6 +35,8 @@ type PlanReference = {
   resource_type: 'youtube' | 'instagram' | 'image' | 'video' | 'link';
 };
 type Plan = {
+  category: GoalCategory;
+  goal_type: string;
   outcome: string;
   success_metric: string;
   baseline: string;
@@ -79,7 +86,7 @@ function canonicalDay(day: unknown): string | null {
   );
   return idx >= 0 ? DAYS[idx] : null;
 }
-function normalizePlan(raw: Plan, durationWeeks: number): Plan | null {
+function normalizePlan(raw: Plan, durationWeeks: number, domain: GoalDomain): Plan | null {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.schedule) || !Array.isArray(raw.milestones))
     return null;
   const milestones = raw.milestones
@@ -115,6 +122,8 @@ function normalizePlan(raw: Plan, durationWeeks: number): Plan | null {
     .filter(reference => /^https?:\/\//i.test(reference.url));
   return {
     ...raw,
+    category: domain.category,
+    goal_type: domain.goal_type,
     milestones,
     schedule,
     references,
@@ -166,6 +175,7 @@ export function GoalPlanner({
   const [durationWeeks, setDurationWeeks] = useState(8);
   const [availableDays, setAvailableDays] = useState<string[]>(['Monday', 'Wednesday', 'Saturday']);
   const [preferredSessionTime, setPreferredSessionTime] = useState('09:00');
+  const [domain, setDomain] = useState<GoalDomain | null>(null);
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -175,17 +185,11 @@ export function GoalPlanner({
   const [error, setError] = useState('');
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
 
-  const armadillo: ArmadilloResult = analyseGoalForEvidence({
-    title: rawInput,
-    outcome: rawInput,
-    why_it_matters: why,
-  });
-
   function toggleDay(day: string) {
     setAvailableDays(x => (x.includes(day) ? x.filter(d => d !== day) : x.length < 7 ? [...x, day] : x));
   }
 
-  async function ensureDraft() {
+  async function ensureDraft(goalDomain: GoalDomain) {
     if (draftGoalId) return draftGoalId;
     const start = nextMonday();
     const { data, error: e } = await supabase
@@ -200,6 +204,7 @@ export function GoalPlanner({
         duration: `${durationWeeks}w`,
         status: 'draft',
         weekly_commitment_target: availableDays.length,
+        plan_json: { category: goalDomain.category, goal_type: goalDomain.goal_type },
       })
       .select('id')
       .single();
@@ -247,27 +252,33 @@ export function GoalPlanner({
     setUpgrade(null);
     try {
       if (!(await checkCreateEntitlement())) return;
-      const goalId = await ensureDraft();
-      const references = await loadReferences(goalId);
-            const data = await invokeGoalAI({
+      const data = await invokeGoalAI({
           mode: 'goal-clarify',
           goal: {
-            id: goalId,
             title: rawInput.trim(),
             outcome: rawInput.trim(),
             why_it_matters: why.trim() || null,
-            domain: armadillo,
             duration_weeks: durationWeeks,
             weekly_commitment_target: availableDays.length,
           },
-          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDomain: ${armadillo.category} / ${armadillo.goal_type}\nMethodology: ${armadillo.methodology}\nRequired information: ${armadillo.required_inputs.join('; ')}\nAI research required: ${armadillo.needs_ai_research ? 'YES — identify ambiguous terms/domain before planning and use live web research.' : 'NO — deterministic specialist match is sufficient unless current specialist research materially improves the plan.'}\nResearch reason: ${armadillo.research_reason || 'none'}\nDuration: ${durationLabel(durationWeeks)}.\nAvailable days: ${availableDays.join(', ')}\nAsk 2-3 high-value questions that resolve the most important missing inputs for this exact domain. Never ask generic questions.`,
+          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${durationLabel(durationWeeks)}.\nAvailable days: ${availableDays.join(', ')}\nIdentify the right kind of activity or outcome, then ask 2-3 high-value questions that resolve the most important missing inputs.`,
           available_days: availableDays,
-          references,
+          references: [],
         });
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not prepare the follow-up questions.');
       const next = data.structured as Clarification;
+      const category = normalizeGoalCategory(next.category);
+      const goalType = typeof next.goal_type === 'string' ? next.goal_type.trim().slice(0, 80) : '';
+      const confidence = Number(next.classification_confidence);
+      if (!category || !goalType || !Number.isFinite(confidence) || confidence < 0.65) {
+        throw new Error('GOAL_CATEGORY_UNCLEAR');
+      }
       if (!Array.isArray(next.questions) || next.questions.length === 0)
         throw new Error('VOW AI returned no follow-up questions.');
+      const goalDomain = { category, goal_type: goalType };
+      setDomain(goalDomain);
+      const goalId = await ensureDraft(goalDomain);
+      const references = await loadReferences(goalId);
       setClarification(next);
       setAnswers(next.questions.map(() => ''));
       const { error: ae } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
@@ -283,14 +294,14 @@ export function GoalPlanner({
       );
       if (ie) throw ie;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'VOW AI could not prepare the follow-up questions.');
+      setError(userFacingError(err, 'VOW could not prepare the follow-up questions. Please try again.'));
     } finally {
       setPlanning(false);
     }
   }
 
   async function buildPlan() {
-    if (!clarification || planning || availableDays.length === 0) return;
+    if (!clarification || !domain || planning || availableDays.length === 0) return;
     setPlanning(true);
     setError('');
     try {
@@ -303,13 +314,13 @@ export function GoalPlanner({
         setError(safety.message || 'VOW cannot plan that request.');
         return;
       }
-      const goalId = await ensureDraft();
+      const goalId = await ensureDraft(domain);
       const clean = answers.map(a => a.trim());
       const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
       const unresolved = clean.filter(answer => !answer || unknown.test(answer)).length;
       if (unresolved === clean.length) {
         setError(
-          `VOW needs one decision before it can build a responsible ${armadillo.goal_type} plan: ${armadillo.required_inputs[0]}.`
+          'VOW needs one decision before it can build a responsible plan. Please answer at least one follow-up question.'
         );
         return;
       }
@@ -334,14 +345,14 @@ export function GoalPlanner({
             title: rawInput.trim(),
             outcome: rawInput.trim(),
             why_it_matters: why.trim() || null,
-            domain: armadillo,
+            domain,
             start_date: toDateString(start),
             deadline: deadlineFor(start, durationWeeks),
             duration_weeks: durationWeeks,
             weekly_commitment_target: availableDays.length,
             plan_generated_at: null,
           },
-          message: `Build a genuinely personalised ${armadillo.goal_type} plan. Methodology: ${armadillo.methodology}\nRequired inputs: ${armadillo.required_inputs.join('; ')}\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${durationLabel(durationWeeks)}. Available days are exactly: ${availableDays.join(', ')}. The user's preferred session time is exactly ${preferredSessionTime} in their device timezone and must be used consistently for every session unless VOW explicitly asks the user to change it. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions.`,
+          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${durationLabel(durationWeeks)}. Available days are exactly: ${availableDays.join(', ')}. Use the selected session time ${preferredSessionTime} for scheduled sessions. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions.`,
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
           references,
@@ -357,11 +368,11 @@ export function GoalPlanner({
       const next = data.structured as Plan;
       if (next.duration_weeks !== durationWeeks)
         throw new Error('VOW AI returned a plan for a different duration than you selected. Please try again.');
-      const normalized = normalizePlan(next, durationWeeks);
+      const normalized = normalizePlan(next, durationWeeks, domain);
       if (!normalized) throw new Error('VOW AI returned an incomplete plan. Please try again.');
       setPlan(normalized);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'VOW AI could not build the plan.');
+      setError(userFacingError(err, 'VOW could not build the plan. Please try again.'));
     } finally {
       setPlanning(false);
     }
@@ -611,6 +622,12 @@ export function GoalPlanner({
           subtitle="VOW uses your answers to make the commitment genuinely yours."
         />
         <div className="max-w-xl space-y-6">
+          <div className="border border-vow-border p-4 space-y-1">
+            <p className="text-xs text-vow-muted uppercase tracking-wider">
+              {domain?.category ?? 'General'} · {domain?.goal_type ?? 'Goal'}
+            </p>
+            <p className="text-sm text-vow-ink">VOW is tailoring the next questions around this type of goal.</p>
+          </div>
           {clarification.questions.map((question, index) => (
             <div key={`${index}-${question}`}>
               <label className="vow-label block mb-2">{question}</label>
@@ -662,6 +679,14 @@ export function GoalPlanner({
           autoFocus
         />
 
+        {rawInput.trim().length >= 3 && (
+          <div className="border border-vow-border p-4 space-y-1">
+            <p className="text-xs text-vow-muted uppercase tracking-wider">
+              Detected · {domain?.category ?? 'General'} — {domain?.goal_type ?? 'Goal'}
+            </p>
+            <p className="text-sm text-vow-ink">VOW is shaping the plan around this goal type and your available time.</p>
+          </div>
+        )}
 
         <div>
           <label className="vow-label block mb-2">Why does this matter?</label>

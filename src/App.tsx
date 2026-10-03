@@ -22,7 +22,7 @@ import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
 import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { cancelAllVowNotifications, clearCloudPushRegistration, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
@@ -189,6 +189,29 @@ function AppContent() {
       window.clearInterval(interval);
     };
   }, [session]);
+
+  useEffect(() => {
+    if (!session || !termsAccepted) return;
+
+    let cleanupPushAction: (() => void) | null = null;
+
+    // Only setup push if permission already granted
+    void getNotificationPermission()
+      .then((permission) => {
+        if (permission === 'granted') {
+          return setupCloudPushNotifications();
+        }
+      })
+      .catch((err) => {
+        console.warn('[VOW] Cloud push setup failed:', err);
+      });
+
+    void setupCloudPushActionListener(() => {
+      window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'goals' }));
+    }).then((cleanup) => { cleanupPushAction = cleanup; });
+
+    return () => { cleanupPushAction?.(); };
+  }, [session, termsAccepted]);
 
   useEffect(() => {
     if (!session || !termsAccepted) return;

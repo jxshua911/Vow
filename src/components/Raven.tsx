@@ -53,7 +53,7 @@ export function RavenPage() {
       setGoals(allGoals);
       setSessions(allSessions);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Progress could not load right now.');
+      setError(err instanceof Error ? err.message : 'Could not load your progress.');
     } finally {
       setLoading(false);
     }
@@ -63,14 +63,14 @@ export function RavenPage() {
 
   const progress = useMemo(() => snapshot ? goalProgress(sessions, goals).filter((x) => x.total > 0) : [], [snapshot, sessions, goals]);
 
-  if (loading) return <div><PageHeader title="Progress" subtitle="Your progress, as it actually happened." /><div className="text-sm text-vow-muted">Reading your progress...</div></div>;
-  if (!snapshot) return <div><PageHeader title="Progress" subtitle="Your progress, as it actually happened." /><div className="border border-vow-border p-12 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">Nothing to measure yet.</p><p className="text-sm text-vow-muted">Complete your first tracked session and VOW will start learning your pattern.</p></div></div>;
+  if (loading) return <div><PageHeader title="Progress" subtitle="Your effort and consistency over time." /><div className="text-sm text-vow-muted">Your progress is being analyzed...</div></div>;
+  if (!snapshot) return <div><PageHeader title="Progress" subtitle="Your effort and consistency over time." /><div className="border border-vow-border p-12 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">Nothing to measure yet.</p><p className="text-sm text-vow-muted">Complete your first tracked session and your progress will start updating.</p></div></div>;
 
   const trendSymbol = snapshot.trend === 'up' ? '↗' : snapshot.trend === 'down' ? '↘' : '—';
   const trendText = snapshot.trend === 'new' ? 'New baseline' : snapshot.trend === 'up' ? `Up ${snapshot.score_delta} points` : snapshot.trend === 'down' ? `Down ${Math.abs(snapshot.score_delta || 0)} points` : 'Holding steady';
 
   return <div>
-    <PageHeader title="Progress" subtitle="Your progress, as it actually happened." action={<button onClick={load} className="text-xs text-vow-muted hover:text-vow-ink">Refresh</button>} />
+    <PageHeader title="Progress" subtitle="Your effort and consistency over time." action={<button onClick={load} className="text-xs text-vow-muted hover:text-vow-ink">Refresh</button>} />
 
     {error && <div className="border-l-2 border-vow-ink pl-3 mb-8"><p className="text-xs text-vow-muted">{error}</p></div>}
 
