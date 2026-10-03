@@ -278,7 +278,6 @@ export function GoalPlanner({
       const goalDomain = { category, goal_type: goalType };
       setDomain(goalDomain);
       const goalId = await ensureDraft(goalDomain);
-      const references = await loadReferences(goalId);
       setClarification(next);
       setAnswers(next.questions.map(() => ''));
       const { error: ae } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
