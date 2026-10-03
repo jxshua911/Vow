@@ -21,87 +21,34 @@ jobs:
         with:
           version: latest
 
-      - name: Deploy Google Calendar auth function
-        run: supabase functions deploy google-calendar-auth --project-ref vqsrdausvmfjayffxiuh
+      - name: Deploy changed Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: vqsrdausvmfjayffxiuh
+        run: |
+          set -euo pipefail
 
-      - name: Deploy Google Calendar events function
-        run: supabase functions deploy google-calendar-events --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          base="${{ github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="${GITHUB_SHA}^"
+          fi
 
-      - name: Deploy VOW AI function
-        run: supabase functions deploy vow-goal-ai --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          mapfile -t functions < <(
+            git diff --name-only "$base" "$GITHUB_SHA" -- 'supabase/functions/*' |
+              awk -F/ 'NF >= 3 {print $3}' |
+              sort -u
+          )
 
-      - name: Deploy VOW blind benchmark function
-        run: supabase functions deploy vow-blind-benchmark --project-ref vqsrdausvmfjayffxiuh --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          if [ "${#functions[@]}" -eq 0 ]; then
+            echo "No Edge Function source changes detected; nothing to deploy."
+            exit 0
+          fi
 
-      - name: Deploy VOW content safety function
-        run: supabase functions deploy vow-content-safety --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy goal calendar sync function
-        run: supabase functions deploy google-calendar-sync-goal --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Deploy Goal resources function
-        run: supabase functions deploy vow-goal-resources --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy Strava OAuth function
-        run: supabase functions deploy strava-oauth --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy Strava activities function
-        run: supabase functions deploy strava-activities --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy Account deletion function
-        run: supabase functions deploy vow-account-delete --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy Google Play verification function
-        run: supabase functions deploy vow-google-play-verify --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy Google Play RTDN function
-        run: supabase functions deploy vow-google-play-rtdn --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Deploy Account export function
-        run: supabase functions deploy vow-account-export --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Deploy weekly snapshot function
-        run: supabase functions deploy vow-snapshot-weekly --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy knowledge embedding function
-        run: supabase functions deploy vow-embed-knowledge --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Deploy Stripe checkout function
-        run: supabase functions deploy vow-create-checkout --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy Stripe webhook function
-        run: supabase functions deploy vow-stripe-webhook --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Deploy retired legacy planner function
-        run: supabase functions deploy vow-hamster --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          for function in "${functions[@]}"; do
+            echo "Deploying changed function: $function"
+            if [ "$function" = "vow-blind-benchmark" ]; then
+              supabase functions deploy "$function" --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+            else
+              supabase functions deploy "$function" --project-ref "$SUPABASE_PROJECT_REF"
+            fi
+          done
