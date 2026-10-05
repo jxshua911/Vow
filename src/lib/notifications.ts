@@ -10,7 +10,7 @@ export type NotificationPreferences = { enabled: boolean; sound: boolean; vibrat
 
 const CHANNEL_PREFIX = 'vow-reminders';
 const PREF_KEY = 'vow:notification-preferences';
-const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: true, sound: true, vibration: true };
+const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: false, sound: true, vibration: true };
 const PUSH_TOKEN_KEY = 'vow:fcm-token';
 let pushListenersReady = false;
 let pushRegistrationWaiter: { resolve: () => void; reject: (error: Error) => void; timeoutId: number } | null = null;
@@ -50,7 +50,7 @@ export function getNotificationPreferences(): NotificationPreferences {
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<NotificationPreferences>;
       return {
-        enabled: parsed.enabled !== false,
+        enabled: parsed.enabled === true,
         sound: parsed.sound !== false,
         vibration: parsed.vibration !== false,
       };

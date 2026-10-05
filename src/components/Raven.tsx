@@ -5,7 +5,7 @@ import type { Goal, Session } from '@/types/database';
 import { calculateRavenSnapshot, getRavenAwards, goalProgress, type RavenAward, type RavenSnapshot } from '@/lib/raven';
 import { PageHeader } from './AppShell';
 
-export function RavenPage() {
+export function ProgressPage() {
   const { session } = useAuth();
   const [snapshot, setSnapshot] = useState<RavenSnapshot | null>(null);
   const [awards, setAwards] = useState<RavenAward[]>([]);
@@ -29,7 +29,10 @@ export function RavenPage() {
       if (goalsRes.error) throw goalsRes.error;
       const allSessions = (sessionsRes.data || []) as Session[];
       const allGoals = (goalsRes.data || []) as Goal[];
-      const storedAwards = (awardsRes.data || []) as RavenAward[];
+      if (awardsRes.error) throw awardsRes.error;
+      if (snapshotRes.error) throw snapshotRes.error;
+      const storedAwards = ((awardsRes.data || []) as Array<RavenAward & { award_key?: string }>)
+        .map((award) => ({ ...award, key: award.award_key || award.key }));
       const previous = snapshotRes.data?.snapshot as RavenSnapshot | null;
       const next = calculateRavenSnapshot(allSessions, previous);
       const earned = getRavenAwards(next, storedAwards);
@@ -53,7 +56,8 @@ export function RavenPage() {
       setGoals(allGoals);
       setSessions(allSessions);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load your progress.');
+      console.error('[VOW] Progress could not be loaded:', err);
+      setError('Could not load your progress. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -64,15 +68,14 @@ export function RavenPage() {
   const progress = useMemo(() => snapshot ? goalProgress(sessions, goals).filter((x) => x.total > 0) : [], [snapshot, sessions, goals]);
 
   if (loading) return <div><PageHeader title="Progress" subtitle="Your effort and consistency over time." /><div className="text-sm text-vow-muted">Your progress is being analyzed...</div></div>;
-  if (!snapshot) return <div><PageHeader title="Progress" subtitle="Your effort and consistency over time." /><div className="border border-vow-border p-12 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">Nothing to measure yet.</p><p className="text-sm text-vow-muted">Complete your first tracked session and your progress will start updating.</p></div></div>;
+  if (error) return <div><PageHeader title="Progress" subtitle="Your effort and consistency over time." /><div className="border border-vow-border p-8"><p className="text-sm text-vow-ink mb-3">{error}</p><button type="button" onClick={() => void load()} className="text-xs text-vow-ink underline underline-offset-4">Try again</button></div></div>;
+  if (!snapshot || snapshot.total_sessions === 0) return <div><PageHeader title="Progress" subtitle="Your effort and consistency over time." /><div className="border border-vow-border p-12 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">Nothing to measure yet.</p><p className="text-sm text-vow-muted">Complete your first tracked session and your progress will start updating.</p></div></div>;
 
   const trendSymbol = snapshot.trend === 'up' ? '↗' : snapshot.trend === 'down' ? '↘' : '—';
   const trendText = snapshot.trend === 'new' ? 'New baseline' : snapshot.trend === 'up' ? `Up ${snapshot.score_delta} points` : snapshot.trend === 'down' ? `Down ${Math.abs(snapshot.score_delta || 0)} points` : 'Holding steady';
 
   return <div>
     <PageHeader title="Progress" subtitle="Your effort and consistency over time." action={<button onClick={load} className="text-xs text-vow-muted hover:text-vow-ink">Refresh</button>} />
-
-    {error && <div className="border-l-2 border-vow-ink pl-3 mb-8"><p className="text-xs text-vow-muted">{error}</p></div>}
 
     <section className="border border-vow-border p-6 mb-8">
       <div className="flex items-start justify-between gap-6">

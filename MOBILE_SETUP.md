@@ -1,9 +1,9 @@
 # VOW — Mobile app setup
 
-This project now wraps your existing React/Supabase web app with
+This project wraps the React/Supabase app with
 [Capacitor](https://capacitorjs.com), so it can run as a real iOS and
-Android app while talking to the same Supabase backend. Everything below
-is new; nothing about your web app's logic, styling, or database changed.
+Android app while talking to the same Supabase backend. This guide covers
+native setup and build steps.
 
 ## What was added
 
@@ -21,10 +21,10 @@ is new; nothing about your web app's logic, styling, or database changed.
 - `index.html` — added `viewport-fit=cover` so content flows correctly
   around notches/home indicators
 
-The Android launch screen and the in-app `SplashOverlay` use the same VOW
-wordmark source without stretching it. Android uses the device's light/dark
-appearance for its native launch screen; the in-app splash uses the saved
-VOW theme.
+Android uses one native launch screen built from the full VOW wordmark,
+centered at its original proportions and colored for the device's light/dark
+appearance. The React splash is web-only, preventing a second splash from
+appearing after Android's native launch screen.
 
 ## 1. Get it building locally
 
@@ -40,8 +40,9 @@ it again any time you change web code and want to see it natively.
 
 ## Notifications
 
-VOW schedules session reminders as on-device notifications after permission
-is granted. Remote Android push is separate: the APK workflow needs the
+Session reminders are off until a user opts in under Profile → Notifications.
+When enabled, VOW schedules upcoming sessions as on-device notifications.
+Remote Android push is separate: the APK workflow needs the
 `ANDROID_GOOGLE_SERVICES_JSON` GitHub Actions secret containing the Firebase
 Android client configuration for `com.vow.app`. This is not a Firebase
 service-account key. The Supabase `vow-send-push` function also requires

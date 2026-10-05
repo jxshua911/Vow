@@ -57,6 +57,16 @@ type Plan = {
 };
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const GOAL_PLACEHOLDERS = [
+  'Finish a first 5K without stopping',
+  'Practise conversational Spanish',
+  'Build a portfolio for a new role',
+  'Read for 20 minutes each day',
+  'Learn to cook five healthy dinners',
+  'Complete a small woodworking project',
+  'Meditate for ten minutes each morning',
+  'Save enough for a planned trip',
+];
 const DURATION_OPTIONS = [
   { weeks: 1, label: '1 week', detail: 'Quick start' },
   { weeks: 2, label: '2 weeks', detail: 'Short sprint' },
@@ -224,6 +234,7 @@ export function GoalPlanner({
   initialWhy?: string;
 }) {
   const [rawInput, setRawInput] = useState(initialGoal);
+  const [goalPlaceholder] = useState(() => GOAL_PLACEHOLDERS[Math.floor(Math.random() * GOAL_PLACEHOLDERS.length)]);
 
   const [why, setWhy] = useState(initialWhy);
   const [durationWeeks, setDurationWeeks] = useState(8);
@@ -747,7 +758,7 @@ export function GoalPlanner({
           rows={4}
           maxLength={300}
           className="vow-input resize-none"
-          placeholder="e.g. Run a sub-60-minute 10K"
+          placeholder={`e.g. ${goalPlaceholder}`}
           autoFocus
         />
 

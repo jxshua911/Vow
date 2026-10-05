@@ -95,6 +95,32 @@ function days(x: any, w: number) {
     : [];
   return a.length ? a.slice(0, 7) : DAYS.slice(0, Math.max(1, Math.min(4, w)));
 }
+function clarificationFallback(goal: string, category: string, selectedDays: string[], hasDeadline: boolean) {
+  const normalizedCategory = category.toLowerCase();
+  const startingPointQuestion = normalizedCategory.includes("sport")
+    ? "What is your current fitness or skill level for this activity?"
+    : normalizedCategory.includes("language")
+    ? "What can you currently understand or say in this language?"
+    : normalizedCategory.includes("education") || normalizedCategory.includes("learning")
+    ? "What have you already studied or practised in this subject?"
+    : normalizedCategory.includes("career")
+    ? "What experience or qualifications do you already have for this next step?"
+    : normalizedCategory.includes("creative") || normalizedCategory.includes("craft")
+    ? "What have you already made or practised in this area?"
+    : normalizedCategory.includes("finance")
+    ? "What is your current starting point or monthly amount you can set aside?"
+    : "What have you already tried, and what is your current starting point?";
+  const timingQuestion = hasDeadline
+    ? "What makes your target date important, and is it flexible?"
+    : "Do you have a target date or event you want to work toward?";
+  return {
+    questions: [
+      `What measurable result would show you have achieved "${goal}"?`,
+      startingPointQuestion,
+      `${timingQuestion} You selected ${selectedDays.join(", ")} for sessions.`,
+    ],
+  };
+}
 async function cooldown(uid: string, k: keyof typeof COOLDOWN) {
   const { data, error } = await db().rpc("vow_claim_ai_cooldown", {
     p_user_id: uid,
@@ -674,9 +700,10 @@ Deno.serve(async (req) => {
 
     const knowledge = await searchKnowledge(knowledgeQuery);
     const researchRequired =
-      domain?.needs_ai_research === true ||
-      detectAmbiguousTerms(message) ||
-      detectAmbiguousTerms(g?.outcome || "");
+      mode !== "goal-clarify" &&
+      (domain?.needs_ai_research === true ||
+        detectAmbiguousTerms(message) ||
+        detectAmbiguousTerms(g?.outcome || ""));
     const context = {
       goal: {
         title: str(g?.title || g?.outcome, 300),
@@ -726,6 +753,7 @@ Deno.serve(async (req) => {
 
     if (mode === "goal-clarify") {
       let r: any;
+      let usedFallback = false;
       try {
         r = await ai(req,
           [
@@ -740,16 +768,40 @@ Deno.serve(async (req) => {
         );
       } catch (e) {
         console.warn("clarify AI error", e);
-        throw e;
+        const errorCode = e instanceof Error ? e.message : String(e);
+        const providerFailure =
+          /^(GROQ_API_KEY_MISSING|GROQ_429|GROQ_PROVIDER_ERROR_\d+|GROQ_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED)$/.test(errorCode) ||
+          (e instanceof TypeError && /fetch|network/i.test(errorCode)) ||
+          (e instanceof Error && e.name === "AbortError");
+        if (!providerFailure) throw e;
+        const goalLabel = str(g?.outcome || g?.title, 180) || "this goal";
+        r = {
+          ...clarificationFallback(goalLabel, str(fallbackCategory, 80), ds, Boolean(str(g?.deadline, 30))),
+          recommended_duration_weeks: w,
+          rationale: "A few details will help VOW shape a practical plan around your goal and schedule.",
+          category: fallbackCategory || "Personal Development",
+          goal_type: str(domain?.goal_type, 80) || "Personal goal",
+          classification_confidence: Number(domain?.confidence) || 0.6,
+        };
+        usedFallback = true;
       }
-      const questions = arr(r.questions, 3).slice(0, 3);
+      let questions = arr(r?.questions, 3).slice(0, 3);
       if (questions.length < 2) {
-        await releasePlanningEntitlement(req, entitlementReservationId);
-        entitlementReservationId = null;
-        return json(
-          { error: "VOW AI returned insufficient clarification questions. Please try again." },
-          502
-        );
+        questions = clarificationFallback(
+          str(g?.outcome || g?.title, 180) || "this goal",
+          str(fallbackCategory, 80),
+          ds,
+          Boolean(str(g?.deadline, 30)),
+        ).questions;
+        r = {
+          ...r,
+          recommended_duration_weeks: w,
+          rationale: "A few details will help VOW shape a practical plan around your goal and schedule.",
+          category: fallbackCategory || "Personal Development",
+          goal_type: str(domain?.goal_type, 80) || "Personal goal",
+          classification_confidence: Number(domain?.confidence) || 0.6,
+        };
+        usedFallback = true;
       }
       r.questions = questions;
       r.category = str(r.category, 80) || str(fallbackCategory, 80) || "Personal Development";
@@ -766,9 +818,15 @@ Deno.serve(async (req) => {
         Math.max(1, Number(r.recommended_duration_weeks) || w)
       );
       r.rationale = str(r.rationale, 500);
+      if (usedFallback && entitlementReservationId) {
+        await releasePlanningEntitlement(req, entitlementReservationId);
+        entitlementReservationId = null;
+      }
       await record(req, "goal-clarify", "success", Date.now() - startedAt);
-      await finalizePlanningEntitlement(req, entitlementReservationId);
-      entitlementFinalized = true;
+      if (entitlementReservationId) {
+        await finalizePlanningEntitlement(req, entitlementReservationId);
+        entitlementFinalized = true;
+      }
       return json({ structured: r, text: JSON.stringify(r) });
     }
     if (mode === "goal-plan") {

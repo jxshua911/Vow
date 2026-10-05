@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Session, Goal, JournalEntry, UserSettings, Review, PatternFinding, ProposedCommitment } from '@/types/database';
@@ -19,31 +19,40 @@ export function ReviewPage() {
   const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const { start, end } = weekRange();
+  const { start, end } = useMemo(() => weekRange(), []);
 
   const load = useCallback(async () => {
     if (!session) return;
-    const weekStart = toDateString(start);
+    setLoading(true);
+    try {
+      const weekStart = toDateString(start);
+      const { data: existing, error: existingError } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('week_start', weekStart)
+        .maybeSingle();
+      if (existingError) throw existingError;
 
-    const { data: existing } = await supabase
-      .from('reviews')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .eq('week_start', weekStart)
-      .maybeSingle();
-    setExistingReview(existing as Review | null);
+      const { data: past, error: pastError } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('week_start', { ascending: false })
+        .limit(10);
+      if (pastError) throw pastError;
 
-    const { data: past } = await supabase
-      .from('reviews')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('week_start', { ascending: false })
-      .limit(10);
-    setPastReviews((past || []) as Review[]);
-
-    if (existing) setReview(existing as Review);
-    setLoading(false);
-    }, [session, start]);
+      setExistingReview(existing as Review | null);
+      setReview(existing as Review | null);
+      setPastReviews((past || []) as Review[]);
+      setActionError(null);
+    } catch (error) {
+      console.error('Review loading failed:', error);
+      setActionError("We couldn't load your review. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [session, start]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -62,6 +71,8 @@ export function ReviewPage() {
         supabase.from('journal_entries').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
         supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle(),
       ]);
+      const queryError = sessionsRes.error || goalsRes.error || journalRes.error || settingsRes.error;
+      if (queryError) throw queryError;
 
       const allSessions = (sessionsRes.data || []) as Session[];
       const goals = (goalsRes.data || []) as Goal[];
@@ -138,13 +149,12 @@ export function ReviewPage() {
         if (error) throw error;
         savedReview = data;
       }
-      if (savedReview) {
-        setReview(savedReview as Review);
-        setExistingReview(savedReview as Review);
-      }
+      if (!savedReview) throw new Error('Review save returned no row.');
+      setReview(savedReview as Review);
+      setExistingReview(savedReview as Review);
     } catch (err) {
       console.error('Review generation failed:', err);
-      setActionError(err instanceof Error && err.message ? `We couldn't generate your review: ${err.message}` : "We couldn't generate your review. Please check your connection and try again.");
+      setActionError("We couldn't generate your review. Please check your connection and try again.");
     } finally {
       setGenerating(false);
     }
@@ -156,12 +166,12 @@ export function ReviewPage() {
     setActionError(null);
 
     try {
-      await supabase.from('reviews').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', review.id).select().single().then(({ error }) => { if (error) throw error; });
       const nextWeekStart = toDateString(addDays(startOfWeek(), 7));
       const nextWeekEnd = toDateString(addDays(endOfWeek(), 7));
 
-      for (const commitment of review.proposed_commitments as unknown as ProposedCommitment[]) {
-        await supabase.from('commitment_log').insert({
+      const commitments = review.proposed_commitments as unknown as ProposedCommitment[];
+      if (commitments.length > 0) {
+        const { error } = await supabase.from('commitment_log').upsert(commitments.map((commitment) => ({
           user_id: session.user.id,
           week_start: nextWeekStart,
           week_end: nextWeekEnd,
@@ -171,14 +181,16 @@ export function ReviewPage() {
           skipped_sessions: 0,
           moved_sessions: 0,
           snapshot: { notes: commitment.notes, goal_title: commitment.goal_title },
-        });
+        })), { onConflict: 'user_id,goal_id,week_start', ignoreDuplicates: true });
+        if (error) throw error;
       }
 
-      for (const commitment of review.proposed_commitments as unknown as ProposedCommitment[]) {
+      const scheduledSessions: Array<Pick<Session, 'goal_id' | 'user_id' | 'title' | 'scheduled_at' | 'duration_minutes' | 'status'>> = [];
+      for (const commitment of commitments) {
         for (let i = 0; i < commitment.sessions_per_week; i++) {
-          const sessionDate = addDays(new Date(nextWeekStart), i + 1);
+          const sessionDate = addDays(new Date(`${nextWeekStart}T00:00:00`), i + 1);
           sessionDate.setHours(9, 0, 0, 0);
-          await supabase.from('sessions').insert({
+          scheduledSessions.push({
             goal_id: commitment.goal_id,
             user_id: session.user.id,
             title: commitment.goal_title,
@@ -188,6 +200,31 @@ export function ReviewPage() {
           });
         }
       }
+      if (scheduledSessions.length > 0) {
+        const goalIds = [...new Set(scheduledSessions.map((item) => item.goal_id))];
+        const scheduledAt = [...new Set(scheduledSessions.map((item) => item.scheduled_at))];
+        const { data: existingSessions, error: existingSessionsError } = await supabase
+          .from('sessions')
+          .select('goal_id,title,scheduled_at')
+          .eq('user_id', session.user.id)
+          .in('goal_id', goalIds)
+          .in('scheduled_at', scheduledAt);
+        if (existingSessionsError) throw existingSessionsError;
+        const existingKeys = new Set((existingSessions || []).map((item) => `${item.goal_id}|${item.title}|${item.scheduled_at}`));
+        const missingSessions = scheduledSessions.filter((item) => !existingKeys.has(`${item.goal_id}|${item.title}|${item.scheduled_at}`));
+        if (missingSessions.length > 0) {
+          const { error } = await supabase.from('sessions').insert(missingSessions);
+          if (error) throw error;
+        }
+      }
+
+      const { error: confirmError } = await supabase
+        .from('reviews')
+        .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+        .eq('id', review.id)
+        .select()
+        .single();
+      if (confirmError) throw confirmError;
 
       const { data: upcomingSessions, error: upcomingSessionError } = await supabase
         .from('sessions')
@@ -202,7 +239,7 @@ export function ReviewPage() {
       await load();
     } catch (err) {
       console.error('Confirm failed:', err);
-      setActionError(err instanceof Error && err.message ? `We couldn't lock in next week: ${err.message}` : "We couldn't lock in next week's commitments. Some may be missing — please try again.");
+      setActionError("We couldn't lock in next week's commitments. Please try again.");
     } finally {
       setConfirming(false);
     }
@@ -252,7 +289,7 @@ export function ReviewPage() {
 }
 
 function ReviewContent({ review }: { review: Review }) {
-  const patterns = (review.patterns || []) as unknown as PatternFinding[];
+  const patterns = (review.patterns || []) as unknown as Array<Omit<PatternFinding, 'type'> & { type: string }>;
   const commitments = (review.proposed_commitments || []) as unknown as ProposedCommitment[];
   return (
     <div className="space-y-10">
@@ -260,10 +297,18 @@ function ReviewContent({ review }: { review: Review }) {
       <div className="flex items-center gap-8"><div className="relative w-20 h-20 flex-shrink-0"><svg className="w-20 h-20 -rotate-90" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="#E2E2DF" strokeWidth="2" /><circle cx="50" cy="50" r="44" fill="none" stroke="#111111" strokeWidth="2" strokeLinecap="square" strokeDasharray={`${(review.completion_pct / 100) * 276.46} 276.46`} className="transition-all duration-1000" /></svg><div className="absolute inset-0 flex items-center justify-center"><span className="text-lg vow-heading text-vow-ink">{Math.round(review.completion_pct)}%</span></div></div><div><p className="vow-label mb-1">Completion rate</p><p className="text-sm text-vow-ink">{review.committed_count > 0 ? `You completed ${review.completed_count} of ${review.committed_count} sessions.` : 'No sessions were scheduled this week.'}</p></div></div>
       <div className="grid md:grid-cols-2 gap-px bg-vow-border border border-vow-border">{review.biggest_win && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest win</p><p className="text-sm text-vow-ink">{review.biggest_win}</p></div>}{review.biggest_setback && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest setback</p><p className="text-sm text-vow-ink">{review.biggest_setback}</p></div>}</div>
       <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Your coach</p><div className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{review.coaching_text}</div></div>
-      {patterns.length > 0 && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Patterns detected ({patterns.length})</p><div className="space-y-6">{patterns.map((p, i) => <div key={i} className="border-b border-vow-border pb-6 last:border-0"><p className="text-xs text-vow-muted uppercase tracking-wide mb-2">{p.type.replace(/_/g, ' ')}</p><p className="text-sm text-vow-ink font-medium mb-3">{p.description}</p>{p.evidence.length > 0 && <div className="mb-3"><p className="text-xs text-vow-muted mb-1">Evidence</p><ul className="space-y-1">{p.evidence.map((e, j) => <li key={j} className="text-xs text-vow-muted pl-3 border-l border-vow-border">{e}</li>)}</ul></div>}{p.hypothesis && <p className="text-xs text-vow-ink mb-2"><span className="text-vow-muted">Hypothesis: </span>{p.hypothesis}</p>}{p.proposed_adjustment && <p className="text-xs text-vow-ink"><span className="text-vow-muted">Suggestion: </span>{p.proposed_adjustment}</p>}</div>)}</div></div>}
+      {patterns.length > 0 && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Patterns detected ({patterns.length})</p><div className="space-y-6">{patterns.map((p, i) => <div key={i} className="border-b border-vow-border pb-6 last:border-0"><p className="text-xs text-vow-muted uppercase tracking-wide mb-2">{reviewPatternLabel(p.type)}</p><p className="text-sm text-vow-ink font-medium mb-3">{withoutInternalName(p.description)}</p>{Array.isArray(p.evidence) && p.evidence.length > 0 && <div className="mb-3"><p className="text-xs text-vow-muted mb-1">Evidence</p><ul className="space-y-1">{p.evidence.map((e, j) => <li key={j} className="text-xs text-vow-muted pl-3 border-l border-vow-border">{withoutInternalName(e)}</li>)}</ul></div>}{p.hypothesis && <p className="text-xs text-vow-ink mb-2"><span className="text-vow-muted">Hypothesis: </span>{withoutInternalName(p.hypothesis)}</p>}{p.proposed_adjustment && <p className="text-xs text-vow-ink"><span className="text-vow-muted">Suggestion: </span>{withoutInternalName(p.proposed_adjustment)}</p>}</div>)}</div></div>}
       {commitments.length > 0 && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Proposed next week</p><div className="space-y-px border border-vow-border">{commitments.map((c, i) => <div key={i} className="bg-vow-bg px-4 py-3 flex items-center justify-between"><div className="min-w-0 flex-1"><div className="text-sm text-vow-ink truncate">{c.goal_title}</div>{c.notes && <div className="text-xs text-vow-muted mt-0.5">{c.notes}</div>}</div><div className="text-sm text-vow-ink font-medium flex-shrink-0 ml-3">{c.sessions_per_week}x/week</div></div>)}</div></div>}
     </div>
   );
+}
+
+function reviewPatternLabel(type: string) {
+  return type === 'raven_signal' ? 'Progress signal' : type.replace(/_/g, ' ');
+}
+
+function withoutInternalName(value: string | null | undefined) {
+  return (value || '').replace(/\bRaven\b/g, 'VOW');
 }
 
 function ConfirmedReviewView({ review, pastReviews }: { review: Review; pastReviews: Review[] }) {

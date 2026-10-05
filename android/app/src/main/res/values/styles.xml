@@ -16,7 +16,7 @@
 
     <!-- Keep the native launch mark in sync with the canonical web wordmark. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:windowBackground">@color/vow_icon_background</item>
+        <item name="android:windowBackground">@drawable/splash</item>
         <item name="windowSplashScreenBackground">@color/vow_icon_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/vow_splash_logo_source</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>

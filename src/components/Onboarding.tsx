@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase';
 import { ArrowRight, ArrowLeft } from '@/lib/ui-icons';
 import { GoalPlanner } from './GoalPlanner';
 import { getTimeZoneLabel, getUserTimeZone } from '@/lib/dates';
-import { requestNotificationPermission } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from './BrandLogo';
 import { userFacingError } from '@/lib/userFacingError';
@@ -29,7 +28,7 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
       if (settingsError) throw settingsError; setShowPlanner(true);
     } catch (err) { setError(userFacingError(err, 'We could not save your onboarding preferences. Please try again.')); } finally { setSaving(false); }
   }
-  if (showPlanner) return <GoalPlanner userId={userId} initialGoal={rawGoal} initialWhy="" onCreated={async () => { try { await requestNotificationPermission(); } catch (notificationError) { console.warn('[VOW] Notification permission was not granted:', notificationError); } onComplete(); }} onCancel={onComplete} />;
+  if (showPlanner) return <GoalPlanner userId={userId} initialGoal={rawGoal} initialWhy="" onCreated={onComplete} onCancel={onComplete} />;
   const steps = ['What do you want to achieve?', 'Timezone and check-ins'];
   return <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12"><div className="w-full max-w-xl">
     <div className="text-center mb-12"><BrandLogo className="mx-auto w-28 h-auto mb-4" /><p className="vow-label">Onboarding</p></div>

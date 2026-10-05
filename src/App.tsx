@@ -15,6 +15,7 @@ import { Dashboard } from '@/components/Dashboard';
 import { GoalHistoryActions } from '@/components/GoalHistoryActions';
 import { GoalsJournalWorkspace } from '@/components/GoalsJournalWorkspace';
 import { ReviewPage } from '@/components/WeeklyReview';
+import { ProgressPage } from '@/components/Raven';
 import { ReviewEntitlementBanner } from '@/components/ReviewEntitlementBanner';
 import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
@@ -42,7 +43,7 @@ function AppContent() {
   const [termsLoading, setTermsLoading] = useState(true);
   const [viewHistory, setViewHistory] = useState<View[]>(['dashboard']);
   const viewHistoryRef = useRef<View[]>(['dashboard']);
-  const [splashMounted, setSplashMounted] = useState(true);
+  const [splashMounted, setSplashMounted] = useState(() => !Capacitor.isNativePlatform());
   const [splashFadingOut, setSplashFadingOut] = useState(false);
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
   const view = viewHistory[viewHistory.length - 1];
@@ -77,8 +78,12 @@ function AppContent() {
     });
     return () => { listener.then((handle) => handle.remove()); };
   }, [goBack]);
-  useEffect(() => { const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS); return () => window.clearTimeout(timer); }, []);
-  useEffect(() => { const timeout = window.setTimeout(() => { setSplashFadingOut(true); setSplashMounted(false); }, 6000); return () => window.clearTimeout(timeout); }, []);
+  useEffect(() => {
+    if (!splashMounted) return;
+    const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS);
+    const timeout = window.setTimeout(() => { setSplashFadingOut(true); setSplashMounted(false); }, 6000);
+    return () => { window.clearTimeout(timer); window.clearTimeout(timeout); };
+  }, [splashMounted]);
   useEffect(() => {
     const listener = (event: Event) => {
       const next = (event as CustomEvent<View>).detail;
@@ -239,7 +244,7 @@ function AppContent() {
   }
 
   const contentReady = !loading && !settingsLoading && !termsLoading;
-  useEffect(() => { if (splashMinElapsed && contentReady && !splashFadingOut) { setSplashFadingOut(true); const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS); return () => window.clearTimeout(timer); } }, [splashMinElapsed, contentReady, splashFadingOut]);
+  useEffect(() => { if (splashMounted && splashMinElapsed && contentReady && !splashFadingOut) { setSplashFadingOut(true); const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS); return () => window.clearTimeout(timer); } }, [splashMounted, splashMinElapsed, contentReady, splashFadingOut]);
 
   let content: React.ReactNode;
   if (loading || (session && (settingsLoading || termsLoading))) content = <AppLoading />;
@@ -260,6 +265,7 @@ function AppContent() {
           {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
           {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
           {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
+          {view === 'progress' && <ProgressPage />}
           {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} />}
           {view === 'upgrade' && <UpgradePage />}
         </AppShell>
