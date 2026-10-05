@@ -2,6 +2,6 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/vow_icon_background" />
     <item
-        android:drawable="@drawable/vow_splash_logo_source"
+        android:drawable="@drawable/vow_splash_wordmark"
         android:gravity="center" />
 </layer-list>
