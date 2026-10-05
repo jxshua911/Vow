@@ -501,7 +501,8 @@ export function GoalPlanner({
 
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create goal.');
+      console.error('[VOW] Goal creation failed:', err);
+      setError(userFacingError(err, 'VOW could not finish creating your goal. Please try again.'));
     } finally {
       setSaving(false);
     }
