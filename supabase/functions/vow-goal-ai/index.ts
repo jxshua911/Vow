@@ -97,6 +97,34 @@ function days(x: any, w: number) {
 }
 function clarificationFallback(goal: string, category: string, selectedDays: string[], hasDeadline: boolean) {
   const normalizedCategory = category.toLowerCase();
+  const lowerGoal = goal.toLowerCase();
+
+  if (lowerGoal.includes("psychology") || lowerGoal.includes("psychological")) {
+    return {
+      questions: [
+        "What is your current Psychology grade or most recent assessment mark?",
+        "Which Psychology course or exam board are you studying, and what topics are in your next assessment?",
+        "When is your next Psychology assessment, and do you have any teacher feedback on where you are losing marks?",
+      ],
+    };
+  }
+
+  if (
+    lowerGoal.includes("sailing") ||
+    lowerGoal.includes("regatta") ||
+    lowerGoal.includes("tanzacat") ||
+    lowerGoal.includes("catamaran") ||
+    lowerGoal.includes("dinghy")
+  ) {
+    return {
+      questions: [
+        "What boat or sailing class are you competing in, and what is the event format?",
+        "What is your current sailing level and recent race performance?",
+        "What result are you targeting, and when is the competition?",
+      ],
+    };
+  }
+
   const startingPointQuestion = normalizedCategory.includes("sport")
     ? "What is your current fitness or skill level for this activity?"
     : normalizedCategory.includes("language")
@@ -770,8 +798,8 @@ Deno.serve(async (req) => {
         console.warn("clarify AI error", e);
         const errorCode = e instanceof Error ? e.message : String(e);
         const providerFailure =
-          /^(GROQ_API_KEY_MISSING|GROQ_429|GROQ_PROVIDER_ERROR_\d+|GROQ_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED)$/.test(errorCode) ||
-          (e instanceof TypeError && /fetch|network/i.test(errorCode)) ||
+          /^(GROQ_API_KEY_MISSING|GROQ_429|GROQ_PROVIDER_ERROR_\d+|GROQ_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED|AI_USAGE_CHECK_FAILED)$/.test(errorCode) ||
+          (e instanceof TypeError && /fetch|network|timeout/i.test(errorCode)) ||
           (e instanceof Error && e.name === "AbortError");
         if (!providerFailure) throw e;
         const goalLabel = str(g?.outcome || g?.title, 180) || "this goal";
