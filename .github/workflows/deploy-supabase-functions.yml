@@ -17,6 +17,11 @@ on:
         required: false
         default: false
         type: boolean
+      restore_ai_rpc_grants:
+        description: 'Apply and verify the narrowly scoped authenticated AI guardrail RPC grants'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   deploy-functions:
@@ -39,10 +44,45 @@ jobs:
           SUPABASE_PROJECT_REF: vqsrdausvmfjayffxiuh
           DEPLOY_FUNCTION: ${{ inputs.function }}
           VERIFY_SECRETS: ${{ inputs.verify_secrets }}
+          RESTORE_AI_RPC_GRANTS: ${{ inputs.restore_ai_rpc_grants }}
         run: |
           set -euo pipefail
 
-          if [ "$VERIFY_SECRETS" = "true" ]; then
+          if [ "$RESTORE_AI_RPC_GRANTS" = "true" ]; then
+            sql="$(cat supabase/migrations/20261005114500_restore_authenticated_ai_guardrail_rpcs.sql)"
+            payload="$(jq -n --arg query "$sql" '{query: $query}')"
+            curl --fail-with-body --silent --show-error \
+              --request POST \
+              --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$payload"
+            echo
+
+            verify_sql="select
+              has_function_privilege('authenticated', 'public.vow_claim_ai_guardrail(uuid,numeric)', 'EXECUTE') as authenticated_can_claim,
+              has_function_privilege('authenticated', 'public.vow_record_ai_usage(text,text,integer,text)', 'EXECUTE') as authenticated_can_record,
+              has_function_privilege('authenticated', 'public.vow_release_ai_guardrail(uuid)', 'EXECUTE') as authenticated_can_release,
+              has_function_privilege('anon', 'public.vow_claim_ai_guardrail(uuid,numeric)', 'EXECUTE') as anon_can_claim,
+              has_function_privilege('anon', 'public.vow_record_ai_usage(text,text,integer,text)', 'EXECUTE') as anon_can_record,
+              has_function_privilege('anon', 'public.vow_release_ai_guardrail(uuid)', 'EXECUTE') as anon_can_release"
+            verify_payload="$(jq -n --arg query "$verify_sql" '{query: $query}')"
+            result="$(curl --fail-with-body --silent --show-error \
+              --request POST \
+              --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$verify_payload")"
+            echo "$result" | jq -e '
+              (.[0].authenticated_can_claim == true) and
+              (.[0].authenticated_can_record == true) and
+              (.[0].authenticated_can_release == true) and
+              (.[0].anon_can_claim == false) and
+              (.[0].anon_can_record == false) and
+              (.[0].anon_can_release == false)
+            ' >/dev/null
+            echo "Authenticated AI guardrail RPC grants verified; anon remains denied."
+          elif [ "$VERIFY_SECRETS" = "true" ]; then
             echo "Deployed Edge Functions:"
             supabase functions list --project-ref "$SUPABASE_PROJECT_REF"
 
