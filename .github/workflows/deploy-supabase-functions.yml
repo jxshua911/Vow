@@ -74,6 +74,7 @@ jobs:
               --header "Content-Type: application/json" \
               --data "$verify_payload")"
             echo "$result" | jq -e '
+              (type == "array") and (length == 1) and
               (.[0].authenticated_can_claim == true) and
               (.[0].authenticated_can_record == true) and
               (.[0].authenticated_can_release == true) and
@@ -82,6 +83,7 @@ jobs:
               (.[0].anon_can_release == false)
             ' >/dev/null
             echo "Authenticated AI guardrail RPC grants verified; anon remains denied."
+            exit 0
           elif [ "$VERIFY_SECRETS" = "true" ]; then
             echo "Deployed Edge Functions:"
             supabase functions list --project-ref "$SUPABASE_PROJECT_REF"
