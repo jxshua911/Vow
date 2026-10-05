@@ -6,7 +6,12 @@ on:
       - capacitor-mobile
     paths:
       - 'supabase/functions/**'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      function:
+        description: 'Optional function name to deploy explicitly'
+        required: false
+        type: string
 
 jobs:
   deploy-functions:
@@ -15,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -25,19 +32,29 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: vqsrdausvmfjayffxiuh
+          DEPLOY_FUNCTION: ${{ inputs.function }}
         run: |
           set -euo pipefail
 
-          base="${{ github.event.before }}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            base="${GITHUB_SHA}^"
-          fi
+          if [ -n "$DEPLOY_FUNCTION" ]; then
+            if [[ ! "$DEPLOY_FUNCTION" =~ ^[a-z0-9-]+$ ]] || [ ! -d "supabase/functions/$DEPLOY_FUNCTION" ]; then
+              echo "Invalid or unknown Edge Function: $DEPLOY_FUNCTION" >&2
+              exit 1
+            fi
+            functions=("$DEPLOY_FUNCTION")
+          else
+            base="${{ github.event.before }}"
+            if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+              base="${GITHUB_SHA}^"
+            fi
 
-          mapfile -t functions < <(
-            git diff --name-only "$base" "$GITHUB_SHA" -- 'supabase/functions/*' |
-              awk -F/ 'NF >= 3 {print $3}' |
-              sort -u
-          )
+            changed_files="$(git diff --name-only "$base" "$GITHUB_SHA" -- 'supabase/functions/*')"
+            mapfile -t functions < <(
+              printf '%s\n' "$changed_files" |
+                awk -F/ 'NF >= 3 {print $3}' |
+                sort -u
+            )
+          fi
 
           if [ "${#functions[@]}" -eq 0 ]; then
             echo "No Edge Function source changes detected; nothing to deploy."
