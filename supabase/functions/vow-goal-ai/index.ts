@@ -695,7 +695,7 @@ Deno.serve(async (req) => {
       knowledge,
     };
     let fallbackCategory = domain?.category;
-    if (fallbackCategory === "Unknown" || fallbackCategory === "General") {
+    if (!fallbackCategory || fallbackCategory === "Unknown" || fallbackCategory === "General") {
       try {
         const classResult = await ai(req, [
           {
@@ -710,14 +710,17 @@ Deno.serve(async (req) => {
         if (classResult && typeof classResult.category === "string" && validCategories.includes(classResult.category)) {
            fallbackCategory = classResult.category;
            domain.category = fallbackCategory;
+           domain.confidence = Math.max(Number(domain.confidence) || 0, 0.72);
         } else {
            fallbackCategory = "Personal Development";
            domain.category = fallbackCategory;
+           domain.confidence = Math.max(Number(domain.confidence) || 0, 0.7);
         }
       } catch (e) {
         console.warn("Groq fallback classification failed", e);
         fallbackCategory = "Personal Development";
         domain.category = fallbackCategory;
+        domain.confidence = Math.max(Number(domain.confidence) || 0, 0.7);
       }
     }
 
@@ -728,7 +731,7 @@ Deno.serve(async (req) => {
           [
             {
               role: "system",
-              content: `You are VOW's specialist goal-discovery researcher. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Use the supplied VOW knowledge base, domain profile, previous goals, and recent journal context as your first planning reference. Use previous goals and journal entries only to personalise the plan when they are relevant to the current goal. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string}. Ask high-value questions that resolve the most important missing inputs for this exact domain. If AI research is required, you MUST use the built-in web_search tool before deciding what an ambiguous abbreviation, event, competition, slang term, or specialist phrase means. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
+              content: `You are VOW's specialist goal-discovery researcher. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Use the supplied VOW knowledge base, domain profile, previous goals, and recent journal context as your first planning reference. Use previous goals and journal entries only to personalise the plan when they are relevant to the current goal. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string,category:string,goal_type:string,classification_confidence:number}. Copy category and goal_type from the supplied domain profile when it is sufficiently specific; otherwise classify the goal accurately and use one supported category. Ask high-value questions that resolve the most important missing inputs for this exact domain. If AI research is required, you MUST use the built-in web_search tool before deciding what an ambiguous abbreviation, event, competition, slang term, or specialist phrase means. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
             },
             { role: "user", content: JSON.stringify({ message, ...context }) },
           ],
@@ -749,6 +752,15 @@ Deno.serve(async (req) => {
         );
       }
       r.questions = questions;
+      r.category = str(r.category, 80) || str(fallbackCategory, 80) || "Personal Development";
+      r.goal_type = str(r.goal_type, 80) || str(domain?.goal_type, 80) || "Personal goal";
+      const classificationConfidence = Number(r.classification_confidence);
+      const domainConfidence = Number(domain?.confidence);
+      r.classification_confidence = Number.isFinite(classificationConfidence)
+        ? Math.max(0, Math.min(1, classificationConfidence))
+        : Number.isFinite(domainConfidence)
+        ? Math.max(0, Math.min(1, domainConfidence))
+        : 0.7;
       r.recommended_duration_weeks = Math.min(
         52,
         Math.max(1, Number(r.recommended_duration_weeks) || w)

@@ -30,5 +30,13 @@
 	{
 		"pkg": "@ebarooni/capacitor-calendar",
 		"classpath": "dev.barooni.capacitor.calendar.CapacitorCalendarPlugin"
+	},
+	{
+		"pkg": "@capgo/native-purchases",
+		"classpath": "ee.forgr.nativepurchases.NativePurchasesPlugin"
+	},
+	{
+		"pkg": "@capacitor/push-notifications",
+		"classpath": "com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin"
 	}
 ]

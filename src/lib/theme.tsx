@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 export type VowTheme = 'light' | 'dark';
 
@@ -27,7 +27,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [showThemeSplash, setShowThemeSplash] = useState(false);
   const timerRef = useRef<number | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
@@ -61,7 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     {children}
     {showThemeSplash && (
       <div className="vow-theme-splash" data-theme={theme} role="status" aria-label={`Switched to ${theme} mode`}>
-        <img className="vow-theme-splash-logo" src={theme === 'dark' ? './vow-logo-white.svg' : './vow-logo.svg'} alt="VOW" />
+        <img className="vow-brand-logo vow-theme-splash-logo" src="/vow-logo.svg" alt="VOW" />
       </div>
     )}
   </ThemeContext.Provider>;

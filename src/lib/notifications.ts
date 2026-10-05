@@ -13,6 +13,21 @@ const PREF_KEY = 'vow:notification-preferences';
 const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: true, sound: true, vibration: true };
 const PUSH_TOKEN_KEY = 'vow:fcm-token';
 let pushListenersReady = false;
+let pushRegistrationWaiter: { resolve: () => void; reject: (error: Error) => void; timeoutId: number } | null = null;
+let cloudPushSetupPromise: Promise<void> | null = null;
+
+export function isRemotePushConfigured(): boolean {
+  return import.meta.env.VITE_ANDROID_REMOTE_NOTIFICATIONS === 'true';
+}
+
+function finishPushRegistration(error?: Error): void {
+  if (!pushRegistrationWaiter) return;
+  window.clearTimeout(pushRegistrationWaiter.timeoutId);
+  const waiter = pushRegistrationWaiter;
+  pushRegistrationWaiter = null;
+  if (error) waiter.reject(error);
+  else waiter.resolve();
+}
 
 function channelId(preferences: NotificationPreferences): string {
   const sound = preferences.sound ? 'sound' : 'silent';
@@ -87,31 +102,15 @@ export async function getNotificationPermission(): Promise<NotificationPermissio
 export async function requestNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
   if (!Capacitor.isNativePlatform()) return 'unsupported';
 
-  try {
-    const current = await LocalNotifications.checkPermissions();
-    if (current.display === 'granted') {
-      try {
-        await setupNotifications();
-      } catch (error) {
-        console.warn('[VOW] Notification channel setup failed (non-critical):', error);
-      }
-      return current.display;
-    }
-
-    const result = await LocalNotifications.requestPermissions();
-    if (result.display === 'granted') {
-      try {
-        await setupNotifications();
-      } catch (error) {
-        console.warn('[VOW] Notification channel setup failed (non-critical):', error);
-      }
-    }
-
-    return result.display;
-  } catch (error) {
-    console.error('[VOW] Notification permission request crashed:', error);
-    return 'denied';
+  const current = await LocalNotifications.checkPermissions();
+  if (current.display === 'granted') {
+    await setupNotifications();
+    return current.display;
   }
+
+  const result = await LocalNotifications.requestPermissions();
+  if (result.display === 'granted') await setupNotifications();
+  return result.display;
 }
 
 export async function scheduleReminder(id: number, title: string, body: string, at: Date, sessionId?: string): Promise<void> {
@@ -256,42 +255,61 @@ async function clearStoredPushToken(): Promise<void> {
   try { localStorage.removeItem(PUSH_TOKEN_KEY); } catch { /* ignore */ }
 }
 
-export async function setupCloudPushNotifications(): Promise<void> {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
-  if (!getNotificationPreferences().enabled) return;
+export function setupCloudPushNotifications(): Promise<void> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return Promise.resolve();
+  if (!getNotificationPreferences().enabled) return Promise.resolve();
+  if (!isRemotePushConfigured()) return Promise.reject(new Error('REMOTE_PUSH_NOT_CONFIGURED'));
+  if (cloudPushSetupPromise) return cloudPushSetupPromise;
+  cloudPushSetupPromise = registerCloudPushNotifications();
+  return cloudPushSetupPromise.finally(() => {
+    cloudPushSetupPromise = null;
+  });
+}
 
+async function registerCloudPushNotifications(): Promise<void> {
+  const permission = await PushNotifications.checkPermissions();
+  if (permission.receive !== 'granted') {
+    const requested = await PushNotifications.requestPermissions();
+    if (requested.receive !== 'granted') throw new Error('REMOTE_PUSH_PERMISSION_DENIED');
+  }
+
+  if (!pushListenersReady) {
+    await PushNotifications.addListener('registration', async ({ value }) => {
+      try {
+        localStorage.setItem(PUSH_TOKEN_KEY, value);
+        const { error } = await supabase.rpc('vow_touch_push_device', {
+          p_token: value,
+          p_build_tier: VOW_BUILD_TIER,
+        });
+        if (error) throw error;
+        finishPushRegistration();
+      } catch (error) {
+        console.error('[VOW] Push registration sync failed:', error);
+        finishPushRegistration(new Error('PUSH_REGISTRATION_SYNC_FAILED'));
+      }
+    });
+
+    await PushNotifications.addListener('registrationError', (error) => {
+      console.error('[VOW] Push registration failed:', error);
+      finishPushRegistration(new Error('PUSH_REGISTRATION_FAILED'));
+    });
+
+    pushListenersReady = true;
+  }
+
+  await setupNotifications(getNotificationPreferences());
+  const registration = new Promise<void>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      finishPushRegistration(new Error('PUSH_REGISTRATION_TIMEOUT'));
+    }, 15_000);
+    pushRegistrationWaiter = { resolve, reject, timeoutId };
+  });
   try {
-    const permission = await PushNotifications.checkPermissions();
-    if (permission.receive !== 'granted') {
-      const requested = await PushNotifications.requestPermissions();
-      if (requested.receive !== 'granted') return;
-    }
-
-    if (!pushListenersReady) {
-      await PushNotifications.addListener('registration', async ({ value }) => {
-        try {
-          localStorage.setItem(PUSH_TOKEN_KEY, value);
-          const { error } = await supabase.rpc('vow_touch_push_device', {
-            p_token: value,
-            p_build_tier: VOW_BUILD_TIER,
-          });
-          if (error) console.warn('[VOW] Push registration sync failed:', error.message);
-        } catch (error) {
-          console.warn('[VOW] Push registration sync failed:', error);
-        }
-      });
-
-      await PushNotifications.addListener('registrationError', (error) => {
-        console.warn('[VOW] Push registration failed:', error);
-      });
-
-      pushListenersReady = true;
-    }
-
-    await setupNotifications(getNotificationPreferences());
     await PushNotifications.register();
+    await registration;
   } catch (error) {
-    console.warn('[VOW] Cloud push setup skipped:', error);
+    finishPushRegistration(error instanceof Error ? error : new Error('PUSH_REGISTRATION_FAILED'));
+    throw error;
   }
 }
 
@@ -312,7 +330,7 @@ export async function clearCloudPushRegistration(): Promise<void> {
 }
 
 export async function setupCloudPushActionListener(onNavigate: (sessionId?: string) => void): Promise<() => void> {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return () => undefined;
+  if (!isRemotePushConfigured() || !Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return () => undefined;
 
   const handle = await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
     const sessionId = typeof notification.data?.sessionId === 'string' ? notification.data.sessionId : undefined;

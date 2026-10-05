@@ -7,12 +7,13 @@ is new; nothing about your web app's logic, styling, or database changed.
 
 ## What was added
 
-- `capacitor.config.ts` — app name, bundle ID, splash/status bar colors
-  (matched to your `#F7F7F5` / `#111111` palette)
+- `capacitor.config.ts` — app name, bundle ID and native splash/status bar
+  settings
 - `ios/` and `android/` — the native Xcode and Android Studio projects
-- `assets/` — the source icon/splash images (generated from your existing
-  `favicon.svg` V-mark), plus every native size Xcode/Android Studio need,
-  already generated into `ios/` and `android/`
+- `public/vow-logo.svg` — the canonical full-wordmark artwork used by the
+  web and native splash screens; Android light/dark drawables are generated
+  from it during `npm run build`
+- `public/vow-app-icon.svg` — the standalone `>` mark used for the app icon
 - `src/lib/nativeAuth.ts` — new file. Handles Google sign-in on native
   (see "Google sign-in" below — this needs one step from you)
 - Small edits to `src/components/AuthPage.tsx` and `src/main.tsx` to wire
@@ -20,10 +21,10 @@ is new; nothing about your web app's logic, styling, or database changed.
 - `index.html` — added `viewport-fit=cover` so content flows correctly
   around notches/home indicators
 
-Your app already had its own splash screen (the `SplashOverlay` in
-`App.tsx`, showing the full VOW wordmark). That's untouched — the native
-splash now just shows your V mark on `#F7F7F5` for an instant, then hands
-off to your existing one. That handoff is intentional, not a glitch.
+The Android launch screen and the in-app `SplashOverlay` use the same VOW
+wordmark source without stretching it. Android uses the device's light/dark
+appearance for its native launch screen; the in-app splash uses the saved
+VOW theme.
 
 ## 1. Get it building locally
 
@@ -36,6 +37,18 @@ npx cap sync
 
 `npx cap sync` copies your latest build into both native projects — run
 it again any time you change web code and want to see it natively.
+
+## Notifications
+
+VOW schedules session reminders as on-device notifications after permission
+is granted. Remote Android push is separate: the APK workflow needs the
+`ANDROID_GOOGLE_SERVICES_JSON` GitHub Actions secret containing the Firebase
+Android client configuration for `com.vow.app`. This is not a Firebase
+service-account key. The Supabase `vow-send-push` function also requires
+`FIREBASE_SERVICE_ACCOUNT_JSON` and `VOW_PUSH_INTERNAL_SECRET`, plus a
+server-side event or schedule that invokes it. Until those pieces are
+configured, VOW provides on-device reminders and does not claim remote push
+delivery.
 
 ## 2. iOS (needs a Mac + Xcode)
 

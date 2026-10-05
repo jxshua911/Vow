@@ -9,7 +9,7 @@ import type { Session } from '@/types/database';
 import { PageHeader } from './AppShell';
 import { normalizeGoalCategory, type GoalCategory } from '@/lib/goalCategories';
 import { userFacingError } from '@/lib/userFacingError';
-import { recommendGoalIntegrations } from '@/lib/armadillo';
+import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadillo';
 import { openExternalLink } from '@/lib/externalLinks';
 
 type Clarification = {
@@ -318,6 +318,11 @@ export function GoalPlanner({
         return;
       }
       if (!(await checkCreateEntitlement())) return;
+      const goalAnalysis = analyseGoalForEvidence({
+        title: rawInput.trim(),
+        outcome: rawInput.trim(),
+        why_it_matters: why.trim() || null,
+      });
       const data = await invokeGoalAI({
           mode: 'goal-clarify',
           goal: {
@@ -326,6 +331,7 @@ export function GoalPlanner({
             why_it_matters: why.trim() || null,
             duration_weeks: durationWeeks,
             weekly_commitment_target: availableDays.length,
+            domain: goalAnalysis,
           },
           message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${durationLabel(durationWeeks)}.\nAvailable days: ${availableDays.join(', ')}\nIdentify the right kind of activity or outcome, then ask 2-3 high-value questions that resolve the most important missing inputs.`,
           available_days: availableDays,
@@ -335,8 +341,7 @@ export function GoalPlanner({
       const next = data.structured as Clarification;
       const category = normalizeGoalCategory(next.category);
       const goalType = typeof next.goal_type === 'string' ? next.goal_type.trim().slice(0, 80) : '';
-      const confidence = Number(next.classification_confidence);
-      if (!category || !goalType || !Number.isFinite(confidence) || confidence < 0.65) {
+      if (!category || !goalType) {
         throw new Error('GOAL_CATEGORY_UNCLEAR');
       }
       if (!Array.isArray(next.questions) || next.questions.length === 0)

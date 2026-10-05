@@ -36,6 +36,18 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Configure Android Firebase notifications
+        env:
+          ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$ANDROID_GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            node -e "JSON.parse(require('fs').readFileSync('android/app/google-services.json', 'utf8'))"
+            echo "VITE_ANDROID_REMOTE_NOTIFICATIONS=true" >> "$GITHUB_ENV"
+          else
+            echo "VITE_ANDROID_REMOTE_NOTIFICATIONS=false" >> "$GITHUB_ENV"
+            echo "::warning::ANDROID_GOOGLE_SERVICES_JSON is not configured; this build will provide on-device reminders only."
+          fi
       - name: Build web app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

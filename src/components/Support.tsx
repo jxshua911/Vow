@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ArrowLeft } from '@/lib/ui-icons';
 import { PageHeader } from './AppShell';
-import { BrandLogo } from './BrandLogo';
 
 type Props = { onBack: () => void; onLegal: () => void };
 
@@ -43,7 +42,6 @@ export function SupportPage({ onBack, onLegal }: Props) {
           <button type="button" onClick={onBack} className="flex h-11 shrink-0 items-center gap-2 border border-vow-border px-3 text-sm text-vow-muted transition-colors hover:border-vow-ink hover:text-vow-ink" aria-label="Back to profile">
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
-          <BrandLogo className="h-auto w-20" />
           <span className="text-sm font-medium text-vow-ink">Support</span>
         </div>
       </header>
