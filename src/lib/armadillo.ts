@@ -66,6 +66,16 @@ const rules = [
     keywords: ['knit', 'knitting', 'crochet', 'sew', 'sewing', 'embroidery', 'woodwork', 'woodworking', 'pottery', 'draw', 'drawing', 'paint', 'painting', 'craft'],
   },
   {
+    category: 'Sports',
+    goal_type: 'Sailing / Regatta',
+    metric: 'race results, starts, boat handling, tactics, training sessions',
+    evidence: ['sailing sessions', 'race results', 'training notes', 'manual performance tracking'],
+    integration: null,
+    methodology: 'Establish the sailor and boat baseline, identify the regatta format and competitive demands, then progress boat handling, starts, tactics, race execution and post-race analysis.',
+    required_inputs: ['current sailing level', 'boat/class and competition format', 'target event or result'],
+    keywords: ['sailing', 'sail', 'sailor', 'regatta', 'tanzacat', 'catamaran', 'dinghy'],
+  },
+  {
     category: 'Education',
     goal_type: 'Study',
     metric: 'study time, task completion, accuracy',
@@ -74,6 +84,16 @@ const rules = [
     methodology: 'Turn the outcome into specific study tasks, schedule focused sessions, use retrieval or practice, and review measurable progress.',
     required_inputs: ['subject or skill', 'current level', 'target outcome or deadline'],
     keywords: ['study', 'revise', 'revision', 'exam', 'homework', 'physics', 'chemistry', 'biology', 'maths', 'mathematics', 'school', 'coursework', 'assignment'],
+  },
+  {
+    category: 'Education',
+    goal_type: 'Psychology Study',
+    metric: 'assessment marks, topic accuracy, timed-question performance, exam technique',
+    evidence: ['psychology study sessions', 'practice-question results', 'topic accuracy', 'mock assessment marks'],
+    integration: 'Google Calendar',
+    methodology: 'Establish the current grade and assessment baseline, diagnose weak psychology topics and exam skills, then use retrieval, application questions, feedback and progressively timed practice to close the gap to the target grade.',
+    required_inputs: ['current psychology grade or marks', 'exam board/course and assessment format', 'weak topics or recent assessment feedback', 'target assessment date'],
+    keywords: ['psychology', 'psychological', 'psychology exam', 'psychology revision'],
   },
   {
     category: 'Reading',
