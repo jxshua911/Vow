@@ -18,6 +18,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
   const [subpage, setSubpage] = useState<ProfileSubpage>('main');
   const [notificationStatus, setNotificationStatus] = useState<string>('checking');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => getNotificationPreferences().enabled);
+  const [notificationError, setNotificationError] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [name, setName] = useState(displayName);
   const [editingName, setEditingName] = useState(false);
@@ -104,6 +105,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
 
   async function handleEnableNotifications() {
     setRequesting(true);
+    setNotificationError('');
     try {
       const status = await requestNotificationPermission();
       setNotificationStatus(status);
@@ -115,6 +117,9 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
           if (data) await syncUpcomingSessionNotifications(data);
         }
       }
+    } catch (error) {
+      console.error('[VOW] Enabling notifications failed:', error);
+      setNotificationError(userFacingError(error, 'Could not enable notifications. Please try again.'));
     } finally {
       setRequesting(false);
     }
@@ -166,7 +171,7 @@ export function ProfilePage({ onLegal, onUpgrade }: { onLegal?: () => void; onUp
         <button onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'support' }))} className="profile-menu-item w-full text-left"><p className="text-sm text-vow-ink">Support</p><p className="text-xs text-vow-muted mt-1">Report an issue, ask a question, or send feedback.</p></button>
         <button onClick={onLegal} className="profile-menu-item w-full text-left"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">EULA, copyright and service policies.</p></button>
         <div className="profile-menu-item"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
-        <div className="profile-menu-item"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">VOW reminders use sound and vibration automatically when notifications are allowed.</p></div>{notificationsGranted && notificationsEnabled && <span className="text-xs text-vow-ink">Enabled</span>}</div><p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus} · {notificationsEnabled ? 'reminders on' : 'reminders off'}</p><div className="flex flex-wrap gap-2 mt-4">{(!notificationsGranted || !notificationsEnabled) && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft disabled:opacity-50">{requesting ? 'Requesting…' : 'Enable notifications'}</button>}{notificationsGranted && notificationsEnabled && <button onClick={() => void handleDisableNotifications()} className="vow-btn-soft">Disable reminders</button>}</div></div>
+        <div className="profile-menu-item"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">VOW reminders use sound and vibration automatically when notifications are allowed.</p></div>{notificationsGranted && notificationsEnabled && <span className="text-xs text-vow-ink">Enabled</span>}</div><p className="text-[10px] text-vow-muted mt-2 capitalize">Status: {notificationStatus} · {notificationsEnabled ? 'reminders on' : 'reminders off'}</p>{notificationError && <p className="text-xs text-vow-ink mt-2" role="alert">{notificationError}</p>}<div className="flex flex-wrap gap-2 mt-4">{(!notificationsGranted || !notificationsEnabled) && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft disabled:opacity-50">{requesting ? 'Requesting…' : 'Enable notifications'}</button>}{notificationsGranted && notificationsEnabled && <button onClick={() => void handleDisableNotifications()} className="vow-btn-soft">Disable reminders</button>}</div></div>
         <div className="profile-menu-item"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">My name</p><p className="text-xs text-vow-muted mt-1 truncate">{name || 'Not provided'}</p></div><button onClick={() => { setEditingName(true); setNameMessage(''); }} className="vow-btn-soft shrink-0">Change Name</button></div>{editingName && <div className="mt-4 border-t border-vow-border pt-4"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus className="vow-input" placeholder="What should VOW call you?" /><div className="flex gap-2 mt-2"><button onClick={handleSaveName} disabled={savingName || !name.trim()} className="vow-btn-primary disabled:opacity-50">{savingName ? 'Saving…' : 'Save name'}</button><button onClick={() => { setEditingName(false); setName(displayName); }} className="vow-btn-ghost">Cancel</button></div>{nameMessage && <p className="text-xs text-vow-muted mt-2">{nameMessage}</p>}</div>}</div>
         <div className="profile-menu-item">
           <p className="text-sm text-vow-ink">Account email</p>

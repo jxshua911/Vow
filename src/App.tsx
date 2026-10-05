@@ -193,6 +193,7 @@ function AppContent() {
   useEffect(() => {
     if (!session || !termsAccepted) return;
 
+    let active = true;
     let cleanupPushAction: (() => void) | null = null;
 
     // Only setup push if permission already granted
@@ -208,9 +209,17 @@ function AppContent() {
 
     void setupCloudPushActionListener(() => {
       window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'goals' }));
-    }).then((cleanup) => { cleanupPushAction = cleanup; });
+    }).then((cleanup) => {
+      if (active) cleanupPushAction = cleanup;
+      else cleanup();
+    }).catch((err) => {
+      console.warn('[VOW] Push action listener setup failed:', err);
+    });
 
-    return () => { cleanupPushAction?.(); };
+    return () => {
+      active = false;
+      cleanupPushAction?.();
+    };
   }, [session, termsAccepted]);
 
   useEffect(() => {
