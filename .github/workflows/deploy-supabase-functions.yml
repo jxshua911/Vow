@@ -12,6 +12,11 @@ on:
         description: 'Optional function name to deploy explicitly'
         required: false
         type: string
+      verify_secrets:
+        description: 'Verify deployed functions and required AI secret names without showing values'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   deploy-functions:
@@ -33,10 +38,27 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: vqsrdausvmfjayffxiuh
           DEPLOY_FUNCTION: ${{ inputs.function }}
+          VERIFY_SECRETS: ${{ inputs.verify_secrets }}
         run: |
           set -euo pipefail
 
-          if [ -n "$DEPLOY_FUNCTION" ]; then
+          if [ "$VERIFY_SECRETS" = "true" ]; then
+            echo "Deployed Edge Functions:"
+            supabase functions list --project-ref "$SUPABASE_PROJECT_REF"
+
+            echo "Checking required Edge Function secret names (values are never displayed):"
+            secret_names="$(supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" --output json | jq -r '.[].name')"
+            missing=0
+            for secret in GROQ_API_KEY OPENAI_API_KEY; do
+              if grep -Fxq "$secret" <<< "$secret_names"; then
+                echo "$secret=SET"
+              else
+                echo "$secret=MISSING"
+                missing=1
+              fi
+            done
+            exit "$missing"
+          elif [ -n "$DEPLOY_FUNCTION" ]; then
             if [[ ! "$DEPLOY_FUNCTION" =~ ^[a-z0-9-]+$ ]] || [ ! -d "supabase/functions/$DEPLOY_FUNCTION" ]; then
               echo "Invalid or unknown Edge Function: $DEPLOY_FUNCTION" >&2
               exit 1
