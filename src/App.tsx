@@ -253,7 +253,7 @@ function AppContent() {
       ) : view === 'legal' ? (
         <LegalPage onBack={goBack} />
       ) : view === 'support' ? (
-        <SupportPage onBack={goBack} />
+        <SupportPage onBack={goBack} onLegal={openLegalWebsite} />
       ) : (
         <AppShell currentView={view} onNavigate={navigate}>
           {view === 'dashboard' && <Dashboard onNavigate={navigate} />}

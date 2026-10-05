@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link2, Trash2 } from '@/lib/ui-icons';
 import { supabase } from '@/lib/supabase';
+import { openExternalLink } from '@/lib/externalLinks';
 
 type GoalResource = {
   id: string;
@@ -35,6 +36,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [openError, setOpenError] = useState('');
 
   async function signedDisplayUrl(urlValue: string) {
     if (!urlValue.startsWith('storage://')) return urlValue;
@@ -124,6 +126,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
           aria-label="Reference title"
         />
         {error && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3">{error}</p>}
+        {openError && <p role="alert" className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3">{openError}</p>}
         <button type="button" onClick={addResource} disabled={!url.trim() || saving} className="vow-btn-soft text-xs disabled:opacity-50">
           {saving ? 'Saving…' : 'Add reference'}
         </button>
@@ -147,10 +150,16 @@ export function GoalResources({ goalId }: { goalId: string }) {
                 <p className="text-sm text-vow-ink font-medium truncate">{resource.title || resource.url}</p>
                 <p className="text-xs text-vow-muted mt-1 capitalize">{resource.resource_type}</p>
                 {resource.displayUrl && (
-                  <a href={resource.displayUrl} target="_blank" rel="noreferrer" className="text-xs text-vow-muted hover:text-vow-ink mt-1 inline-flex items-center gap-1">
+                  <button type="button" onClick={() => {
+                    setOpenError('');
+                    void openExternalLink(resource.displayUrl).catch((openFailure: unknown) => {
+                      console.error('[VOW] Goal resource could not be opened:', openFailure);
+                      setOpenError('We could not open this resource. Please try again.');
+                    });
+                  }} className="text-xs text-vow-muted hover:text-vow-ink mt-1 inline-flex items-center gap-1">
                     <span className="truncate max-w-[220px] sm:max-w-md">Open reference</span>
                     <Link2 className="w-3 h-3" />
-                  </a>
+                  </button>
                 )}
               </div>
               <button type="button" onClick={() => removeResource(resource.id)} className="text-xs text-vow-muted hover:text-vow-ink disabled:opacity-50 flex-shrink-0" aria-label={`Remove reference ${resource.title || resource.url}`}>

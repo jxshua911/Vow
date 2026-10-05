@@ -1,3 +1,5 @@
+import { INTEGRATIONS, recommendIntegrations, type IntegrationDefinition } from './integrations/catalog';
+
 export type ArmadilloResult = {
   category: string;
   goal_type: string;
@@ -164,4 +166,17 @@ export function analyseGoalForEvidence(input: {
       ? 'The goal contains an abbreviation, event name, or specialist term that should be verified with live research before the specialist methodology is finalised.'
       : null,
   };
+}
+
+export function recommendGoalIntegrations(input: {
+  title?: string | null;
+  outcome?: string | null;
+  why_it_matters?: string | null;
+}): IntegrationDefinition[] {
+  const primaryName = analyseGoalForEvidence(input).integration;
+  const primary = INTEGRATIONS.find((integration) => integration.name === primaryName);
+  const matched = recommendIntegrations([input.title || '', input.outcome || '', input.why_it_matters || '']);
+  return primary
+    ? [primary, ...matched.filter((integration) => integration.id !== primary.id)]
+    : matched;
 }

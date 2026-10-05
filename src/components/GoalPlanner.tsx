@@ -9,6 +9,8 @@ import type { Session } from '@/types/database';
 import { PageHeader } from './AppShell';
 import { normalizeGoalCategory, type GoalCategory } from '@/lib/goalCategories';
 import { userFacingError } from '@/lib/userFacingError';
+import { recommendGoalIntegrations } from '@/lib/armadillo';
+import { openExternalLink } from '@/lib/externalLinks';
 
 type Clarification = {
   questions: string[];
@@ -86,7 +88,21 @@ function canonicalDay(day: unknown): string | null {
   );
   return idx >= 0 ? DAYS[idx] : null;
 }
-function normalizePlan(raw: Plan, durationWeeks: number, domain: GoalDomain): Plan | null {
+function isYoutubeUrl(value: string): boolean {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com');
+  } catch {
+    return false;
+  }
+}
+function normalizePlan(
+  raw: Plan,
+  durationWeeks: number,
+  domain: GoalDomain,
+  goalText: string,
+  whyItMatters: string
+): Plan | null {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.schedule) || !Array.isArray(raw.milestones))
     return null;
   const milestones = raw.milestones
@@ -110,16 +126,54 @@ function normalizePlan(raw: Plan, durationWeeks: number, domain: GoalDomain): Pl
     }))
     .filter(item => item.task);
   if (!schedule.length || !milestones.length) return null;
-  const references = (Array.isArray(raw.references) ? raw.references : [])
-    .slice(0, 4)
-    .map(reference => ({
-      url: String(reference?.url || '').trim().slice(0, 1000),
-      title: reference?.title ? String(reference.title).trim().slice(0, 200) : null,
-      resource_type: (['youtube', 'instagram', 'image', 'video', 'link'].includes(reference?.resource_type || '')
-        ? reference.resource_type
-        : 'link') as PlanReference['resource_type'],
-    }))
-    .filter(reference => /^https?:\/\//i.test(reference.url));
+  const candidateReferences = (Array.isArray(raw.references) ? raw.references : [])
+    .map(reference => {
+      const url = String(reference?.url || '').trim().slice(0, 1000);
+      const resourceType = reference?.resource_type;
+      return {
+        url,
+        title: reference?.title ? String(reference.title).trim().slice(0, 200) : null,
+        resource_type: isYoutubeUrl(url)
+          ? 'youtube'
+          : (['instagram', 'image', 'video', 'link'].includes(resourceType || '')
+            ? resourceType
+            : 'link') as PlanReference['resource_type'],
+      };
+    })
+    .filter(reference => {
+      try {
+        return new URL(reference.url).protocol === 'https:';
+      } catch {
+        return false;
+      }
+    })
+    .filter((reference, index, references) => references.findIndex((candidate) => candidate.url === reference.url) === index);
+  const youtubeReference = candidateReferences.find((reference) => isYoutubeUrl(reference.url));
+  const websiteReference = candidateReferences.find((reference) => reference !== youtubeReference);
+  const references: PlanReference[] = [
+    youtubeReference || {
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${domain.goal_type} ${goalText} guide`)}`,
+      title: `YouTube search for ${goalText}`,
+      resource_type: 'youtube',
+    },
+  ];
+  if (websiteReference) references.push(websiteReference);
+  const suggestedApps = recommendGoalIntegrations({
+    title: goalText,
+    outcome: raw.outcome,
+    why_it_matters: whyItMatters,
+  })
+    .filter((integration) => integration.websiteUrl)
+    .slice(0, 2);
+  for (const integration of suggestedApps) {
+    const url = integration.websiteUrl;
+    if (!url || references.some((reference) => reference.url === url)) continue;
+    references.push({
+      url,
+      title: `Suggested app: ${integration.name} — ${integration.status === 'available' ? 'available in VOW' : 'VOW connection not available yet'}`,
+      resource_type: 'link',
+    });
+  }
   return {
     ...raw,
     category: domain.category,
@@ -183,7 +237,18 @@ export function GoalPlanner({
   const [planning, setPlanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [resourceError, setResourceError] = useState('');
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
+
+  async function openPlanReference(url: string) {
+    setResourceError('');
+    try {
+      await openExternalLink(url);
+    } catch (openError) {
+      console.error('[VOW] Goal resource could not be opened:', openError);
+      setResourceError('We could not open this resource. Please try again.');
+    }
+  }
 
   function toggleDay(day: string) {
     setAvailableDays(x => (x.includes(day) ? x.filter(d => d !== day) : x.length < 7 ? [...x, day] : x));
@@ -223,12 +288,13 @@ export function GoalPlanner({
   }
 
   async function loadReferences(goalId: string) {
-    const { data } = await supabase
+    const { data, error: loadError } = await supabase
       .from('goal_resources')
       .select('url,title,resource_type')
       .eq('goal_id', goalId)
       .order('created_at', { ascending: false })
       .limit(4);
+    if (loadError) throw loadError;
     return data || [];
   }
 
@@ -242,15 +308,15 @@ export function GoalPlanner({
       setError('Please keep your goal and context under 5,000 characters each.');
       return;
     }
-    const safety = await checkContentSafety(rawInput);
-    if (safety.status !== 'safe') {
-      setError(safety.message || 'VOW cannot plan that request.');
-      return;
-    }
     setPlanning(true);
     setError('');
     setUpgrade(null);
     try {
+      const safety = await checkContentSafety(rawInput);
+      if (safety.status !== 'safe') {
+        setError(safety.message || 'VOW cannot plan that request.');
+        return;
+      }
       if (!(await checkCreateEntitlement())) return;
       const data = await invokeGoalAI({
           mode: 'goal-clarify',
@@ -367,7 +433,7 @@ export function GoalPlanner({
       const next = data.structured as Plan;
       if (next.duration_weeks !== durationWeeks)
         throw new Error('VOW AI returned a plan for a different duration than you selected. Please try again.');
-      const normalized = normalizePlan(next, durationWeeks, domain);
+      const normalized = normalizePlan(next, durationWeeks, domain, rawInput.trim(), why.trim());
       if (!normalized) throw new Error('VOW AI returned an incomplete plan. Please try again.');
       setPlan(normalized);
     } catch (err) {
@@ -379,10 +445,10 @@ export function GoalPlanner({
 
   async function handleCreate() {
     if (!plan || !draftGoalId || saving) return;
-    const { data: sessionData } = await supabase.auth.getSession();
     setSaving(true);
     setError('');
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
       const start = nextMonday();
 
       function buildDate(week: number, day: string, preferredTime: string): Date {
@@ -576,18 +642,19 @@ export function GoalPlanner({
           </section>
           {plan.references?.length ? (
             <section className="border border-vow-border p-5">
-              <p className="vow-label mb-3">Relevant references</p>
+              <p className="vow-label mb-1">Resources for this goal</p>
+              <p className="mb-4 text-xs leading-5 text-vow-muted">A relevant video or search, trusted website, and goal-matched app suggestions. App connection status is noted.</p>
               {plan.references.map(reference => (
-                <a
+                <button
+                  type="button"
                   key={reference.url}
-                  href={reference.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block text-sm text-vow-ink underline underline-offset-4 mb-2 last:mb-0"
+                  onClick={() => void openPlanReference(reference.url)}
+                  className="mb-3 block text-left text-sm text-vow-ink underline underline-offset-4 last:mb-0"
                 >
                   {reference.title || reference.url}
-                </a>
+                </button>
               ))}
+              {resourceError && <p role="alert" className="mt-3 text-xs text-vow-muted">{resourceError}</p>}
             </section>
           ) : null}
           {error && (
