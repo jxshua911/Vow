@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Session, Goal, JournalEntry, UserSettings, Review, PatternFinding, ProposedCommitment } from '@/types/database';
@@ -8,6 +8,8 @@ import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
 import { ArrowRight } from '@/lib/ui-icons';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
+import { getEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
+import { UpgradePrompt } from './UpgradePrompt';
 
 export function ReviewPage() {
   const { session } = useAuth();
@@ -18,6 +20,8 @@ export function ReviewPage() {
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [reviewEntitlement, setReviewEntitlement] = useState<EntitlementResult | null>(null);
+  const generationInProgress = useRef(false);
 
   const { start, end } = useMemo(() => weekRange(), []);
 
@@ -57,11 +61,31 @@ export function ReviewPage() {
   useEffect(() => { load(); }, [load]);
 
   async function generateReview() {
-    if (!session) return;
+    if (!session || generationInProgress.current) return;
+    generationInProgress.current = true;
     setGenerating(true);
     setActionError(null);
+    setReviewEntitlement(null);
 
     try {
+      if (!existingReview) {
+        const entitlement = await getEntitlementSnapshot();
+        if (
+          entitlement &&
+          entitlement.plan !== 'premium' &&
+          entitlement.advanced_reviews_used >= (entitlement.advanced_reviews_limit ?? 1)
+        ) {
+          setReviewEntitlement({
+            allowed: false,
+            reason: 'usage_limit',
+            feature: 'advanced_review',
+            used: entitlement.advanced_reviews_used,
+            limit: entitlement.advanced_reviews_limit ?? 1,
+          });
+          return;
+        }
+      }
+
       const weekStart = toDateString(start);
       const weekEnd = toDateString(end);
 
@@ -154,8 +178,27 @@ export function ReviewPage() {
       setExistingReview(savedReview as Review);
     } catch (err) {
       console.error('Review generation failed:', err);
-      setActionError("We couldn't generate your review. Please check your connection and try again.");
+      const failure = err && typeof err === 'object' ? err as { message?: unknown; code?: unknown } : null;
+      const message = typeof failure?.message === 'string' ? failure.message : '';
+      if (message.includes('VOW_PREMIUM_ADVANCED_REVIEW_REQUIRED')) {
+        const entitlement = await getEntitlementSnapshot();
+        setReviewEntitlement({
+          allowed: false,
+          reason: 'usage_limit',
+          feature: 'advanced_review',
+          used: entitlement?.advanced_reviews_used ?? 1,
+          limit: entitlement?.advanced_reviews_limit ?? 1,
+        });
+      } else if (/network|fetch|connection/i.test(message)) {
+        setActionError("VOW couldn't connect while saving your review. Check your connection and try again.");
+      } else {
+        const code = typeof failure?.code === 'string' ? ` (${failure.code})` : '';
+        setActionError(message
+          ? `VOW couldn't save your review${code}: ${message}`
+          : "VOW couldn't save your review. Please try again.");
+      }
     } finally {
+      generationInProgress.current = false;
       setGenerating(false);
     }
   }
@@ -255,6 +298,7 @@ export function ReviewPage() {
         <div className="border-t border-vow-border pt-12 text-center">
           <p className="vow-heading text-2xl text-vow-ink mb-3">No review generated yet</p>
           <p className="text-vow-muted text-sm mb-8 max-w-md mx-auto leading-relaxed">Generate your weekly accountability review. It reads your sessions, journal, and commitment history to give you honest, evidence-based feedback and propose next week's commitments.</p>
+          {reviewEntitlement && <div className="mb-6 text-left"><UpgradePrompt result={reviewEntitlement} title="Your free advanced review has been used" compact /></div>}
           <button onClick={generateReview} disabled={generating} className="vow-btn-primary">{generating ? 'Analyzing your week...' : 'Generate weekly review'}</button>
           {actionError && <p className="text-sm text-vow-ink leading-relaxed mt-6 border-l-2 border-vow-ink pl-3 max-w-md mx-auto">{actionError}</p>}
         </div>
@@ -269,6 +313,7 @@ export function ReviewPage() {
       <ReviewContent review={review!} />
       <div className="border-t border-vow-border pt-8 mt-10">
         <h3 className="vow-label mb-4">Confirm next week's commitments</h3>
+        {reviewEntitlement && <div className="mb-6"><UpgradePrompt result={reviewEntitlement} title="Your free advanced review has been used" compact /></div>}
         {actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4">{actionError}</p>}
         <div className="space-y-px border border-vow-border mb-6">
           {(review!.proposed_commitments as unknown as ProposedCommitment[]).map((c, i) => (
@@ -280,7 +325,7 @@ export function ReviewPage() {
         </div>
         <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg">Confirming locks these commitments into your immutable commitment log and schedules next week's sessions. You can adjust before confirming.</p>
         <div className="flex flex-col sm:flex-row gap-3">
-          <button onClick={generateReview} disabled={generating} className="vow-btn-ghost">Regenerate</button>
+          <button onClick={generateReview} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate'}</button>
           <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1">{confirming ? 'Locking in...' : 'Lock in next week'}</button>
         </div>
       </div>
