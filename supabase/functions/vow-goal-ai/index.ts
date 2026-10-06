@@ -749,9 +749,11 @@ Deno.serve(async (req) => {
       journalEntries: userJournal || [],
       knowledge,
     };
+    console.log("[VOW AI] Initial domain.category:", domain?.category);
     let fallbackCategory = domain?.category;
     if (!fallbackCategory || fallbackCategory === "Unknown" || fallbackCategory === "General") {
       try {
+        console.log("[VOW AI] Calling AI classification...");
         const classResult = await ai(req, [
           {
             role: "system",
@@ -759,6 +761,7 @@ Deno.serve(async (req) => {
           },
           { role: "user", content: `Goal: ${str(g?.title || g?.outcome, 300)}. Context: ${str(g?.why_it_matters, 500)}` }
         ], "clarify", researchRequired);
+        console.log("[VOW AI] Classification result:", classResult);
         
         const validCategories = ["Sports", "Languages", "Crafts/Hobbies", "Education", "Reading", "Mindfulness", "Technology/Projects", "Career/Projects", "Personal Development", "Life Admin", "Communication", "Wellbeing", "Creative Skills", "Travel", "Learning", "Practical Skills", "Finance", "Productivity"];
         
@@ -778,6 +781,7 @@ Deno.serve(async (req) => {
         domain.confidence = Math.max(Number(domain.confidence) || 0, 0.7);
       }
     }
+    console.log("[VOW AI] Final fallbackCategory:", fallbackCategory);
 
     if (mode === "goal-clarify") {
       let r: any;

@@ -15,7 +15,6 @@ import { Dashboard } from '@/components/Dashboard';
 import { GoalHistoryActions } from '@/components/GoalHistoryActions';
 import { GoalsJournalWorkspace } from '@/components/GoalsJournalWorkspace';
 import { ReviewPage } from '@/components/WeeklyReview';
-import { ProgressPage } from '@/components/Raven';
 import { ReviewEntitlementBanner } from '@/components/ReviewEntitlementBanner';
 import { ProfilePage } from '@/components/Profile';
 import { CalendarPage } from '@/components/Calendar';
@@ -265,7 +264,6 @@ function AppContent() {
           {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
           {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
           {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
-          {view === 'progress' && <ProgressPage />}
           {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} />}
           {view === 'upgrade' && <UpgradePage />}
         </AppShell>
