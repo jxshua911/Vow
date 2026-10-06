@@ -1,30 +1,30 @@
-export type ContentSafetyStatus = 'safe' | 'blocked' | 'suspended';
+import { supabase } from '@/lib/supabase';
+
+export type ContentSafetyStatus = 'safe' | 'ambiguous' | 'blocked' | 'warning' | 'suspended' | 'banned';
 
 export type ContentSafetyResult = {
   status: ContentSafetyStatus;
   message?: string;
 };
 
-const BLOCKED_PATTERNS: RegExp[] = [
-  /\bhow\s+to\s+(?:make|build|obtain)\s+(?:a\s+)?(?:bomb|explosive|weapon)\b/i,
-  /\b(?:make|build|obtain)\s+(?:a\s+)?(?:bomb|explosive|weapon)\b/i,
-];
+function isContentSafetyStatus(value: unknown): value is ContentSafetyStatus {
+  return ['safe', 'ambiguous', 'blocked', 'warning', 'suspended', 'banned'].includes(String(value));
+}
 
 /**
- * Lightweight client-side guard for prompts sent to the planning function.
- * The server remains the authoritative safety boundary; this prevents
- * obviously unsafe planning requests from being sent unnecessarily.
+ * Safety checks and progressive enforcement are performed by the server so
+ * goal creation and planning share one authoritative moderation history.
  */
 export async function checkContentSafety(text: string): Promise<ContentSafetyResult> {
   const value = text.trim();
   if (!value) return { status: 'blocked', message: 'Please enter a planning request.' };
 
-  if (BLOCKED_PATTERNS.some((pattern) => pattern.test(value))) {
-    return {
-      status: 'blocked',
-      message: 'VOW cannot help plan activities involving weapons or explosives.',
-    };
+  const { data, error } = await supabase.functions.invoke('vow-content-safety', {
+    body: { text: value },
+  });
+  if (error) throw error;
+  if (!data || !isContentSafetyStatus(data.status)) {
+    throw new Error('VOW safety check returned an invalid response.');
   }
-
-  return { status: 'safe' };
+  return { status: data.status, message: typeof data.message === 'string' ? data.message : undefined };
 }

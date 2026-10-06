@@ -89,43 +89,48 @@ function classify(input: string): Classification {
   return { status: "safe", category: "none", severity: "ambiguous", confidence: 0.99, message: "" };
 }
 
-function addMonths(date: Date, months: number) {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
-}
-
 async function enforceSeriousViolation(userId: string, classification: Classification) {
   const db = adminClient();
-  const { count, error: countError } = await db.from("moderation_events").select("id", { count: "exact", head: true }).eq("user_id", userId).in("severity", ["high", "critical"]);
-  if (countError) throw new Error("MODERATION_HISTORY_FAILED");
-
-  const strikeNumber = (count || 0) + 1;
-  let action: "suspended" | "banned";
-  let banDuration: string;
-  let bannedUntil: Date | null = null;
-  if (strikeNumber === 1) {
-    action = "suspended";
-    banDuration = "168h";
-    bannedUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  } else if (strikeNumber === 2) {
-    action = "suspended";
-    banDuration = "1464h";
-    bannedUntil = addMonths(new Date(), 2);
-  } else {
-    action = "banned";
-    banDuration = "876000h";
+  const { data: strikeNumber, error: strikeError } = await db.rpc("vow_record_moderation_violation", {
+    p_user_id: userId,
+    p_category: classification.category,
+    p_severity: classification.severity,
+    p_confidence: clamp(classification.confidence),
+  });
+  if (strikeError || typeof strikeNumber !== "number" || !Number.isInteger(strikeNumber) || strikeNumber < 1) {
+    throw new Error("MODERATION_HISTORY_FAILED");
   }
+
+  if (strikeNumber <= 3) {
+    return {
+      action: "reword_required" as const,
+      strikeNumber,
+      retryAfterSeconds: null,
+    };
+  }
+
+  const action: "suspended" | "banned" = strikeNumber === 4 ? "suspended" : "banned";
+  const banDuration = action === "suspended" ? "24h" : "876000h";
+  let bannedUntil: Date | null = null;
+  if (action === "suspended") bannedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   const { data: userData, error: userError } = await db.auth.admin.getUserById(userId);
   if (userError || !userData.user) throw new Error("MODERATION_USER_LOOKUP_FAILED");
   const existingMeta = userData.user.app_metadata || {};
-  const nextMeta = { ...existingMeta, moderation_strikes: strikeNumber, moderation_status: action === "banned" ? "permanently_banned" : "suspended", moderation_banned_until: bannedUntil ? bannedUntil.toISOString() : null };
+  const nextMeta = {
+    ...existingMeta,
+    moderation_strikes: strikeNumber,
+    moderation_status: action === "banned" ? "permanently_banned" : "suspended",
+    moderation_banned_until: bannedUntil ? bannedUntil.toISOString() : null,
+  };
   const { error: banError } = await db.auth.admin.updateUserById(userId, { ban_duration: banDuration, app_metadata: nextMeta });
   if (banError) throw new Error("MODERATION_ENFORCEMENT_FAILED");
 
-  const { error: eventError } = await db.from("moderation_events").insert({ user_id: userId, category: classification.category, severity: classification.severity, confidence: clamp(classification.confidence), action, strike_number: strikeNumber });
-  if (eventError) throw new Error("MODERATION_EVENT_RECORD_FAILED");
+  if (action === "banned") {
+    console.error("[VOW] Permanent moderation ban issued. Review the owner-visible moderation event.", {
+      strike_number: strikeNumber,
+    });
+  }
   return { action, strikeNumber, retryAfterSeconds: bannedUntil ? Math.max(1, Math.ceil((bannedUntil.getTime() - Date.now()) / 1000)) : null };
 }
 
@@ -143,19 +148,56 @@ Deno.serve(async (req) => {
     const classification = classify(text);
     if (classification.status === "safe" || classification.status === "ambiguous") {
       if (classification.status === "ambiguous") {
-        await adminClient().from("moderation_events").insert({ user_id: data.user.id, category: classification.category, severity: classification.severity, confidence: clamp(classification.confidence), action: "reword_required", strike_number: null });
+        const { error: eventError } = await adminClient().from("moderation_events").insert({
+          user_id: data.user.id,
+          category: classification.category,
+          severity: classification.severity,
+          confidence: clamp(classification.confidence),
+          action: "reword_required",
+          strike_number: null,
+        });
+        if (eventError) throw new Error("MODERATION_EVENT_RECORD_FAILED");
       }
       return json({ status: classification.status, category: classification.category, confidence: classification.confidence, message: classification.message });
     }
 
-    const enforcement = await enforceSeriousViolation(data.user.id, classification);
-    const message = enforcement.action === "banned"
-      ? "This account has been permanently banned because of repeated serious safety violations."
-      : enforcement.strikeNumber === 1
-        ? "This content was blocked and your VOW account has been suspended for 7 days because of a serious safety violation."
-        : "This content was blocked and your VOW account has been suspended for 2 months because of a repeated serious safety violation.";
+    if (classification.category === "self_harm") {
+      const { error: eventError } = await adminClient().from("moderation_events").insert({
+        user_id: data.user.id,
+        category: classification.category,
+        severity: classification.severity,
+        confidence: clamp(classification.confidence),
+        action: "reword_required",
+        strike_number: null,
+      });
+      if (eventError) throw new Error("MODERATION_EVENT_RECORD_FAILED");
+      return json({
+        status: "blocked",
+        category: classification.category,
+        confidence: classification.confidence,
+        message: classification.message,
+      });
+    }
 
-    return json({ status: "suspended", category: classification.category, confidence: classification.confidence, message, strike_number: enforcement.strikeNumber, retry_after_seconds: enforcement.retryAfterSeconds });
+    const enforcement = await enforceSeriousViolation(data.user.id, classification);
+    const status = enforcement.action === "banned"
+      ? "banned"
+      : enforcement.action === "suspended"
+        ? "suspended"
+        : enforcement.strikeNumber === 3
+          ? "warning"
+          : "blocked";
+    const message = enforcement.action === "banned"
+      ? "Your account has been permanently suspended after repeated serious safety violations."
+      : enforcement.action === "suspended"
+        ? "Your account is temporarily suspended for 24 hours because of repeated serious safety violations."
+        : enforcement.strikeNumber === 3
+          ? "Final warning: this serious safety violation is not allowed. Another violation may suspend your account."
+          : enforcement.strikeNumber === 1
+            ? "Please rephrase this goal so it clearly describes a safe activity."
+            : "This is your second safety warning. Please change the goal before trying again.";
+
+    return json({ status, category: classification.category, confidence: classification.confidence, message, strike_number: enforcement.strikeNumber, retry_after_seconds: enforcement.retryAfterSeconds });
   } catch (error) {
     console.error("content safety", error);
     return json({ error: "VOW could not complete its safety check." }, 500);

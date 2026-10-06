@@ -42,7 +42,10 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
       const safety = await checkContentSafety(question);
       if (safety.status !== 'safe') {
         setError(safety.message || 'Please reword that so the intended activity is clear.');
-        if (safety.status === 'suspended' && session) await supabase.auth.signOut();
+        if ((safety.status === 'suspended' || safety.status === 'banned') && session) {
+          const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+          if (signOutError) console.warn('[VOW] Could not clear the local session after a moderation suspension:', signOutError);
+        }
         return;
       }
       let upcoming: Session[] = [];

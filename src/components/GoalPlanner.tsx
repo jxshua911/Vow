@@ -106,6 +106,14 @@ function isYoutubeUrl(value: string): boolean {
     return false;
   }
 }
+function youtubeSearchReference(goalText: string, goalType: string): PlanReference {
+  const query = [goalType, goalText, 'guide'].filter(Boolean).join(' ');
+  return {
+    url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+    title: `YouTube videos for ${goalText}`,
+    resource_type: 'youtube',
+  };
+}
 function normalizePlan(
   raw: Plan,
   durationWeeks: number,
@@ -161,11 +169,7 @@ function normalizePlan(
   const youtubeReference = candidateReferences.find((reference) => isYoutubeUrl(reference.url));
   const websiteReference = candidateReferences.find((reference) => reference !== youtubeReference);
   const references: PlanReference[] = [
-    youtubeReference || {
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${domain.goal_type} ${goalText} guide`)}`,
-      title: `YouTube search for ${goalText}`,
-      resource_type: 'youtube',
-    },
+    youtubeReference || youtubeSearchReference(goalText, domain.goal_type),
   ];
   if (websiteReference) references.push(websiteReference);
   const suggestedApps = recommendGoalIntegrations({
@@ -326,6 +330,10 @@ export function GoalPlanner({
       const safety = await checkContentSafety(rawInput);
       if (safety.status !== 'safe') {
         setError(safety.message || 'VOW cannot plan that request.');
+        if (safety.status === 'suspended' || safety.status === 'banned') {
+          const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+          if (signOutError) console.warn('[VOW] Could not clear the local session after a moderation suspension:', signOutError);
+        }
         return;
       }
       if (!(await checkCreateEntitlement())) return;
@@ -393,6 +401,10 @@ export function GoalPlanner({
       const safety = await checkContentSafety(rawInput);
       if (safety.status !== 'safe') {
         setError(safety.message || 'VOW cannot plan that request.');
+        if (safety.status === 'suspended' || safety.status === 'banned') {
+          const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+          if (signOutError) console.warn('[VOW] Could not clear the local session after a moderation suspension:', signOutError);
+        }
         return;
       }
       const goalId = await ensureDraft(domain);
@@ -656,11 +668,27 @@ export function GoalPlanner({
             ))}
             <p className="text-sm text-vow-muted pt-4 border-t border-vow-border">{plan.progression}</p>
           </section>
-          {plan.references?.length ? (
+          {plan.references?.some(reference => isYoutubeUrl(reference.url)) && (
+            <section className="border border-vow-border p-5" aria-live="polite">
+              <p className="vow-label mb-1">Recommended YouTube videos</p>
+              <p className="mb-4 text-xs leading-5 text-vow-muted">These goal-specific video links are ready to open now; they do not depend on saving the goal first.</p>
+              {plan.references.filter(reference => isYoutubeUrl(reference.url)).map(reference => (
+                <button
+                  type="button"
+                  key={reference.url}
+                  onClick={() => void openPlanReference(reference.url)}
+                  className="mb-3 block text-left text-sm text-vow-ink underline underline-offset-4 last:mb-0"
+                >
+                  {reference.title || 'Open YouTube video'}
+                </button>
+              ))}
+            </section>
+          )}
+          {plan.references?.some(reference => !isYoutubeUrl(reference.url)) ? (
             <section className="border border-vow-border p-5">
-              <p className="vow-label mb-1">Resources for this goal</p>
-              <p className="mb-4 text-xs leading-5 text-vow-muted">A relevant video or search, trusted website, and goal-matched app suggestions. App connection status is noted.</p>
-              {plan.references.map(reference => (
+              <p className="vow-label mb-1">Other resources for this goal</p>
+              <p className="mb-4 text-xs leading-5 text-vow-muted">Trusted websites and goal-matched app suggestions. App connection status is noted.</p>
+              {plan.references.filter(reference => !isYoutubeUrl(reference.url)).map(reference => (
                 <button
                   type="button"
                   key={reference.url}
@@ -711,6 +739,17 @@ export function GoalPlanner({
             </p>
             <p className="text-sm text-vow-ink">VOW is tailoring the next questions around this type of goal.</p>
           </div>
+          <section className="border border-vow-border p-4" aria-live="polite">
+            <p className="vow-label mb-1">Recommended YouTube videos</p>
+            <p className="text-xs leading-5 text-vow-muted mb-3">A goal-specific video search is available now while VOW prepares your plan.</p>
+            <button
+              type="button"
+              onClick={() => void openPlanReference(youtubeSearchReference(rawInput.trim(), domain?.goal_type || '').url)}
+              className="text-sm text-vow-ink underline underline-offset-4"
+            >
+              Browse YouTube videos for this goal
+            </button>
+          </section>
           {clarification.questions.map((question, index) => (
             <div key={`${index}-${question}`}>
               <label className="vow-label block mb-2">{question}</label>
