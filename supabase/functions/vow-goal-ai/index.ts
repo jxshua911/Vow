@@ -773,6 +773,7 @@ Deno.serve(async (req) => {
     };
     console.log("[VOW AI] Initial domain.category:", domain?.category);
     let fallbackCategory = domain?.category;
+    console.log("[VOW AI] Initial domain.category:", domain?.category);
     if (!fallbackCategory || fallbackCategory === "Unknown" || fallbackCategory === "General") {
       try {
         console.log("[VOW AI] Calling AI classification...");
@@ -787,19 +788,23 @@ Deno.serve(async (req) => {
         
         const validCategories = ["Sports", "Languages", "Crafts/Hobbies", "Education", "Reading", "Mindfulness", "Technology/Projects", "Career/Projects", "Personal Development", "Life Admin", "Communication", "Wellbeing", "Creative Skills", "Travel", "Learning", "Practical Skills", "Finance", "Productivity"];
         
+    console.log("[VOW AI] Classification result:", JSON.stringify(classResult));
         if (classResult && typeof classResult.category === "string" && validCategories.includes(classResult.category)) {
            fallbackCategory = classResult.category;
            domain.category = fallbackCategory;
+    console.log("[VOW AI] Final category saved:", domain.category);
            domain.confidence = Math.max(Number(domain.confidence) || 0, 0.72);
         } else {
            fallbackCategory = "Personal Development";
            domain.category = fallbackCategory;
+    console.log("[VOW AI] Final category saved:", domain.category);
            domain.confidence = Math.max(Number(domain.confidence) || 0, 0.7);
         }
       } catch (e) {
         console.warn("Groq fallback classification failed", e);
         fallbackCategory = "Personal Development";
         domain.category = fallbackCategory;
+    console.log("[VOW AI] Final category saved:", domain.category);
         domain.confidence = Math.max(Number(domain.confidence) || 0, 0.7);
       }
     }
