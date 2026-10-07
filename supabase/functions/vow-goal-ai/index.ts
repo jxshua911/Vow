@@ -10,7 +10,7 @@ const CORS = {
   "Content-Type": "application/json",
 };
 const MAX = { plan: 4000, clarify: 1200, chat: 700 };
-const COOLDOWN = { plan: 120000, clarify: 30000, chat: 10000 };
+type CooldownKind = "plan" | "clarify" | "chat";
 const MAX_BODY_BYTES = 128 * 1024;
 const json = (x: unknown, s = 200, e: Record<string, string> = {}) =>
   new Response(JSON.stringify(x), { status: s, headers: { ...CORS, ...e } });
@@ -149,17 +149,39 @@ function clarificationFallback(goal: string, category: string, selectedDays: str
     ],
   };
 }
-async function cooldown(uid: string, k: keyof typeof COOLDOWN) {
-  const { data, error } = await db().rpc("vow_claim_ai_cooldown", {
-    p_user_id: uid,
-    p_kind: k,
-    p_cooldown_seconds: COOLDOWN[k] / 1000,
-  });
-  if (error) throw new Error("AI_USAGE_CHECK_FAILED");
-  const wait = Number(data);
-  if (!Number.isInteger(wait) || wait < 0)
+async function cooldown(uid: string, k: CooldownKind) {
+  try {
+    const { data, error } = await db().rpc("vow_claim_ai_cooldown", {
+      p_user_id: uid,
+      p_kind: k,
+    });
+
+    if (error) {
+      console.error("[VOW AI] Cooldown RPC error:", error);
+      throw new Error("AI_USAGE_CHECK_FAILED");
+    }
+
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      console.error("[VOW AI] Cooldown RPC invalid response:", data);
+      throw new Error("AI_USAGE_CHECK_FAILED");
+    }
+
+    const wait = Number(data.cooldown_seconds);
+    if (
+      !Number.isInteger(wait) ||
+      wait < 0 ||
+      typeof data.is_active !== "boolean"
+    ) {
+      console.error("[VOW AI] Cooldown RPC invalid response fields:", data);
+      throw new Error("AI_USAGE_CHECK_FAILED");
+    }
+
+    console.log(`[VOW AI] Cooldown check for ${k}: wait ${wait}s`);
+    return wait;
+  } catch (error) {
+    console.error("[VOW AI] Cooldown failed:", error);
     throw new Error("AI_USAGE_CHECK_FAILED");
-  return wait;
+  }
 }
 async function reservePlanningEntitlement(
   req: Request,
