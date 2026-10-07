@@ -1,1 +1,2 @@
-VOW — trigger a fresh Android build after the latest Profile → Customise navigation/icon changes.
+VOW Android build trigger — 2026-10-07 device QA rebuild
+Latest capacitor-mobile source + current backend fixes.
