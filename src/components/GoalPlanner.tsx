@@ -858,7 +858,6 @@ export function GoalPlanner({
               />
             </div>
           ))}
-          <p className="text-xs text-vow-muted">{clarification.rationale}</p>
           {error && (
             <div className="flex items-start gap-3 border-l-2 border-vow-ink pl-3">
               <p className="text-sm text-vow-ink flex-1">{error}</p>
