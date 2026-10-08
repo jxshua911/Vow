@@ -11,6 +11,7 @@ import { normalizeGoalCategory, type GoalCategory } from '@/lib/goalCategories';
 import { userFacingError } from '@/lib/userFacingError';
 import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadillo';
 import { openExternalLink } from '@/lib/externalLinks';
+import { TimeWheelPicker } from './TimeWheelPicker';
 
 type Clarification = {
   questions: string[];
@@ -950,7 +951,7 @@ export function GoalPlanner({
           <div className="space-y-3">
             {availableDays.map(day => <div key={day} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-vow-border pb-3 last:border-b-0 last:pb-0">
               <div><p className="text-sm text-vow-ink">{day}</p>{!sessionTimes[day] && <p className="text-[11px] text-vow-muted mt-1">Choose a time</p>}</div>
-              <input type="time" value={sessionTimes[day] || ''} onChange={e => setSessionTimes(current => ({ ...current, [day]: e.target.value }))} className="vow-input w-auto min-h-11" aria-label={`Session time for ${day}`} />
+              <TimeWheelPicker value={sessionTimes[day] || '09:00'} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={`${day} session time`} />
             </div>)}
           </div>
         </div>}
