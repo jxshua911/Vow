@@ -137,6 +137,16 @@ function AppContent() {
     setTermsLoading(true);
     void (async () => {
       try {
+        const { data: accountState, error: accountStateError } = await supabase.rpc('vow_restore_or_purge_account');
+        if (accountStateError) {
+          console.error('[VOW] Failed to restore account state:', accountStateError);
+          throw accountStateError;
+        }
+        if (accountState?.status === 'purged') {
+          await supabase.auth.signOut({ scope: 'local' });
+          return;
+        }
+
         const [settingsResult, termsResult] = await Promise.all([
           supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle(),
           supabase.from('vow_terms_acceptances').select('id').eq('user_id', session.user.id).eq('terms_version', VOW_TERMS_VERSION).maybeSingle(),
