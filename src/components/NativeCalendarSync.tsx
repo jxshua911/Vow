@@ -54,20 +54,6 @@ export function NativeCalendarSync() {
     return () => { cancelled = true; };
   }, [enabled, userId, accountEmail, dismissed]);
 
-  if (!Capacitor.isNativePlatform() || !userId || !enabled || dismissed) return;
-    let cancelled = false;
-    async function sync() {
-      const { data } = await supabase.from('sessions').select('*').eq('user_id', userId).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
-      if (cancelled) return;
-      try {
-        const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail) : 0;
-        if (!cancelled) dismissAfterSuccess(created ? `${created} upcoming VOW sessions are synced to your Google/device calendar.` : 'Calendar sync is up to date.');
-      } catch (error) { console.error('[VOW] Native calendar sync failed:', error); }
-    }
-    sync();
-    return () => { cancelled = true; };
-  }, [enabled, userId, accountEmail, dismissed]);
-
   if (!Capacitor.isNativePlatform() || !session || dismissed) return null;
 
   async function toggle() {
