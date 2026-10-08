@@ -383,6 +383,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, r
           max_completion_tokens: MAX[kind],
           temperature: 0.15,
           reasoning_effort: "low",
+          response_format: { type: "json_object" },
           tools: [{ type: "browser_search" }],
           tool_choice: researchRequired ? "required" : "auto",
         }),
@@ -441,6 +442,7 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
         messages,
         max_completion_tokens: MAX[kind],
         temperature: 0.15,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -476,16 +478,18 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
       if (researchRequired) throw groqError;
 
       if (Deno.env.get("OPENAI_API_KEY")) {
-        try {
-          const result = await callOpenAI(req, messages, kind);
-          console.log("OpenAI fallback succeeded after Groq failure");
-          return result;
-        } catch (openaiError) {
-          console.error(
-            "OpenAI fallback also failed",
-            openaiError instanceof Error ? openaiError.message : String(openaiError)
-          );
-          throw groqError;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const result = await callOpenAI(req, messages, kind);
+            console.log("[VOW] OpenAI fallback succeeded after Groq failure", { attempt: attempt + 1 });
+            return result;
+          } catch (openaiError) {
+            console.error("[VOW] OpenAI fallback attempt failed", {
+              attempt: attempt + 1,
+              error: openaiError instanceof Error ? openaiError.message : String(openaiError),
+            });
+            if (attempt === 0) await sleep(500);
+          }
         }
       }
 
@@ -699,27 +703,35 @@ Deno.serve(async (req) => {
         { "Retry-After": String(wait) }
       );
     const adaptive = mode === "chat" && /missed|rebuild|changed|realistic|adapt|schedule/i.test(message0);
-    const feature = adaptive ? "adaptive_replan" : "planning_action";
-    let entitlement: Record<string, unknown>;
-    try {
-      entitlement = await reservePlanningEntitlement(req, feature, {
-        goal_id: typeof p?.goal_id === "string" ? p.goal_id : null,
-        prompt_type: feature,
-        request_id: crypto.randomUUID(),
-      });
-    } catch (error) {
-      // Graceful degradation: an entitlement infrastructure failure must not
-      // take VOW AI completely offline. The permanent schema repair lives in
-      // Supabase migrations; this guard is the last-resort runtime failsafe.
-      console.error(
-        "[VOW AI] Entitlement reservation unavailable; continuing in degraded mode:",
-        error instanceof Error ? error.message : String(error)
-      );
-      entitlement = {
-        allowed: true,
-        reservation_id: null,
-        degraded: true,
-      };
+    const feature = mode === "goal-clarify"
+      ? null
+      : adaptive
+      ? "adaptive_replan"
+      : "planning_action";
+    let entitlement: Record<string, unknown> = {
+      allowed: true,
+      reservation_id: null,
+      feature,
+    };
+    if (feature) {
+      try {
+        entitlement = await reservePlanningEntitlement(req, feature, {
+          goal_id: typeof p?.goal_id === "string" ? p.goal_id : null,
+          prompt_type: feature,
+          request_id: crypto.randomUUID(),
+        });
+      } catch (error) {
+        console.error(
+          "[VOW AI] Entitlement reservation unavailable; continuing in degraded mode:",
+          error instanceof Error ? error.message : String(error)
+        );
+        entitlement = {
+          allowed: true,
+          reservation_id: null,
+          feature,
+          degraded: true,
+        };
+      }
     }
     if (entitlement.allowed !== true)
       return json(
@@ -741,6 +753,11 @@ Deno.serve(async (req) => {
               answer: str(a?.answer, 500),
             }))
         : [],
+    const clean = answers.map((item: any) => String(item.answer ?? "").trim());
+    const unknown = /^(i\\s*(don['']?t|do not)\\s*know|not sure|unsure|unknown|n\\/a)$/i;
+    const isUnanswered = (a: string) => !a || unknown.test(a);
+    const unresolved = clean.filter(isUnanswered).length;
+    console.log("[VOW] Clarification answers:", { answers, clean, unresolved });
       refs = Array.isArray(p?.references)
         ? p.references
             .slice(0, 6)
