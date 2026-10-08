@@ -32,7 +32,6 @@ function ResourceIcon({ type }: { type: GoalResource['resource_type'] }) {
 export function GoalResources({ goalId }: { goalId: string }) {
   const [resources, setResources] = useState<Array<GoalResource & { displayUrl: string }>>([]);
   const [url, setUrl] = useState('');
-  const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -64,7 +63,6 @@ export function GoalResources({ goalId }: { goalId: string }) {
 
   async function addResource() {
     const cleanUrl = url.trim();
-    const cleanTitle = title.trim();
     if (!cleanUrl || saving) return;
     if (!/^https?:\/\/\S+\.\S+/i.test(cleanUrl)) {
       setError('Enter a valid link starting with http:// or https://');
@@ -76,7 +74,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
     }
     setSaving(true);
     setError('');
-    const { data, error: insertError } = await supabase.from('goal_resources').insert({ goal_id: goalId, url: cleanUrl, title: cleanTitle || null, resource_type: inferType(cleanUrl) }).select('id,goal_id,user_id,url,title,resource_type,created_at').single();
+    const { data, error: insertError } = await supabase.from('goal_resources').insert({ goal_id: goalId, url: cleanUrl, title: null, resource_type: inferType(cleanUrl) }).select('id,goal_id,user_id,url,title,resource_type,created_at').single();
     if (insertError || !data) {
       setError(insertError?.message || 'Could not save that reference. Please try again.');
       setSaving(false);
@@ -85,7 +83,6 @@ export function GoalResources({ goalId }: { goalId: string }) {
     const display = await signedDisplayUrl(data.url);
     setResources((current) => [...current, { ...(data as GoalResource), displayUrl: display }]);
     setUrl('');
-    setTitle('');
     setSaving(false);
   }
 
@@ -104,7 +101,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="vow-label">Goal references</h2>
-          <p className="text-xs text-vow-muted mt-1">Links VOW uses as evidence of your intended outcome.</p>
+          <p className="text-xs text-vow-muted mt-1">Add a link that represents the outcome you want. You can use a picture or other inspiration yourself; VOW will focus on turning your goal into a practical plan.</p>
         </div>
       </div>
       <div className="border border-vow-border p-4 mb-4 space-y-3">
@@ -113,17 +110,9 @@ export function GoalResources({ goalId }: { goalId: string }) {
           onChange={(e) => { setUrl(e.target.value); if (error) setError(''); }}
           maxLength={2048}
           inputMode="url"
-          placeholder="https://example.com/your-reference"
+          placeholder="Paste a reference link (optional)"
           className="vow-input"
           aria-label="Reference URL"
-        />
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          maxLength={200}
-          placeholder="Title (optional)"
-          className="vow-input"
-          aria-label="Reference title"
         />
         {error && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3">{error}</p>}
         {openError && <p role="alert" className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3">{openError}</p>}
@@ -135,7 +124,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
         <div className="text-vow-muted text-sm">Loading references…</div>
       ) : resources.length === 0 ? (
         <div className="border border-vow-border p-6 text-center">
-          <p className="text-vow-muted text-sm">No references yet. Add a link to help VOW tailor your plan.</p>
+          <p className="text-vow-muted text-sm">No reference links yet. Add one if it helps you describe the outcome you want.</p>
         </div>
       ) : (
         <div className="border-t border-vow-border">
