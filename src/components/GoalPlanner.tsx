@@ -532,7 +532,7 @@ export function GoalPlanner({
             why_it_matters: why.trim() || null,
             domain,
             start_date: toDateString(start),
-            deadline: deadlineFor(start, durationWeeks),
+            deadline: deadlineFor(start, selectedDurationWeeks),
             duration_weeks: selectedDurationWeeks,
             weekly_commitment_target: availableDays.length,
             plan_generated_at: null,
