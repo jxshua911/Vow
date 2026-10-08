@@ -43,7 +43,7 @@ function AppContent() {
   const accountStateReady = useRef(false);
   const [viewHistory, setViewHistory] = useState<View[]>(['dashboard']);
   const viewHistoryRef = useRef<View[]>(['dashboard']);
-  const [splashMounted, setSplashMounted] = useState(() => !Capacitor.isNativePlatform());
+  const [splashMounted, setSplashMounted] = useState(true);
   const [splashFadingOut, setSplashFadingOut] = useState(false);
   const [splashMinElapsed, setSplashMinElapsed] = useState(false);
   const view = viewHistory[viewHistory.length - 1];
