@@ -500,9 +500,11 @@ export function GoalPlanner({
         return;
       }
       const goalId = await ensureDraft(domain);
-      const clean = answers.map(a => a.trim());
+      const clean = answers.map((answer) => String(answer ?? '').trim());
       const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
-      const unresolved = clean.filter(answer => !answer || unknown.test(answer)).length;
+      const isUnanswered = (a: string) => !a || unknown.test(a);
+      const unresolved = clean.filter(isUnanswered).length;
+      console.log('[VOW] Clarification answers:', { answers, clean, unresolved });
       if (unresolved === clean.length) {
         setError(
           'VOW needs one decision before it can build a responsible plan. Please answer at least one follow-up question.'
