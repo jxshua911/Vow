@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { addDays, toDateString } from '@/lib/dates';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
@@ -268,6 +268,74 @@ export function GoalPlanner({
   const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
   const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
   const missingSessionTimes = availableDays.filter((day) => !sessionTimes[day]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || initialGoal || initialWhy) return;
+    try {
+      const saved = window.localStorage.getItem(draftStorageKey);
+      if (!saved) return;
+      const draft = JSON.parse(saved) as {
+        rawInput?: string;
+        why?: string;
+        durationWeeks?: number | null;
+        customDurationValue?: string;
+        customDurationUnit?: DurationUnit;
+        availableDays?: string[];
+        sessionTimes?: Record<string, string>;
+        clarification?: Clarification | null;
+        answers?: string[];
+        domain?: GoalDomain | null;
+        draftGoalId?: string | null;
+      };
+      if (typeof draft.rawInput === 'string') setRawInput(draft.rawInput);
+      if (typeof draft.why === 'string') setWhy(draft.why);
+      if (typeof draft.durationWeeks === 'number' || draft.durationWeeks === null) setDurationWeeks(draft.durationWeeks);
+      if (typeof draft.customDurationValue === 'string') setCustomDurationValue(draft.customDurationValue);
+      if (draft.customDurationUnit) setCustomDurationUnit(draft.customDurationUnit);
+      if (Array.isArray(draft.availableDays)) setAvailableDays(draft.availableDays);
+      if (draft.sessionTimes) setSessionTimes(draft.sessionTimes);
+      if (draft.clarification) setClarification(draft.clarification);
+      if (Array.isArray(draft.answers)) setAnswers(draft.answers);
+      if (draft.domain) setDomain(draft.domain);
+      if (draft.draftGoalId) setDraftGoalId(draft.draftGoalId);
+    } catch (error) {
+      console.warn('[VOW] Could not restore goal planner draft:', error);
+    }
+  }, [draftStorageKey, initialGoal, initialWhy]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(draftStorageKey, JSON.stringify({
+        rawInput,
+        why,
+        durationWeeks,
+        customDurationValue,
+        customDurationUnit,
+        availableDays,
+        sessionTimes,
+        clarification,
+        answers,
+        domain,
+        draftGoalId,
+      }));
+    } catch (error) {
+      console.warn('[VOW] Could not save goal planner draft:', error);
+    }
+  }, [
+    draftStorageKey,
+    rawInput,
+    why,
+    durationWeeks,
+    customDurationValue,
+    customDurationUnit,
+    availableDays,
+    sessionTimes,
+    clarification,
+    answers,
+    domain,
+    draftGoalId,
+  ]);
 
   async function openPlanReference(url: string) {
     setResourceError('');
