@@ -753,11 +753,6 @@ Deno.serve(async (req) => {
               answer: str(a?.answer, 500),
             }))
         : [],
-    const clean = answers.map((item: any) => String(item.answer ?? "").trim());
-    const unknown = /^(i\\s*(don['']?t|do not)\\s*know|not sure|unsure|unknown|n\\/a)$/i;
-    const isUnanswered = (a: string) => !a || unknown.test(a);
-    const unresolved = clean.filter(isUnanswered).length;
-    console.log("[VOW] Clarification answers:", { answers, clean, unresolved });
       refs = Array.isArray(p?.references)
         ? p.references
             .slice(0, 6)
@@ -769,6 +764,11 @@ Deno.serve(async (req) => {
             .filter((r: any) => /^https?:\/\//i.test(r.url))
         : [],
       message = message0;
+    const clean = answers.map((item: any) => String(item.answer ?? "").trim());
+    const unknown = /^(i\\s*(don['']?t|do not)\\s*know|not sure|unsure|unknown|n\\/a)$/i;
+    const isUnanswered = (a: string) => !a || unknown.test(a);
+    const unresolved = clean.filter(isUnanswered).length;
+    console.log("[VOW] Clarification answers:", { answers, clean, unresolved });
     const knowledgeQuery = [
       str(g?.title || g?.outcome, 500),
       str(g?.why_it_matters, 300),
