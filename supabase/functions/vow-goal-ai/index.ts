@@ -472,14 +472,20 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
         groqError instanceof Error ? groqError.message : String(groqError)
       );
 
-      // OpenAI Chat Completions does not provide the browser-search tool used by
-      // the Groq path, so never claim research was performed when it was required.
-      if (researchRequired) throw groqError;
-
       if (Deno.env.get("OPENAI_API_KEY")) {
+        const fallbackMessages = researchRequired
+          ? [
+              ...messages,
+              {
+                role: "system",
+                content:
+                  "Fallback mode: live web research is unavailable on this provider path. Do not claim that web research was performed. Use only the supplied VOW knowledge and user context, and return the same valid JSON structure requested by the original prompt.",
+              },
+            ]
+          : messages;
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            const result = await callOpenAI(req, messages, kind);
+            const result = await callOpenAI(req, fallbackMessages, kind);
             console.log("[VOW] OpenAI fallback succeeded after Groq failure", { attempt: attempt + 1 });
             return result;
           } catch (openaiError) {
