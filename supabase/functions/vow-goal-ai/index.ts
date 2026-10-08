@@ -427,6 +427,13 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
         continue;
       }
 
+      if (r.status === 400 && attempt === 0) {
+        console.warn("Groq JSON-mode request rejected; retrying without response_format", {
+          body: raw.slice(0, 1200),
+        });
+        continue;
+      }
+
       console.error("Groq provider error", { status: r.status, body: raw.slice(0, 1200) });
       if (r.status === 429) throw new Error("GROQ_429");
       throw new Error(`GROQ_PROVIDER_ERROR_${r.status}`);
