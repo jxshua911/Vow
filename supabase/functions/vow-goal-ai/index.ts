@@ -192,9 +192,19 @@ async function reservePlanningEntitlement(
     p_feature: feature,
     p_metadata: metadata,
   });
-  if (error) throw new Error("ENTITLEMENT_RESERVATION_FAILED");
-  if (!data || typeof data !== "object")
+  if (error) {
+    console.error("[VOW AI] Entitlement reservation RPC error:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
     throw new Error("ENTITLEMENT_RESERVATION_FAILED");
+  }
+  if (!data || typeof data !== "object") {
+    console.error("[VOW AI] Entitlement reservation returned invalid data:", data);
+    throw new Error("ENTITLEMENT_RESERVATION_FAILED");
+  }
   return data as Record<string, unknown>;
 }
 
@@ -690,11 +700,27 @@ Deno.serve(async (req) => {
       );
     const adaptive = mode === "chat" && /missed|rebuild|changed|realistic|adapt|schedule/i.test(message0);
     const feature = adaptive ? "adaptive_replan" : "planning_action";
-    const entitlement = await reservePlanningEntitlement(req, feature, {
-      goal_id: typeof p?.goal_id === "string" ? p.goal_id : null,
-      prompt_type: feature,
-      request_id: crypto.randomUUID(),
-    });
+    let entitlement: Record<string, unknown>;
+    try {
+      entitlement = await reservePlanningEntitlement(req, feature, {
+        goal_id: typeof p?.goal_id === "string" ? p.goal_id : null,
+        prompt_type: feature,
+        request_id: crypto.randomUUID(),
+      });
+    } catch (error) {
+      // Graceful degradation: an entitlement infrastructure failure must not
+      // take VOW AI completely offline. The permanent schema repair lives in
+      // Supabase migrations; this guard is the last-resort runtime failsafe.
+      console.error(
+        "[VOW AI] Entitlement reservation unavailable; continuing in degraded mode:",
+        error instanceof Error ? error.message : String(error)
+      );
+      entitlement = {
+        allowed: true,
+        reservation_id: null,
+        degraded: true,
+      };
+    }
     if (entitlement.allowed !== true)
       return json(
         {
