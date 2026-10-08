@@ -120,7 +120,7 @@ export function ReviewPage() {
 
       const primaryGoal = goals.find((g) => g.status === 'active') || goals[0];
       const whyItMatters = primaryGoal?.why_it_matters || null;
-      const coachingText = allSessions.length === 0 ? "This is your first week. No baseline yet. Complete your first commitment and we'll track progress from here." : buildCoachingText(weekSessions, patterns, settings, whyItMatters);
+      const coachingText = allSessions.length === 0 ? "No sessions were completed this week. Once you start your commitments, your review will show what worked and what to adjust." : buildCoachingText(weekSessions, patterns, settings, whyItMatters);
 
       const recommendations = patterns.map((p) => ({
         title: p.description,
@@ -343,18 +343,9 @@ function ReviewContent({ review }: { review: Review }) {
       {review.committed_count > 0 ? <div className="flex items-center gap-8"><div className="relative w-20 h-20 flex-shrink-0"><svg className="w-20 h-20 -rotate-90" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="#E2E2DF" strokeWidth="2" /><circle cx="50" cy="50" r="44" fill="none" stroke="#111111" strokeWidth="2" strokeLinecap="square" strokeDasharray={`${(review.completion_pct / 100) * 276.46} 276.46`} className="transition-all duration-1000" /></svg><div className="absolute inset-0 flex items-center justify-center"><span className="text-lg vow-heading text-vow-ink">{Math.round(review.completion_pct)}%</span></div></div><div><p className="vow-label mb-1">Completion rate</p><p className="text-sm text-vow-ink">You completed {review.completed_count} of {review.committed_count} sessions.</p></div></div> : <div className="bg-vow-surface/45 border border-vow-border p-5"><p className="vow-label mb-2">First week</p><p className="text-sm text-vow-ink">This is your first week. No baseline yet. Complete your first commitment and we&apos;ll track progress from here.</p></div>}
       <div className="grid md:grid-cols-2 gap-px bg-vow-border border border-vow-border">{review.biggest_win && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest win</p><p className="text-sm text-vow-ink">{review.biggest_win}</p></div>}{review.biggest_setback && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest setback</p><p className="text-sm text-vow-ink">{review.biggest_setback}</p></div>}</div>
       <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Your coach</p><div className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{review.coaching_text}</div></div>
-      {patterns.length > 0 && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Patterns detected ({patterns.length})</p><div className="space-y-6">{patterns.map((p, i) => <div key={i} className="border-b border-vow-border pb-6 last:border-0"><p className="text-xs text-vow-muted uppercase tracking-wide mb-2">{reviewPatternLabel(p.type)}</p><p className="text-sm text-vow-ink font-medium mb-3">{withoutInternalName(p.description)}</p>{Array.isArray(p.evidence) && p.evidence.length > 0 && <div className="mb-3"><p className="text-xs text-vow-muted mb-1">Evidence</p><ul className="space-y-1">{p.evidence.map((e, j) => <li key={j} className="text-xs text-vow-muted pl-3 border-l border-vow-border">{withoutInternalName(e)}</li>)}</ul></div>}{p.hypothesis && <p className="text-xs text-vow-ink mb-2"><span className="text-vow-muted">Hypothesis: </span>{withoutInternalName(p.hypothesis)}</p>}{p.proposed_adjustment && <p className="text-xs text-vow-ink"><span className="text-vow-muted">Suggestion: </span>{withoutInternalName(p.proposed_adjustment)}</p>}</div>)}</div></div>}
       {commitments.length > 0 && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Proposed next week</p><div className="space-y-px border border-vow-border">{commitments.map((c, i) => <div key={i} className="bg-vow-bg px-4 py-3 flex items-center justify-between"><div className="min-w-0 flex-1"><div className="text-sm text-vow-ink truncate">{c.goal_title}</div>{c.notes && <div className="text-xs text-vow-muted mt-0.5">{c.notes}</div>}</div><div className="text-sm text-vow-ink font-medium flex-shrink-0 ml-3">{c.sessions_per_week}x/week</div></div>)}</div></div>}
     </div>
   );
-}
-
-function reviewPatternLabel(type: string) {
-  return type === 'raven_signal' ? 'Progress signal' : type.replace(/_/g, ' ');
-}
-
-function withoutInternalName(value: string | null | undefined) {
-  return (value || '').replace(/\bRaven\b/g, 'VOW');
 }
 
 function ConfirmedReviewView({ review, pastReviews, onRegenerate, generating, actionError }: { review: Review; pastReviews: Review[]; onRegenerate: () => void; generating: boolean; actionError: string | null }) {
