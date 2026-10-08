@@ -485,13 +485,15 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
 }
 
 
-type AiProvider = "groq" | "qwen" | "nova";
+type AiProvider = "groq" | "mistral" | "qwen";
 
 function providerWeights(): Record<AiProvider, number> {
-  const defaults: Record<AiProvider, number> = { groq: 0.4, qwen: 0.35, nova: 0.25 };
+  // Launch defaults favour providers with genuine free/developer access.
+  // Qwen is included only when its free quota is available for the account/region.
+  const defaults: Record<AiProvider, number> = { groq: 0.5, mistral: 0.35, qwen: 0.15 };
   try {
     const raw = JSON.parse(Deno.env.get("VOW_AI_PROVIDER_WEIGHTS") || "{}");
-    for (const provider of ["groq", "qwen", "nova"] as AiProvider[]) {
+    for (const provider of ["groq", "mistral", "qwen"] as AiProvider[]) {
       const value = Number(raw?.[provider]);
       if (Number.isFinite(value) && value >= 0) defaults[provider] = value;
     }
@@ -503,10 +505,10 @@ function providerWeights(): Record<AiProvider, number> {
 
 function providerOrder(): AiProvider[] {
   const weights = providerWeights();
-  const enabled = (["groq", "qwen", "nova"] as AiProvider[]).filter((p) => {
+  const enabled = (["groq", "mistral", "qwen"] as AiProvider[]).filter((p) => {
     if (p === "groq") return Boolean(Deno.env.get("GROQ_API_KEY"));
-    if (p === "qwen") return Boolean(Deno.env.get("DASHSCOPE_API_KEY"));
-    return Boolean(Deno.env.get("AWS_BEARER_TOKEN_BEDROCK"));
+    if (p === "mistral") return Boolean(Deno.env.get("MISTRAL_API_KEY"));
+    return Boolean(Deno.env.get("DASHSCOPE_API_KEY"));
   });
   if (!enabled.length) return [];
   const total = enabled.reduce((sum, p) => sum + weights[p], 0);
@@ -521,6 +523,42 @@ function providerOrder(): AiProvider[] {
     }
   }
   return [selected, ...enabled.filter((p) => p !== selected)];
+}
+
+async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX) {
+  const key = Deno.env.get("MISTRAL_API_KEY");
+  if (!key) throw new Error("MISTRAL_API_KEY_MISSING");
+  const model = Deno.env.get("MISTRAL_MODEL") || "mistral-small-latest";
+  const c = new AbortController();
+  const timer = setTimeout(() => c.abort(), 35000);
+  try {
+    const r = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      signal: c.signal,
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: MAX[kind],
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+      }),
+    });
+    const raw = await r.text();
+    if (!r.ok) {
+      console.error("[VOW AI] Mistral provider error", { status: r.status, body: raw.slice(0, 1200) });
+      throw new Error(r.status === 429 ? "MISTRAL_429" : `MISTRAL_PROVIDER_ERROR_${r.status}`);
+    }
+    const payload = JSON.parse(raw);
+    const content = payload?.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) throw new Error("MISTRAL_EMPTY_RESPONSE");
+    return parse(content);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
@@ -639,9 +677,9 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
         const result =
           provider === "groq"
             ? await callGroq(req, providerMessages, kind, researchRequired)
-            : provider === "qwen"
-            ? await callQwen(req, providerMessages, kind)
-            : await callNova(req, providerMessages, kind);
+            : provider === "mistral"
+            ? await callMistral(req, providerMessages, kind)
+            : await callQwen(req, providerMessages, kind);
         console.log("[VOW AI] Provider succeeded", { provider });
         return result;
       } catch (providerError) {
@@ -653,7 +691,9 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
       }
     }
 
-    if (Deno.env.get("OPENAI_API_KEY")) {
+    // Paid fallback is deliberately opt-in during VOW launch.
+    // Keep this disabled while we are relying on free provider capacity.
+    if (Deno.env.get("VOW_AI_ENABLE_PAID_FALLBACK") === "true" && Deno.env.get("OPENAI_API_KEY")) {
       const fallbackMessages = researchRequired
         ? [
             ...messages,
@@ -1057,7 +1097,7 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.warn("clarify AI error", e);
         const errorCode = e instanceof Error ? e.message : String(e);
-        const providerFailure = /^(GROQ_API_KEY_MISSING|QWEN_API_KEY_MISSING|NOVA_API_KEY_MISSING|GROQ_429|QWEN_429|NOVA_429|GROQ_PROVIDER_ERROR_\\d+|QWEN_PROVIDER_ERROR_\\d+|NOVA_PROVIDER_ERROR_\\d+|GROQ_EMPTY_RESPONSE|QWEN_EMPTY_RESPONSE|NOVA_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED|AI_USAGE_CHECK_FAILED)$/.test(errorCode) ||
+        const providerFailure = /^(GROQ_API_KEY_MISSING|MISTRAL_API_KEY_MISSING|QWEN_API_KEY_MISSING|NOVA_API_KEY_MISSING|GROQ_429|MISTRAL_429|QWEN_429|NOVA_429|GROQ_PROVIDER_ERROR_\\d+|MISTRAL_PROVIDER_ERROR_\\d+|QWEN_PROVIDER_ERROR_\\d+|NOVA_PROVIDER_ERROR_\\d+|GROQ_EMPTY_RESPONSE|MISTRAL_EMPTY_RESPONSE|QWEN_EMPTY_RESPONSE|NOVA_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED|AI_USAGE_CHECK_FAILED)$/.test(errorCode) ||
           /^(GROQ_API_KEY_MISSING|GROQ_429|GROQ_PROVIDER_ERROR_\d+|GROQ_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED|AI_USAGE_CHECK_FAILED)$/.test(errorCode) ||
           (e instanceof TypeError && /fetch|network|timeout/i.test(errorCode)) ||
           (e instanceof Error && e.name === "AbortError");
@@ -1293,13 +1333,16 @@ Deno.serve(async (req) => {
             "ENTITLEMENT_RESERVATION_FAILED",
             "ENTITLEMENT_FINALIZE_FAILED",
             "GROQ_API_KEY_MISSING",
+            "MISTRAL_API_KEY_MISSING",
             "QWEN_API_KEY_MISSING",
             "NOVA_API_KEY_MISSING",
+            "MISTRAL_429",
             "QWEN_429",
             "NOVA_429",
             "OPENAI_API_KEY_MISSING",
             "AI_RESEARCH_NOT_PERFORMED",
             "GROQ_EMPTY_RESPONSE",
+            "MISTRAL_EMPTY_RESPONSE",
             "INVALID_AI_JSON",
           ].includes(m)
           ? m
@@ -1314,7 +1357,7 @@ Deno.serve(async (req) => {
       );
     }
     console.error("vow-goal-ai", { mode, error_code: telemetryCode });
-    if (m === "GROQ_429" || m === "QWEN_429" || m === "NOVA_429")
+    if (m === "GROQ_429" || m === "MISTRAL_429" || m === "QWEN_429" || m === "NOVA_429")
       return json(
         { error: "VOW AI is temporarily busy. Please try again shortly." },
         429,
@@ -1354,6 +1397,7 @@ Deno.serve(async (req) => {
     }
     if (
       m === "GROQ_API_KEY_MISSING" ||
+      m === "MISTRAL_API_KEY_MISSING" ||
       m === "QWEN_API_KEY_MISSING" ||
       m === "NOVA_API_KEY_MISSING" ||
       m === "AI_PROVIDER_UNAVAILABLE"
