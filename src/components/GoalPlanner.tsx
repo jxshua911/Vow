@@ -573,7 +573,7 @@ export function GoalPlanner({
       const start = nextMonday();
 
       function buildDate(week: number, day: string, preferredTime: string): Date {
-        const w = Math.max(1, Math.min(durationWeeks, week));
+        const w = Math.max(1, Math.min(selectedDurationWeeks || 1, week));
         const dayIndex = Math.max(0, DAYS.indexOf(day));
         const date = addDays(start, (w - 1) * 7 + dayIndex);
         const match = /^(\d{1,2}):(\d{2})/.exec(sessionTimes[day] || preferredTime || '09:00');
@@ -589,7 +589,7 @@ export function GoalPlanner({
         title: m.title,
         description: m.description,
         sort_order: i,
-        deadline: deadlineFor(start, Math.min(durationWeeks, Math.max(1, m.week))),
+        deadline: deadlineFor(start, Math.min(selectedDurationWeeks || 1, Math.max(1, m.week))),
         status: i === 0 ? 'in_progress' : 'pending',
       }));
 
@@ -597,7 +597,7 @@ export function GoalPlanner({
         const date = buildDate(item.week, item.day, item.preferred_time);
         return {
           plan_version: 1,
-          week_number: Math.max(1, Math.min(durationWeeks, item.week)),
+          week_number: Math.max(1, Math.min(selectedDurationWeeks || 1, item.week)),
           day_of_week: item.day,
           scheduled_at: date.toISOString(),
           task: item.task,
@@ -611,7 +611,7 @@ export function GoalPlanner({
       const sessionRows = filteredItems.map(item => {
         const date = buildDate(item.week, item.day, item.preferred_time);
         const milestoneIndex = Math.min(
-          Math.max(0, Math.floor(((item.week - 1) / Math.max(1, durationWeeks)) * plan.milestones.length)),
+          Math.max(0, Math.floor(((item.week - 1) / Math.max(1, selectedDurationWeeks || 1)) * plan.milestones.length)),
           Math.max(0, plan.milestones.length - 1)
         );
         return {
@@ -633,8 +633,8 @@ export function GoalPlanner({
           outcome: plan.outcome || rawInput.trim(),
           why_it_matters: why.trim() || null,
           start_date: toDateString(start),
-          deadline: deadlineFor(start, durationWeeks),
-          duration: `${durationWeeks}w`,
+          deadline: deadlineFor(start, selectedDurationWeeks || 1),
+          duration: `${selectedDurationWeeks || 1}w`,
           status: 'active',
           weekly_commitment_target: availableDays.length,
           plan_json: plan,
