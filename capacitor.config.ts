@@ -6,10 +6,11 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   plugins: {
     SplashScreen: {
-      launchShowDuration: 0,
+      launchShowDuration: 1400,
       launchAutoHide: true,
       androidScaleType: 'CENTER_INSIDE',
       showSpinner: false,
+      launchFadeOutDuration: 180,
       splashFullScreen: true,
       splashImmersive: true,
     },
