@@ -9,7 +9,6 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
 };
-const MAX = { plan: 4000, clarify: 1200, chat: 700 };
 const MAX = { plan: 10000, clarify: 1200, chat: 700 };
 const MAX_BODY_BYTES = 128 * 1024;
 const json = (x: unknown, s = 200, e: Record<string, string> = {}) =>
@@ -417,6 +416,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
         const content = message?.content;
         if (typeof content !== "string" || !content.trim()) throw new Error("GROQ_EMPTY_RESPONSE");
         return parse(content);
+      }
 
       if (r.status === 429 && attempt === 0) {
         const delay = retryDelayMs(r, attempt);
