@@ -22,7 +22,27 @@ Deno.serve(async(req)=>{
     admin.from("strava_connections").select("access_token,refresh_token").eq("user_id",user.id).maybeSingle(),
   ]);
   await Promise.all([google?.refresh_token?revokeGoogle(google.refresh_token):Promise.resolve(),google?.access_token?revokeGoogle(google.access_token):Promise.resolve(),strava?.access_token?revokeStrava(strava.access_token):Promise.resolve()]);
-  const {error:deleteDataError}=await admin.rpc("delete_user_account_data",{p_user_id:user.id});if(deleteDataError)return json({error:"DATA_DELETION_FAILED"},500);
-  const {error:deleteUserError}=await admin.auth.admin.deleteUser(user.id);if(deleteUserError)return json({error:"AUTH_ACCOUNT_DELETION_FAILED"},500);
-  return json({deleted:true});
+  const deletionExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const {data:existingSettings,error:settingsReadError}=await admin.from("user_settings").select("user_id").eq("user_id",user.id).maybeSingle();
+  if(settingsReadError)return json({error:"ACCOUNT_STATE_READ_FAILED"},500);
+  const {error:settingsWriteError}=existingSettings
+    ? await admin.from("user_settings").update({
+        account_status:"deleted",
+        deleted_at:new Date().toISOString(),
+        deletion_expires_at:deletionExpiresAt,
+        updated_at:new Date().toISOString(),
+      }).eq("user_id",user.id)
+    : await admin.from("user_settings").insert({
+        user_id:user.id,
+        timezone:"UTC",
+        notification_frequency:"weekly",
+        coaching_tone:"honest_encouraging",
+        onboarding_complete:false,
+        account_status:"deleted",
+        deleted_at:new Date().toISOString(),
+        deletion_expires_at:deletionExpiresAt,
+        updated_at:new Date().toISOString(),
+      });
+  if(settingsWriteError)return json({error:"ACCOUNT_STATE_WRITE_FAILED"},500);
+  return json({deleted:true,restorable_until:deletionExpiresAt});
 });
