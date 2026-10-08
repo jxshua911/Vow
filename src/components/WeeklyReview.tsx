@@ -29,6 +29,17 @@ export function ReviewPage() {
     if (!session) return;
     setLoading(true);
     try {
+      const { data: planningReservation, error: planningReservationError } = await supabase.rpc('vow_reserve_entitlement', {
+        p_feature: 'planning_action',
+        p_metadata: { surface: 'weekly_review' },
+      });
+      if (planningReservationError) throw planningReservationError;
+      if (!planningReservation?.allowed) {
+        setReviewEntitlement(planningReservation as EntitlementResult);
+        return;
+      }
+      planningReservationId = planningReservation.reservation_id || null;
+
       const weekStart = toDateString(start);
       const { data: existing, error: existingError } = await supabase
         .from('reviews')
@@ -66,6 +77,7 @@ export function ReviewPage() {
     setGenerating(true);
     setActionError(null);
     setReviewEntitlement(null);
+    let planningReservationId: string | null = null;
 
     try {
       {
@@ -190,18 +202,33 @@ export function ReviewPage() {
         savedReview = data;
       }
       if (!savedReview) throw new Error('Review save returned no row.');
-      const planningCharge = await consumeEntitlement('planning_action', {
-        surface: 'weekly_review',
-        review_id: savedReview.id,
-      });
-      if (!planningCharge.allowed) {
-        setReviewEntitlement(planningCharge);
-        return;
+      if (planningReservationId) {
+        const { error: finalizeError } = await supabase.rpc('vow_finalize_entitlement_reservation', {
+          p_reservation_id: planningReservationId,
+        });
+        if (finalizeError) throw finalizeError;
+        planningReservationId = null;
+      }
+      if (!existingReview) {
+        const { error: usageError } = await supabase.rpc('vow_record_ai_usage', {
+          p_mode: 'review',
+          p_outcome: 'success',
+          p_latency_ms: null,
+          p_error_code: null,
+        });
+        if (usageError) console.warn('[VOW] Review usage could not be recorded:', usageError.message);
       }
       await refreshEntitlementSnapshot();
       setReview(savedReview as Review);
       setExistingReview(savedReview as Review);
     } catch (err) {
+      if (planningReservationId) {
+        try {
+          await supabase.rpc('vow_release_entitlement_reservation', { p_reservation_id: planningReservationId });
+        } catch (releaseError) {
+          console.warn('[VOW] Review planning reservation could not be released:', releaseError);
+        }
+      }
       console.error('Review generation failed:', err);
       const failure = err && typeof err === 'object' ? err as { message?: unknown; code?: unknown } : null;
       const message = typeof failure?.message === 'string' ? failure.message : '';
