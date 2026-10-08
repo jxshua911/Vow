@@ -211,7 +211,7 @@ function AppContent() {
 
   useEffect(() => {
     if (!session || !termsAccepted || !Capacitor.isNativePlatform()) return;
-    const promptKey = 'vow:notification-permission-prompted';
+    const promptKey = `vow:notification-permission-prompted:${session.user.id}`;
     try {
       if (localStorage.getItem(promptKey) === 'true') return;
     } catch {
