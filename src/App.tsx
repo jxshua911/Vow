@@ -142,7 +142,8 @@ function AppContent() {
         const { data: accountState, error: accountStateError } = await supabase.rpc('vow_restore_or_purge_account');
         if (accountStateError) {
           console.error('[VOW] Failed to restore account state:', accountStateError);
-          throw accountStateError;
+          await supabase.auth.signOut({ scope: 'local' });
+          return;
         }
         if (accountState?.status === 'purged') {
           await supabase.auth.signOut({ scope: 'local' });
