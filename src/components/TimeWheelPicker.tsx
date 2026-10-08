@@ -40,7 +40,7 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
     touchStartY.current = event.touches[0]?.clientY ?? null;
   }
 
-  function handleTouchEnd(part: 'hour' | 'minute', event: React.TouchEvent<HTMLDivElement>) {
+  function handleTouchEnd(part: 'hour' | 'minute', event: TouchEvent<HTMLDivElement>) {
     const start = touchStartY.current;
     touchStartY.current = null;
     if (start === null) return;
