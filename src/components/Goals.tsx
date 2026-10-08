@@ -23,7 +23,7 @@ export function GoalsPage() {
   }, [session]);
   useEffect(() => { loadGoals(); }, [loadGoals]);
 
-  if (selectedGoalId) return <GoalDetail goalId={selectedGoalId} onBack={() => { setSelectedGoalId(null); loadGoals(); }} />;
+  if (selectedGoalId) return <GoalDetail goalId={selectedGoalId} onBack={() => { setSelectedGoalId(null); loadGoals(); }} onContinueDraft={() => { setSelectedGoalId(null); setShowCreate(true); }} />;
   if (showCreate) return <GoalPlanner userId={session?.user.id || ''} onCreated={() => { setShowCreate(false); loadGoals(); }} onCancel={() => setShowCreate(false)} />;
   if (!session) return <div><PageHeader title="Goals" /><div className="text-vow-muted text-sm">Please sign in to view your goals.</div></div>;
 
@@ -42,7 +42,7 @@ function GoalSection({ title, goals, onSelect }: { title: string; goals: Goal[];
   return <div><h2 className="vow-label mb-4">{title}</h2><div className="border-t border-vow-border">{goals.map((g) => <button key={g.id} onClick={() => onSelect(g.id)} className="w-full text-left border-b border-vow-border py-5 group flex items-start justify-between gap-4 hover:bg-vow-surface/30 transition-colors"><div className="flex-1 min-w-0"><div className={`text-base font-medium mb-1 ${statusColors[g.status]}`}>{g.outcome}</div>{g.why_it_matters && <div className="text-xs text-vow-muted italic mb-2">"{g.why_it_matters}"</div>}<div className="flex items-center gap-4 text-xs text-vow-muted"><span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{g.deadline ? formatRelative(g.deadline) : 'No deadline'}</span><span className="flex items-center gap-1"><Clock className="w-3 h-3" />{g.weekly_commitment_target}x/week</span></div></div><ArrowLeft className="w-4 h-4 text-vow-border rotate-180 mt-1 group-hover:text-vow-ink transition-colors" /></button>)}</div></div>;
 }
 
-function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) {
+function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBack: () => void; onContinueDraft: () => void }) {
   const { session } = useAuth();
   const [goal, setGoal] = useState<Goal | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -51,13 +51,21 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
   const [showAddSession, setShowAddSession] = useState(false);
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [expandedMilestone, setExpandedMilestone] = useState<string | null>(null);
+  const [unansweredQuestions, setUnansweredQuestions] = useState<string[]>([]);
   const load = useCallback(async () => {
     const [goalRes, msRes, sessRes] = await Promise.all([
       supabase.from('goals').select('*').eq('id', goalId).maybeSingle(),
       supabase.from('milestones').select('*').eq('goal_id', goalId).order('sort_order'),
       supabase.from('sessions').select('*').eq('goal_id', goalId).order('scheduled_at', { ascending: true }),
     ]);
-    setGoal(goalRes.data as Goal | null); setMilestones(msRes.data || []); setSessions(sessRes.data || []); setLoading(false);
+    setGoal(goalRes.data as Goal | null); setMilestones(msRes.data || []); setSessions(sessRes.data || []);
+    if (goalRes.data?.status === 'draft') {
+      const { data: clarificationRows } = await supabase.from('goal_clarification_answers').select('question,answer,question_order').eq('goal_id', goalId).order('question_order', { ascending: true });
+      setUnansweredQuestions(((clarificationRows || []) as Array<{ question: string; answer: string | null }>).filter((row) => !row.answer?.trim()).map((row) => row.question));
+    } else {
+      setUnansweredQuestions([]);
+    }
+    setLoading(false);
   }, [goalId]);
   useEffect(() => { load(); }, [load]);
   async function updateSessionStatus(sessId: string, status: Session['status']) {
@@ -113,6 +121,17 @@ function GoalDetail({ goalId, onBack }: { goalId: string; onBack: () => void }) 
   return <div>
     <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors"><ArrowLeft className="w-4 h-4" />Back to goals</button>
     <div className="border-t border-vow-border pt-8 mb-8"><div className="flex items-start justify-between gap-4 mb-4"><h1 className="vow-heading text-2xl text-vow-ink">{goal.outcome}</h1><span className="text-xs uppercase tracking-wide text-vow-muted">{goal.status}</span></div>{goal.why_it_matters && <p className="text-sm text-vow-muted italic mb-6">"{goal.why_it_matters}"</p>}<div className="grid grid-cols-3 gap-4 border-t border-vow-border pt-4"><div><p className="vow-label">Progress</p><p className="text-lg text-vow-ink mt-1">{pct}%</p></div><div><p className="vow-label">Sessions</p><p className="text-lg text-vow-ink mt-1">{completedSessions}/{totalSessions}</p></div><div><p className="vow-label">Moved</p><p className="text-lg text-vow-ink mt-1">{movedCount}</p></div></div></div>
+    {goal.status === 'draft' && <section className="border border-vow-border bg-vow-surface/45 p-5 mb-10">
+      <p className="vow-label mb-2">Incomplete goal</p>
+      <p className="text-sm text-vow-ink mb-2">This goal is incomplete. VOW still needs a few answers before it can build your plan.</p>
+      {unansweredQuestions.length > 0 ? (
+        <>
+          <p className="text-xs text-vow-muted mb-3">You still need to answer:</p>
+          <ul className="space-y-2 mb-4">{unansweredQuestions.map((question, index) => <li key={index} className="text-sm text-vow-ink border-l border-vow-border pl-3">{question}</li>)}</ul>
+        </>
+      ) : <p className="text-xs text-vow-muted mb-4">Continue where you left off to finish this goal.</p>}
+      <button type="button" onClick={onContinueDraft} className="vow-btn-primary">Continue answering</button>
+    </section>}
     <GoalResources goalId={goalId} />
     <GoalReferenceList goalId={goalId} />
     <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Milestones</h2><button onClick={() => setExpandedMilestone(expandedMilestone ? null : milestones[0]?.id || null)} className="vow-btn-soft text-xs">{expandedMilestone ? 'Collapse' : 'Expand'}</button></div><div className="border-t border-vow-border">{milestones.map((ms) => { const Icon = ms.status === 'completed' ? CheckCircle2 : Circle; return <div key={ms.id} className="border-b border-vow-border py-4"><button className="w-full text-left flex items-start gap-3" onClick={() => setExpandedMilestone(expandedMilestone === ms.id ? null : ms.id)}><Icon className="w-4 h-4 mt-0.5" /><div className="flex-1"><p className="text-sm text-vow-ink">{ms.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(ms.deadline)}</p>{expandedMilestone === ms.id && <p className="text-xs text-vow-muted mt-2">{ms.description}</p>}</div><ChevronDown className={`w-4 h-4 transition-transform ${expandedMilestone === ms.id ? 'rotate-180' : ''}`} /></button><button onClick={() => toggleMilestoneStatus(ms)} className="vow-btn-soft text-xs ml-7 mt-2">{ms.status === 'completed' ? 'Mark pending' : 'Mark completed'}</button></div>; })}</div></div>
