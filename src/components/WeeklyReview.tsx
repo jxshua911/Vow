@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import type { Session, Goal, JournalEntry, UserSettings, Review, ProposedCommitment } from '@/types/database';
+import type { Session, Goal, JournalEntry, UserSettings, Review, ProposedCommitment, PatternFinding } from '@/types/database';
 import { weekRange, toDateString, formatDate, startOfWeek, endOfWeek, addDays } from '@/lib/dates';
 import { detectPatterns } from '@/lib/patterns';
 import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
