@@ -160,7 +160,8 @@ export function ReviewPage() {
         recommendations: recommendations as unknown as Record<string, unknown>[],
         coaching_text: coachingText,
         proposed_commitments: proposedCommitments as unknown as Record<string, unknown>[],
-        status: 'draft' as const,
+        status: existingReview?.status || 'draft',
+        confirmed_at: existingReview?.confirmed_at ?? null,
       };
 
       let savedReview;
@@ -289,7 +290,7 @@ export function ReviewPage() {
   }
 
   if (loading) return <div><PageHeader title="Weekly Review" /><div className="text-vow-muted text-sm">Loading...</div></div>;
-  if (review && review.status === 'confirmed') return <ConfirmedReviewView review={review} pastReviews={pastReviews} onRegenerate={generateReview} generating={generating} />;
+  if (review && review.status === 'confirmed') return <ConfirmedReviewView review={review} pastReviews={pastReviews} onRegenerate={generateReview} generating={generating} actionError={actionError} />;
 
   if (!review && !existingReview) {
     return (
@@ -356,8 +357,8 @@ function withoutInternalName(value: string | null | undefined) {
   return (value || '').replace(/\bRaven\b/g, 'VOW');
 }
 
-function ConfirmedReviewView({ review, pastReviews, onRegenerate, generating }: { review: Review; pastReviews: Review[]; onRegenerate: () => void; generating: boolean }) {
-  return <div><PageHeader title="Weekly Review" subtitle={`${formatDate(review.week_start)} — ${formatDate(review.week_end)}`} /><div className="border-l-2 border-vow-success pl-4 mb-10"><p className="text-sm text-vow-ink font-medium">Review confirmed</p><p className="text-xs text-vow-muted mt-0.5">Next week's commitments are locked in and sessions are scheduled.</p></div><ReviewContent review={review} /><div className="border-t border-vow-border pt-6 mt-8"><p className="text-xs text-vow-muted mb-4">Want another look before changing anything else?</p><button onClick={onRegenerate} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate review'}</button></div>{pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}</div>;
+function ConfirmedReviewView({ review, pastReviews, onRegenerate, generating, actionError }: { review: Review; pastReviews: Review[]; onRegenerate: () => void; generating: boolean; actionError: string | null }) {
+  return <div><PageHeader title="Weekly Review" subtitle={`${formatDate(review.week_start)} — ${formatDate(review.week_end)}`} /><div className="border-l-2 border-vow-success pl-4 mb-10"><p className="text-sm text-vow-ink font-medium">Review confirmed</p><p className="text-xs text-vow-muted mt-0.5">Next week's commitments are locked in and sessions are scheduled.</p></div><ReviewContent review={review} /><div className="border-t border-vow-border pt-6 mt-8"><p className="text-xs text-vow-muted mb-4">Want another look before changing anything else?</p>{actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4" role="alert">{actionError}</p>}<button onClick={onRegenerate} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate review'}</button></div>{pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}</div>;
 }
 
 function PastReviewsList({ reviews }: { reviews: Review[] }) {
