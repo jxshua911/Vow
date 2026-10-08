@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
+import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { isThisWeek, formatTime, formatRelative, dayName } from '@/lib/dates';
 import { PageHeader } from './AppShell';
 import type { View } from './AppShell';
@@ -13,6 +14,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -26,6 +28,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   }, [session]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { void getEntitlementSnapshot().then((snapshot) => { if (active) setEntitlement(snapshot); }); };
+    refresh();
+    const onEntitlementChange = (event: Event) => {
+      const detail = (event as CustomEvent<EntitlementSnapshot | null>).detail;
+      if (detail) setEntitlement(detail); else refresh();
+    };
+    window.addEventListener('vow:entitlement-changed', onEntitlementChange);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('vow:entitlement-changed', onEntitlementChange); window.removeEventListener('focus', refresh); };
+  }, []);
   const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
   const thisWeekSessions = sessions.filter((s) => isThisWeek(s.scheduled_at));
   const completedThisWeek = thisWeekSessions.filter((s) => s.status === 'completed');
@@ -48,7 +62,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   return <div>
     <PageHeader title={`Welcome back, ${displayName}`} subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`} />
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-10 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="This week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} /><StatCell label="Completion" value={`${completionPct}%`} /><StatCell label="Streak" value={`${streak}`} subtitle={streak === 0 ? 'Broken — honest count' : undefined} /></div>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-6 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="This week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} subtitle={`${completionPct}% completed`} /><StatCell label="Streak days" value={streak} subtitle={streak === 0 ? 'No completed day yet' : undefined} /><StatCell label="Planning actions" value={entitlement?.plan === 'premium' ? 'Unlimited' : `${entitlement?.planning_used ?? 0}/${entitlement?.planning_limit ?? 10}`} subtitle={entitlement?.plan === 'premium' ? 'Premium' : 'This month'} /></div>
+    {entitlement?.plan !== 'premium' && <div className="border border-vow-border p-5 mb-10"><div className="flex items-center justify-between gap-4 mb-3"><div><p className="vow-label mb-1">Planning actions</p><p className="text-sm text-vow-ink">{used}/{limit} used this month</p></div><span className="text-xs text-vow-muted">{`Math.min(100, Math.round(((${used}) / (${limit})) * 100))`}%</span></div><div className="h-2 bg-vow-surface overflow-hidden"><div className="h-full bg-vow-ink transition-all" style={{ width: `${Math.min(100, Math.round(((entitlement?.planning_used ?? 0) / (entitlement?.planning_limit ?? 10)) * 100))}%` }} /></div>{(entitlement?.planning_used ?? 0) >= 9 && <p className="text-xs text-vow-ink mt-3">{(entitlement?.planning_used ?? 0) >= 10 ? 'You have reached your 10 free planning actions this month.' : 'You have 1 free planning action remaining this month.'}</p>}</div>}
     <div className="grid md:grid-cols-2 gap-12">
       <div>
         <h2 className="vow-label mb-4">Upcoming sessions</h2>
