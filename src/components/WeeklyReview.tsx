@@ -8,7 +8,7 @@ import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
 import { ArrowRight } from '@/lib/ui-icons';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
-import { getEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
+import { consumeEntitlement, getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
 
 export function ReviewPage() {
@@ -68,9 +68,24 @@ export function ReviewPage() {
     setReviewEntitlement(null);
 
     try {
-      if (!existingReview) {
+      {
         const entitlement = await getEntitlementSnapshot();
         if (
+          entitlement &&
+          entitlement.plan !== 'premium' &&
+          entitlement.planning_used >= (entitlement.planning_limit ?? 10)
+        ) {
+          setReviewEntitlement({
+            allowed: false,
+            reason: 'usage_limit',
+            feature: 'planning_action',
+            used: entitlement.planning_used,
+            limit: entitlement.planning_limit ?? 10,
+          });
+          return;
+        }
+        if (
+          !existingReview &&
           entitlement &&
           entitlement.plan !== 'premium' &&
           entitlement.advanced_reviews_used >= (entitlement.advanced_reviews_limit ?? 1)
@@ -175,6 +190,15 @@ export function ReviewPage() {
         savedReview = data;
       }
       if (!savedReview) throw new Error('Review save returned no row.');
+      const planningCharge = await consumeEntitlement('planning_action', {
+        surface: 'weekly_review',
+        review_id: savedReview.id,
+      });
+      if (!planningCharge.allowed) {
+        setReviewEntitlement(planningCharge);
+        return;
+      }
+      await refreshEntitlementSnapshot();
       setReview(savedReview as Review);
       setExistingReview(savedReview as Review);
     } catch (err) {
