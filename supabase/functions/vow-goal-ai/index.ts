@@ -403,9 +403,11 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
           model: "openai/gpt-oss-20b",
           messages,
           max_completion_tokens: MAX[kind],
-          temperature: 0.15,
-          // Do not use Groq's browser_search tool path here; it has returned provider 400s in production.
-          // VOW knowledge is already supplied in the prompt, and OpenAI fallback remains available.
+          temperature: 0.2,
+          reasoning_effort: "low",
+          response_format: { type: "json_object" },
+          // Keep the primary Groq request on the documented JSON mode for GPT-OSS.
+          // VOW knowledge is already supplied in the prompt; no provider-side browser tool is required here.
         }),
       });
 
@@ -425,7 +427,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
         continue;
       }
 
-      console.error("Groq provider error", { status: r.status });
+      console.error("Groq provider error", { status: r.status, body: raw.slice(0, 1200) });
       if (r.status === 429) throw new Error("GROQ_429");
       throw new Error(`GROQ_PROVIDER_ERROR_${r.status}`);
     }
