@@ -916,7 +916,7 @@ export function GoalPlanner({
           />
         </div>
 
-        <div className="bg-vow-surface/45 border border-vow-border p-4">
+        <div className="bg-vow-gray/10 border border-vow-border p-4">
           <label className="vow-label block mb-3">How long are you committing?</label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {DURATION_OPTIONS.map(option => (
@@ -936,7 +936,7 @@ export function GoalPlanner({
           <p className="text-xs text-vow-muted mt-3">{selectedDurationWeeks ? `Selected: ${selectedDurationLabel} · VOW plans in ${selectedDurationWeeks} week${selectedDurationWeeks === 1 ? '' : 's'}.` : 'Choose a duration before continuing.'}</p>
         </div>
 
-        <div className="bg-vow-surface/45 border border-vow-border p-4">
+        <div className="bg-vow-gray/10 border border-vow-border p-4">
           <label className="vow-label block mb-3">Available days</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {DAYS.map(day => <button key={day} type="button" onClick={() => toggleDay(day)} className={`border px-3 py-2 text-xs transition-colors ${availableDays.includes(day) ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>{day}</button>)}
@@ -944,7 +944,7 @@ export function GoalPlanner({
           <p className="text-xs text-vow-muted mt-3">Select every day you can genuinely commit to. Nothing is pre-selected.</p>
         </div>
 
-        {availableDays.length > 0 && <div className="bg-vow-surface/45 border border-vow-border p-4">
+        {availableDays.length > 0 && <div className="bg-vow-gray/10 border border-vow-border p-4">
           <label className="vow-label block mb-3">Session time for each day</label>
           <div className="space-y-3">
             {availableDays.map(day => <div key={day} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-vow-border pb-3 last:border-b-0 last:pb-0">
