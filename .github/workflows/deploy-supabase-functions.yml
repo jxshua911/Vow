@@ -1,12 +1,6 @@
 name: Deploy Supabase Edge Functions
 
 on:
-  push:
-    branches:
-      - capacitor-mobile
-    paths:
-      - 'supabase/functions/**'
-      - 'supabase/migrations/20261007120400_rebuild_ai_cooldown_rpc.sql'
   workflow_dispatch:
     inputs:
       function:
