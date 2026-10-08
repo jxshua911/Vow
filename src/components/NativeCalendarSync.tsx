@@ -15,7 +15,6 @@ export function NativeCalendarSync() {
   const [enabled, setEnabled] = useState(() => localStorage.getItem(ENABLE_KEY) === 'true');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const dismissedKey = userId ? DISMISSED_KEY_PREFIX + userId : DISMISSED_KEY_PREFIX;
   const [dismissed, setDismissed] = useState(() => Boolean(userId && localStorage.getItem(DISMISSED_KEY_PREFIX + userId) === 'true'));
   const [hiding, setHiding] = useState(false);
 
