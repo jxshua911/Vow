@@ -8,7 +8,7 @@ import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
 import { ArrowRight } from '@/lib/ui-icons';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
-import { consumeEntitlement, getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
+import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
 
 export function ReviewPage() {
