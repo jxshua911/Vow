@@ -40,6 +40,7 @@ function AppContent() {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
+  const accountStateReady = useRef(false);
   const [viewHistory, setViewHistory] = useState<View[]>(['dashboard']);
   const viewHistoryRef = useRef<View[]>(['dashboard']);
   const [splashMounted, setSplashMounted] = useState(() => !Capacitor.isNativePlatform());
@@ -127,6 +128,7 @@ function AppContent() {
   useEffect(() => {
     let cancelled = false;
     if (!session) {
+      accountStateReady.current = false;
       setSettings(null);
       setSettingsLoading(false);
       setTermsAccepted(false);
@@ -146,6 +148,7 @@ function AppContent() {
           await supabase.auth.signOut({ scope: 'local' });
           return;
         }
+        accountStateReady.current = true;
 
         const [settingsResult, termsResult] = await Promise.all([
           supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle(),
@@ -182,6 +185,7 @@ function AppContent() {
     if (!session) return;
     let active = true;
     const validateAccount = async () => {
+      if (!accountStateReady.current) return;
       const { data, error } = await supabase.rpc('vow_account_is_active');
       if (!active) return;
       if (error) {
