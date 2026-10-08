@@ -384,7 +384,7 @@ function retryDelayMs(response: Response, attempt: number) {
   return Math.min(8000, 1000 * 2 ** attempt);
 }
 
-async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired: boolean) {
+async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean) {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY_MISSING");
 
@@ -414,9 +414,9 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, r
       if (r.ok) {
         const payload = JSON.parse(raw);
         const message = payload?.choices?.[0]?.message;
+        const content = message?.content;
         if (typeof content !== "string" || !content.trim()) throw new Error("GROQ_EMPTY_RESPONSE");
         return parse(content);
-      }
 
       if (r.status === 429 && attempt === 0) {
         const delay = retryDelayMs(r, attempt);
