@@ -383,7 +383,6 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, r
           max_completion_tokens: MAX[kind],
           temperature: 0.15,
           reasoning_effort: "low",
-          response_format: { type: "json_object" },
           tools: [{ type: "browser_search" }],
           tool_choice: researchRequired ? "required" : "auto",
         }),
