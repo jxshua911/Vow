@@ -121,7 +121,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBac
   return <div>
     <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors"><ArrowLeft className="w-4 h-4" />Back to goals</button>
     <div className="border-t border-vow-border pt-8 mb-8"><div className="flex items-start justify-between gap-4 mb-4"><h1 className="vow-heading text-2xl text-vow-ink">{goal.outcome}</h1><span className="text-xs uppercase tracking-wide text-vow-muted">{goal.status}</span></div>{goal.why_it_matters && <p className="text-sm text-vow-muted italic mb-6">"{goal.why_it_matters}"</p>}<div className="grid grid-cols-3 gap-4 border-t border-vow-border pt-4"><div><p className="vow-label">Progress</p><p className="text-lg text-vow-ink mt-1">{pct}%</p></div><div><p className="vow-label">Sessions</p><p className="text-lg text-vow-ink mt-1">{completedSessions}/{totalSessions}</p></div><div><p className="vow-label">Moved</p><p className="text-lg text-vow-ink mt-1">{movedCount}</p></div></div></div>
-    {goal.status === 'draft' && <section className="border border-vow-border bg-vow-surface/45 p-5 mb-10">
+    {goal.status === 'draft' && <section className="border border-vow-border bg-vow-gray/10 p-5 mb-10">
       <p className="vow-label mb-2">Incomplete goal</p>
       <p className="text-sm text-vow-ink mb-2">This goal is incomplete. VOW still needs a few answers before it can build your plan.</p>
       {unansweredQuestions.length > 0 ? (
