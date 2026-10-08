@@ -484,45 +484,203 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
   }
 }
 
+
+type AiProvider = "groq" | "qwen" | "nova";
+
+function providerWeights(): Record<AiProvider, number> {
+  const defaults: Record<AiProvider, number> = { groq: 0.4, qwen: 0.35, nova: 0.25 };
+  try {
+    const raw = JSON.parse(Deno.env.get("VOW_AI_PROVIDER_WEIGHTS") || "{}");
+    for (const provider of ["groq", "qwen", "nova"] as AiProvider[]) {
+      const value = Number(raw?.[provider]);
+      if (Number.isFinite(value) && value >= 0) defaults[provider] = value;
+    }
+  } catch {
+    console.warn("[VOW AI] Invalid VOW_AI_PROVIDER_WEIGHTS; using defaults.");
+  }
+  return defaults;
+}
+
+function providerOrder(): AiProvider[] {
+  const weights = providerWeights();
+  const enabled = (["groq", "qwen", "nova"] as AiProvider[]).filter((p) => {
+    if (p === "groq") return Boolean(Deno.env.get("GROQ_API_KEY"));
+    if (p === "qwen") return Boolean(Deno.env.get("DASHSCOPE_API_KEY"));
+    return Boolean(Deno.env.get("AWS_BEARER_TOKEN_BEDROCK"));
+  });
+  if (!enabled.length) return [];
+  const total = enabled.reduce((sum, p) => sum + weights[p], 0);
+  if (total <= 0) return enabled;
+  let pick = Math.random() * total;
+  let selected: AiProvider = enabled[0];
+  for (const provider of enabled) {
+    pick -= weights[provider];
+    if (pick <= 0) {
+      selected = provider;
+      break;
+    }
+  }
+  return [selected, ...enabled.filter((p) => p !== selected)];
+}
+
+async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
+  const key = Deno.env.get("DASHSCOPE_API_KEY");
+  if (!key) throw new Error("QWEN_API_KEY_MISSING");
+  const baseUrl = (Deno.env.get("DASHSCOPE_BASE_URL") || "https://dashscope-us.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
+  const model = Deno.env.get("QWEN_MODEL") || "qwen3.7-flash";
+  const c = new AbortController();
+  const timer = setTimeout(() => c.abort(), 35000);
+  try {
+    const r = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      signal: c.signal,
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: MAX[kind],
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+      }),
+    });
+    const raw = await r.text();
+    if (!r.ok) {
+      console.error("[VOW AI] Qwen provider error", { status: r.status, body: raw.slice(0, 1200) });
+      throw new Error(r.status === 429 ? "QWEN_429" : `QWEN_PROVIDER_ERROR_${r.status}`);
+    }
+    const payload = JSON.parse(raw);
+    const content = payload?.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) throw new Error("QWEN_EMPTY_RESPONSE");
+    return parse(content);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
+  const key = Deno.env.get("AWS_BEARER_TOKEN_BEDROCK");
+  if (!key) throw new Error("NOVA_API_KEY_MISSING");
+  const region = Deno.env.get("AWS_BEDROCK_REGION") || "us-east-1";
+  const model = Deno.env.get("AWS_NOVA_MODEL") || "amazon.nova-micro-v1:0";
+  const c = new AbortController();
+  const timer = setTimeout(() => c.abort(), 35000);
+  try {
+    const system = messages
+      .filter((m: any) => m?.role === "system")
+      .map((m: any) => ({ text: String(m.content || "") }))
+      .filter((m: any) => m.text);
+    const userMessages = messages
+      .filter((m: any) => m?.role !== "system")
+      .map((m: any) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: [{ text: String(m.content || "") }],
+      }));
+    const r = await fetch(
+      `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(model)}/converse`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        signal: c.signal,
+        body: JSON.stringify({
+          system,
+          messages: userMessages,
+          inferenceConfig: { maxTokens: MAX[kind], temperature: 0.2 },
+        }),
+      }
+    );
+    const raw = await r.text();
+    if (!r.ok) {
+      console.error("[VOW AI] Nova provider error", { status: r.status, body: raw.slice(0, 1200) });
+      throw new Error(r.status === 429 ? "NOVA_429" : `NOVA_PROVIDER_ERROR_${r.status}`);
+    }
+    const payload = JSON.parse(raw);
+    const content = payload?.output?.message?.content
+      ?.filter((x: any) => typeof x?.text === "string")
+      ?.map((x: any) => x.text)
+      ?.join("");
+    if (!content?.trim()) throw new Error("NOVA_EMPTY_RESPONSE");
+    return parse(content);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
   const requestId = await claimGuardrail(req);
   try {
-    try {
-      return await callGroq(req, messages, kind, researchRequired);
-    } catch (groqError) {
-      console.warn(
-        "Groq failed, attempting OpenAI fallback...",
-        groqError instanceof Error ? groqError.message : String(groqError)
-      );
+    const providers = providerOrder();
+    console.log("[VOW AI] Provider routing", {
+      selected: providers[0] || "none",
+      fallback_order: providers.slice(1),
+      weights: providerWeights(),
+    });
 
-      if (Deno.env.get("OPENAI_API_KEY")) {
-        const fallbackMessages = researchRequired
-          ? [
-              ...messages,
-              {
-                role: "system",
-                content:
-                  "Fallback mode: live web research is unavailable on this provider path. Do not claim that web research was performed. Use only the supplied VOW knowledge and user context, and return the same valid JSON structure requested by the original prompt.",
-              },
-            ]
-          : messages;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const result = await callOpenAI(req, fallbackMessages, kind);
-            console.log("[VOW] OpenAI fallback succeeded after Groq failure", { attempt: attempt + 1 });
-            return result;
-          } catch (openaiError) {
-            console.error("[VOW] OpenAI fallback attempt failed", {
-              attempt: attempt + 1,
-              error: openaiError instanceof Error ? openaiError.message : String(openaiError),
-            });
-            if (attempt === 0) await sleep(500);
-          }
+    let lastError: unknown = null;
+    for (const provider of providers) {
+      try {
+        const providerMessages =
+          researchRequired && provider !== "groq"
+            ? [
+                ...messages,
+                {
+                  role: "system",
+                  content:
+                    "Fallback provider mode: provider-side web research is unavailable on this path. Do not claim that web research was performed. Use only the supplied VOW knowledge and user context, and return the same valid JSON structure requested by the original prompt.",
+                },
+              ]
+            : messages;
+
+        const result =
+          provider === "groq"
+            ? await callGroq(req, providerMessages, kind, researchRequired)
+            : provider === "qwen"
+            ? await callQwen(req, providerMessages, kind)
+            : await callNova(req, providerMessages, kind);
+        console.log("[VOW AI] Provider succeeded", { provider });
+        return result;
+      } catch (providerError) {
+        lastError = providerError;
+        console.warn("[VOW AI] Provider failed; trying next provider", {
+          provider,
+          error: providerError instanceof Error ? providerError.message : String(providerError),
+        });
+      }
+    }
+
+    if (Deno.env.get("OPENAI_API_KEY")) {
+      const fallbackMessages = researchRequired
+        ? [
+            ...messages,
+            {
+              role: "system",
+              content:
+                "Emergency fallback mode: live web research is unavailable on this provider path. Do not claim that web research was performed. Use only the supplied VOW knowledge and user context, and return the same valid JSON structure requested by the original prompt.",
+            },
+          ]
+        : messages;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const result = await callOpenAI(req, fallbackMessages, kind);
+          console.log("[VOW AI] OpenAI emergency fallback succeeded", { attempt: attempt + 1 });
+          return result;
+        } catch (openaiError) {
+          lastError = openaiError;
+          console.error("[VOW AI] OpenAI emergency fallback failed", {
+            attempt: attempt + 1,
+            error: openaiError instanceof Error ? openaiError.message : String(openaiError),
+          });
+          if (attempt === 0) await sleep(500);
         }
       }
-
-      throw groqError;
     }
+
+    throw lastError instanceof Error ? lastError : new Error("AI_PROVIDER_UNAVAILABLE");
   } finally {
     await releaseGuardrail(req, requestId);
   }
@@ -899,7 +1057,7 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.warn("clarify AI error", e);
         const errorCode = e instanceof Error ? e.message : String(e);
-        const providerFailure =
+        const providerFailure = /^(GROQ_API_KEY_MISSING|QWEN_API_KEY_MISSING|NOVA_API_KEY_MISSING|GROQ_429|QWEN_429|NOVA_429|GROQ_PROVIDER_ERROR_\\d+|QWEN_PROVIDER_ERROR_\\d+|NOVA_PROVIDER_ERROR_\\d+|GROQ_EMPTY_RESPONSE|QWEN_EMPTY_RESPONSE|NOVA_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED|AI_USAGE_CHECK_FAILED)$/.test(errorCode) ||
           /^(GROQ_API_KEY_MISSING|GROQ_429|GROQ_PROVIDER_ERROR_\d+|GROQ_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED|AI_USAGE_CHECK_FAILED)$/.test(errorCode) ||
           (e instanceof TypeError && /fetch|network|timeout/i.test(errorCode)) ||
           (e instanceof Error && e.name === "AbortError");
@@ -1135,6 +1293,10 @@ Deno.serve(async (req) => {
             "ENTITLEMENT_RESERVATION_FAILED",
             "ENTITLEMENT_FINALIZE_FAILED",
             "GROQ_API_KEY_MISSING",
+            "QWEN_API_KEY_MISSING",
+            "NOVA_API_KEY_MISSING",
+            "QWEN_429",
+            "NOVA_429",
             "OPENAI_API_KEY_MISSING",
             "AI_RESEARCH_NOT_PERFORMED",
             "GROQ_EMPTY_RESPONSE",
@@ -1152,7 +1314,7 @@ Deno.serve(async (req) => {
       );
     }
     console.error("vow-goal-ai", { mode, error_code: telemetryCode });
-    if (m === "GROQ_429")
+    if (m === "GROQ_429" || m === "QWEN_429" || m === "NOVA_429")
       return json(
         { error: "VOW AI is temporarily busy. Please try again shortly." },
         429,
@@ -1190,7 +1352,12 @@ Deno.serve(async (req) => {
         503
       );
     }
-    if (m === "GROQ_API_KEY_MISSING")
+    if (
+      m === "GROQ_API_KEY_MISSING" ||
+      m === "QWEN_API_KEY_MISSING" ||
+      m === "NOVA_API_KEY_MISSING" ||
+      m === "AI_PROVIDER_UNAVAILABLE"
+    )
       return json({ error: "VOW AI is temporarily unavailable." }, 503);
     return json(
       {
