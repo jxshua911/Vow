@@ -41,13 +41,12 @@ export function buildCoachingText(
     lines.push(`Follow-through was lower this week. The useful question is what should change in the plan.`);
   }
 
-  // Patterns — each with a proposed adjustment, never a bare callout
+  // Keep the review user-facing: actionable adjustments only; never expose internal pattern-analysis language.
   if (patterns.length > 0) {
-    lines.push(`What to adjust next:`);
-    for (const p of patterns.slice(0, 3)) {
-      lines.push(`• ${p.description}.`);
-      if (p.hypothesis) lines.push(`  Possible reason: ${p.hypothesis}`);
-      if (p.proposed_adjustment) lines.push(`  Next step: ${p.proposed_adjustment}`);
+    const actionable = patterns.slice(0, 2).map((p) => p.proposed_adjustment).filter(Boolean);
+    if (actionable.length > 0) {
+      lines.push(`For next week:`);
+      actionable.forEach((adjustment) => lines.push(`• ${adjustment}`));
     }
   }
 
