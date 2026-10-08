@@ -10,7 +10,7 @@ const CORS = {
   "Content-Type": "application/json",
 };
 const MAX = { plan: 4000, clarify: 1200, chat: 700 };
-type CooldownKind = "plan" | "clarify" | "chat";
+const MAX = { plan: 10000, clarify: 1200, chat: 700 };
 const MAX_BODY_BYTES = 128 * 1024;
 const json = (x: unknown, s = 200, e: Record<string, string> = {}) =>
   new Response(JSON.stringify(x), { status: s, headers: { ...CORS, ...e } });
@@ -65,9 +65,32 @@ function parse(s: string) {
   try {
     return JSON.parse(t);
   } catch {
-    const a = t.indexOf("{"),
-      b = t.lastIndexOf("}");
-    if (a >= 0 && b > a) return JSON.parse(t.slice(a, b + 1));
+    // Extract the first complete JSON value when the model adds prose/markdown.
+    for (let start = 0; start < t.length; start += 1) {
+      if (t[start] !== "{" && t[start] !== "[") continue;
+      const stack: string[] = [];
+      let inString = false;
+      let escaped = false;
+      for (let i = start; i < t.length; i += 1) {
+        const ch = t[i];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (ch === "\\") escaped = true;
+          else if (ch === '"') inString = false;
+          continue;
+        }
+        if (ch === '"') { inString = true; continue; }
+        if (ch === "{" || ch === "[") stack.push(ch);
+        else if (ch === "}" || ch === "]") {
+          const expected = ch === "}" ? "{" : "[";
+          if (stack[stack.length - 1] !== expected) break;
+          stack.pop();
+          if (stack.length === 0) {
+            try { return JSON.parse(t.slice(start, i + 1)); } catch { break; }
+          }
+        }
+      }
+    }
     throw new Error("INVALID_AI_JSON");
   }
 }
@@ -382,9 +405,8 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, r
           messages,
           max_completion_tokens: MAX[kind],
           temperature: 0.15,
-          reasoning_effort: "low",
-          tools: [{ type: "browser_search" }],
-          tool_choice: researchRequired ? "required" : "auto",
+          // Do not use Groq's browser_search tool path here; it has returned provider 400s in production.
+          // VOW knowledge is already supplied in the prompt, and OpenAI fallback remains available.
         }),
       });
 
@@ -392,14 +414,6 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, r
       if (r.ok) {
         const payload = JSON.parse(raw);
         const message = payload?.choices?.[0]?.message;
-        const executedTools = Array.isArray(message?.executed_tools) ? message.executed_tools : [];
-        const usedWebSearch = executedTools.some((tool: any) => {
-          const serialized = JSON.stringify(tool).toLowerCase();
-          return serialized.includes("web_search") || serialized.includes("browser_search");
-        });
-        if (researchRequired && !usedWebSearch) throw new Error("AI_RESEARCH_NOT_PERFORMED");
-
-        const content = message?.content;
         if (typeof content !== "string" || !content.trim()) throw new Error("GROQ_EMPTY_RESPONSE");
         return parse(content);
       }
