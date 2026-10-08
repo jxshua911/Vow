@@ -22,7 +22,7 @@ import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
 import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, isRemotePushConfigured, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, requestNotificationPermission, isRemotePushConfigured, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
@@ -208,6 +208,25 @@ function AppContent() {
       window.clearInterval(interval);
     };
   }, [session]);
+
+  useEffect(() => {
+    if (!session || !termsAccepted || !Capacitor.isNativePlatform()) return;
+    const promptKey = 'vow:notification-permission-prompted';
+    try {
+      if (localStorage.getItem(promptKey) === 'true') return;
+    } catch {
+      // Continue; the OS permission state remains authoritative.
+    }
+
+    void requestNotificationPermission()
+      .then(() => {
+        try { localStorage.setItem(promptKey, 'true'); } catch { /* ignore */ }
+      })
+      .catch((err) => {
+        console.warn('[VOW] Notification permission request failed:', err);
+        try { localStorage.setItem(promptKey, 'true'); } catch { /* ignore */ }
+      });
+  }, [session, termsAccepted]);
 
   useEffect(() => {
     if (!session || !termsAccepted) return;
