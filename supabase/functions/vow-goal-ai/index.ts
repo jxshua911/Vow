@@ -764,7 +764,7 @@ Deno.serve(async (req) => {
         : [],
       message = message0;
     const clean = answers.map((item: any) => String(item.answer ?? "").trim());
-    const unknown = /^(i\\s*(don['']?t|do not)\\s*know|not sure|unsure|unknown|n\\/a)$/i;
+    const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
     const isUnanswered = (a: string) => !a || unknown.test(a);
     const unresolved = clean.filter(isUnanswered).length;
     console.log("[VOW] Clarification answers:", { answers, clean, unresolved });
