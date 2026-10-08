@@ -77,6 +77,14 @@ const DURATION_OPTIONS = [
   { weeks: 52, label: '1 year', detail: 'Full-year commitment' },
 ];
 
+type DurationUnit = 'days' | 'weeks' | 'months';
+function customDurationWeeks(value: string, unit: DurationUnit): number | null {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const days = unit === 'days' ? amount : unit === 'weeks' ? amount * 7 : amount * 30;
+  return Math.max(1, Math.ceil(days / 7));
+}
+
 function nextMonday() {
   const d = new Date();
   const day = d.getDay();
@@ -240,10 +248,13 @@ export function GoalPlanner({
   const [rawInput, setRawInput] = useState(initialGoal);
   const [goalPlaceholder] = useState(() => GOAL_PLACEHOLDERS[Math.floor(Math.random() * GOAL_PLACEHOLDERS.length)]);
 
+  const draftStorageKey = 'vow-goal-planner-draft:' + userId;
   const [why, setWhy] = useState(initialWhy);
-  const [durationWeeks, setDurationWeeks] = useState(8);
-  const [availableDays, setAvailableDays] = useState<string[]>(['Monday', 'Wednesday', 'Saturday']);
-  const [preferredSessionTime, setPreferredSessionTime] = useState('09:00');
+  const [durationWeeks, setDurationWeeks] = useState<number | null>(null);
+  const [customDurationValue, setCustomDurationValue] = useState('');
+  const [customDurationUnit, setCustomDurationUnit] = useState<DurationUnit>('months');
+  const [availableDays, setAvailableDays] = useState<string[]>([]);
+  const [sessionTimes, setSessionTimes] = useState<Record<string, string>>({});
   const [domain, setDomain] = useState<GoalDomain | null>(null);
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
@@ -254,6 +265,9 @@ export function GoalPlanner({
   const [error, setError] = useState('');
   const [resourceError, setResourceError] = useState('');
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
+  const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
+  const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
+  const missingSessionTimes = availableDays.filter((day) => !sessionTimes[day]);
 
   async function openPlanReference(url: string) {
     setResourceError('');
@@ -266,7 +280,17 @@ export function GoalPlanner({
   }
 
   function toggleDay(day: string) {
-    setAvailableDays(x => (x.includes(day) ? x.filter(d => d !== day) : x.length < 7 ? [...x, day] : x));
+    setAvailableDays((current) => {
+      if (current.includes(day)) {
+        setSessionTimes((times) => {
+          const next = { ...times };
+          delete next[day];
+          return next;
+        });
+        return current.filter((d) => d !== day);
+      }
+      return current.length < 7 ? [...current, day] : current;
+    });
   }
 
   async function ensureDraft(goalDomain: GoalDomain) {
@@ -280,8 +304,8 @@ export function GoalPlanner({
         outcome: rawInput.trim(),
         why_it_matters: why.trim() || null,
         start_date: toDateString(start),
-        deadline: deadlineFor(start, durationWeeks),
-        duration: `${durationWeeks}w`,
+        deadline: deadlineFor(start, selectedDurationWeeks || 1),
+        duration: `${selectedDurationWeeks || 1}w`,
         status: 'draft',
         weekly_commitment_target: availableDays.length,
         plan_json: { category: goalDomain.category, goal_type: goalDomain.goal_type },
@@ -314,7 +338,7 @@ export function GoalPlanner({
   }
 
   async function askQuestions() {
-    if (!rawInput.trim() || planning || availableDays.length === 0) return;
+    if (!rawInput.trim() || planning || availableDays.length === 0 || !selectedDurationWeeks || missingSessionTimes.length > 0) return;
     if (rawInput.trim().length < 3) {
       setError('Please describe your goal in at least a few characters.');
       return;
@@ -348,11 +372,11 @@ export function GoalPlanner({
             title: rawInput.trim(),
             outcome: rawInput.trim(),
             why_it_matters: why.trim() || null,
-            duration_weeks: durationWeeks,
+            duration_weeks: selectedDurationWeeks,
             weekly_commitment_target: availableDays.length,
             domain: goalAnalysis,
           },
-          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${durationLabel(durationWeeks)}.\nAvailable days: ${availableDays.join(', ')}\nIdentify the right kind of activity or outcome, then ask 2-3 high-value questions that resolve the most important missing inputs.`,
+          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days: ${availableDays.join(', ')}\nSession times: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}\nIdentify the right kind of activity or outcome, then ask 2-3 high-value questions that resolve the most important missing inputs.`,
           available_days: availableDays,
           references: [],
         });
@@ -390,7 +414,7 @@ export function GoalPlanner({
   }
 
   async function buildPlan() {
-    if (!clarification || !domain || planning || availableDays.length === 0) return;
+    if (!clarification || !domain || planning || availableDays.length === 0 || !selectedDurationWeeks || missingSessionTimes.length > 0) return;
     setPlanning(true);
     setError('');
     try {
@@ -441,11 +465,11 @@ export function GoalPlanner({
             domain,
             start_date: toDateString(start),
             deadline: deadlineFor(start, durationWeeks),
-            duration_weeks: durationWeeks,
+            duration_weeks: selectedDurationWeeks,
             weekly_commitment_target: availableDays.length,
             plan_generated_at: null,
           },
-          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${durationLabel(durationWeeks)}. Available days are exactly: ${availableDays.join(', ')}. Use the selected session time ${preferredSessionTime} for scheduled sessions. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions.`,
+          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days are exactly: ${availableDays.join(', ')}. Session times by day are exactly: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Use these times for the selected days. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions.`,
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
           references,
@@ -459,10 +483,11 @@ export function GoalPlanner({
         return;
       }
       const next = data.structured as Plan;
-      if (next.duration_weeks !== durationWeeks)
+      if (next.duration_weeks !== selectedDurationWeeks)
         throw new Error('VOW AI returned a plan for a different duration than you selected. Please try again.');
-      const normalized = normalizePlan(next, durationWeeks, domain, rawInput.trim(), why.trim());
+      const normalized = normalizePlan(next, selectedDurationWeeks, domain, rawInput.trim(), why.trim());
       if (!normalized) throw new Error('VOW AI returned an incomplete plan. Please try again.');
+      normalized.schedule = normalized.schedule.map((item) => ({ ...item, preferred_time: sessionTimes[item.day] || item.preferred_time }));
       setPlan(normalized);
     } catch (err) {
       setError(userFacingError(err, 'VOW could not build the plan. Please try again.'));
@@ -483,7 +508,7 @@ export function GoalPlanner({
         const w = Math.max(1, Math.min(durationWeeks, week));
         const dayIndex = Math.max(0, DAYS.indexOf(day));
         const date = addDays(start, (w - 1) * 7 + dayIndex);
-        const match = /^(\d{1,2}):(\d{2})/.exec(preferredSessionTime || preferredTime || '09:00');
+        const match = /^(\d{1,2}):(\d{2})/.exec(sessionTimes[day] || preferredTime || '09:00');
         date.setHours(Math.min(23, Number(match?.[1] || 9)), Math.min(59, Number(match?.[2] || 0)), 0, 0);
         return date;
       }
@@ -547,7 +572,7 @@ export function GoalPlanner({
           plan_json: plan,
           plan_version: 1,
           plan_generated_at: new Date().toISOString(),
-          planning_horizon_weeks: durationWeeks,
+          planning_horizon_weeks: selectedDurationWeeks || 1,
           planning_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         },
         p_milestones: milestoneRows,
@@ -593,6 +618,7 @@ export function GoalPlanner({
         console.warn('[VOW] Google Calendar sync could not be completed.');
       }
 
+      if (typeof window !== 'undefined') window.localStorage.removeItem(draftStorageKey);
       onCreated();
     } catch (err) {
       console.error('[VOW] Goal creation failed:', err);
@@ -626,7 +652,7 @@ export function GoalPlanner({
         <button onClick={() => setPlan(null)} className="text-sm text-vow-muted hover:text-vow-ink mb-6">
           ← Adjust answers
         </button>
-        <PageHeader title="Your VOW plan" subtitle={`${durationLabel(durationWeeks)} · ${availableDays.length} sessions/week`} />
+        <PageHeader title="Your VOW plan" subtitle={`${selectedDurationLabel} · ${availableDays.length} sessions/week`} />
         <div className="max-w-3xl space-y-6">
           <section className="border border-vow-border p-5">
             <p className="vow-label mb-2">Outcome</p>
@@ -640,7 +666,7 @@ export function GoalPlanner({
             <p className="text-sm text-vow-muted">{plan.baseline}</p>
           </section>
           <section className="border border-vow-border p-5">
-            <p className="vow-label mb-4">Schedule · {durationLabel(durationWeeks)}</p>
+            <p className="vow-label mb-4">Schedule · {selectedDurationLabel}</p>
             <div className="divide-y divide-vow-border">
               {plan.schedule.map((item, i) => (
                 <div key={`${item.week}-${item.day}-${i}`} className="py-3 flex gap-3">
@@ -822,58 +848,43 @@ export function GoalPlanner({
           />
         </div>
 
-        <div>
+        <div className="bg-vow-surface/45 border border-vow-border p-4">
           <label className="vow-label block mb-3">How long are you committing?</label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {DURATION_OPTIONS.map(option => (
-              <button
-                key={option.weeks}
-                type="button"
-                onClick={() => setDurationWeeks(option.weeks)}
-                className={`text-left border px-3 py-3 transition-colors ${
-                  durationWeeks === option.weeks
-                    ? 'border-vow-ink bg-vow-ink text-vow-bg'
-                    : 'border-vow-border text-vow-muted hover:text-vow-ink'
-                }`}
-              >
+              <button key={option.weeks} type="button" onClick={() => setDurationWeeks(option.weeks)} className={`text-left border px-3 py-3 transition-colors ${durationWeeks === option.weeks ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>
                 <span className="block text-sm font-medium">{option.label}</span>
-                <span
-                  className={`block text-[10px] mt-1 ${
-                    durationWeeks === option.weeks ? 'text-vow-bg/70' : 'text-vow-muted'
-                  }`}
-                >
-                  {option.detail}
-                </span>
+                <span className="block text-[10px] mt-1 text-vow-muted">{option.detail}</span>
               </button>
             ))}
+            <button type="button" onClick={() => setDurationWeeks(null)} className={`text-left border px-3 py-3 transition-colors ${durationWeeks === null ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>
+              <span className="block text-sm font-medium">Custom</span><span className="block text-[10px] mt-1 text-vow-muted">Any duration</span>
+            </button>
           </div>
+          {durationWeeks === null && <div className="grid grid-cols-[1fr_auto] gap-2 mt-3">
+            <input type="number" min="1" max="3650" value={customDurationValue} onChange={e => setCustomDurationValue(e.target.value)} placeholder="e.g. 4" className="vow-input" aria-label="Custom duration amount" />
+            <select value={customDurationUnit} onChange={e => setCustomDurationUnit(e.target.value as DurationUnit)} className="vow-input" aria-label="Custom duration unit"><option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option></select>
+          </div>}
+          <p className="text-xs text-vow-muted mt-3">{selectedDurationWeeks ? `Selected: ${selectedDurationLabel} · VOW plans in ${selectedDurationWeeks} week${selectedDurationWeeks === 1 ? '' : 's'}.` : 'Choose a duration before continuing.'}</p>
         </div>
 
-        <div>
-          <label className="vow-label block mb-3">Preferred session time</label>
-          <input type="time" value={preferredSessionTime} onChange={e => setPreferredSessionTime(e.target.value)} className="vow-input min-h-11" />
-          <p className="text-xs text-vow-muted mt-2">Choose when you prefer to work on this.</p>
-        </div>
-
-        <div>
+        <div className="bg-vow-surface/45 border border-vow-border p-4">
           <label className="vow-label block mb-3">Available days</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {DAYS.map(day => (
-              <button
-                key={day}
-                type="button"
-                onClick={() => toggleDay(day)}
-                className={`border px-3 py-2 text-xs transition-colors ${
-                  availableDays.includes(day)
-                    ? 'border-vow-ink bg-vow-ink text-vow-bg'
-                    : 'border-vow-border text-vow-muted hover:text-vow-ink'
-                }`}
-              >
-                {day}
-              </button>
-            ))}
+            {DAYS.map(day => <button key={day} type="button" onClick={() => toggleDay(day)} className={`border px-3 py-2 text-xs transition-colors ${availableDays.includes(day) ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>{day}</button>)}
           </div>
+          <p className="text-xs text-vow-muted mt-3">Select every day you can genuinely commit to. Nothing is pre-selected.</p>
         </div>
+
+        {availableDays.length > 0 && <div className="bg-vow-surface/45 border border-vow-border p-4">
+          <label className="vow-label block mb-3">Session time for each day</label>
+          <div className="space-y-3">
+            {availableDays.map(day => <div key={day} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-vow-border pb-3 last:border-b-0 last:pb-0">
+              <div><p className="text-sm text-vow-ink">{day}</p>{!sessionTimes[day] && <p className="text-[11px] text-vow-muted mt-1">Choose a time</p>}</div>
+              <input type="time" value={sessionTimes[day] || ''} onChange={e => setSessionTimes(current => ({ ...current, [day]: e.target.value }))} className="vow-input w-auto min-h-11" aria-label={`Session time for ${day}`} />
+            </div>)}
+          </div>
+        </div>}
 
         {error && (
           <div className="flex items-start gap-3 border-l-2 border-vow-ink pl-3">
@@ -890,10 +901,10 @@ export function GoalPlanner({
           </button>
           <button
             onClick={askQuestions}
-            disabled={!rawInput.trim() || planning || availableDays.length === 0}
+            disabled={!rawInput.trim() || planning || availableDays.length === 0 || !selectedDurationWeeks || missingSessionTimes.length > 0}
             className="vow-btn-primary flex-1"
           >
-            {planning ? 'VOW is preparing questions…' : 'Continue'}
+            {planning ? 'VOW is preparing questions…' : missingSessionTimes.length > 0 ? `Choose time for ${missingSessionTimes.length} day${missingSessionTimes.length === 1 ? '' : 's'}` : !selectedDurationWeeks ? 'Choose a duration' : 'Continue'}
           </button>
         </div>
       </div>
