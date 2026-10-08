@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, type TouchEvent, type WheelEvent } from 'react';
 
 type TimeWheelPickerProps = {
   value: string;
@@ -36,7 +36,7 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
     setTime(part === 'hour' ? hour + amount : hour, part === 'minute' ? minute + amount : minute);
   }
 
-  function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
+  function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
     touchStartY.current = event.touches[0]?.clientY ?? null;
   }
 
@@ -50,7 +50,7 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
     adjust(part, delta > 0 ? 1 : -1);
   }
 
-  function handleWheel(part: 'hour' | 'minute', event: React.WheelEvent<HTMLDivElement>) {
+  function handleWheel(part: 'hour' | 'minute', event: WheelEvent<HTMLDivElement>) {
     if (Math.abs(event.deltaY) < 2) return;
     adjust(part, event.deltaY > 0 ? 1 : -1);
   }
