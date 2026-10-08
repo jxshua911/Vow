@@ -335,7 +335,6 @@ export function ReviewPage() {
 }
 
 function ReviewContent({ review }: { review: Review }) {
-  const patterns = (review.patterns || []) as unknown as Array<Omit<PatternFinding, 'type'> & { type: string }>;
   const commitments = (review.proposed_commitments || []) as unknown as ProposedCommitment[];
   return (
     <div className="space-y-10">
