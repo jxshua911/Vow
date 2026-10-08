@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { addDays, toDateString } from '@/lib/dates';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
-import { consumeEntitlement, type EntitlementResult } from '@/lib/entitlements';
+import { consumeEntitlement, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
 import { checkContentSafety } from '@/lib/contentSafety';
 import type { Session } from '@/types/database';
@@ -651,6 +651,7 @@ export function GoalPlanner({
         p_sessions: sessionRows,
       });
       if (lockError || !lockedGoalId) throw lockError || new Error('VOW could not lock the plan safely.');
+      await refreshEntitlementSnapshot();
 
       if (plan.references?.length) {
         const { error: referenceError } = await supabase.from('goal_resources').insert(
