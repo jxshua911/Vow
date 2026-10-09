@@ -93,9 +93,11 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       console.error('[VOW] Enabling session reminders failed:', error);
       // Permission may be granted even when reminder sync fails; keep UI aligned with saved preference.
       setNotificationsEnabled(getNotificationPreferences().enabled);
-      setNotificationError(getNotificationPreferences().enabled
-        ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
-        : 'Could not enable session reminders. Please try again.');
+      setNotificationError(error instanceof Error && error.message === 'EXACT_ALARM_PERMISSION_DENIED'
+        ? 'Allow Alarms & reminders for VOW in Android settings, then try again.'
+        : getNotificationPreferences().enabled
+          ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
+          : 'Could not enable session reminders. Please try again.');
     } finally {
       setUpdatingNotifications(false);
     }
