@@ -324,7 +324,7 @@ export function ReviewPage() {
       await load();
     } catch (err) {
       console.error('Confirm failed:', err);
-      setActionError("We couldn't lock in next week's commitments. Please try again.");
+      setActionError("We couldn't confirm next week's commitments. Please try again.");
     } finally {
       setConfirming(false);
     }
@@ -365,10 +365,10 @@ export function ReviewPage() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg">Confirming locks these commitments into your immutable commitment log and schedules next week's sessions. You can adjust before confirming.</p>
+        <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg">Confirming saves these commitments and schedules next week's sessions. You can still change them before confirming; afterwards, changes are made at the next weekly review.</p>
         <div className="flex flex-col sm:flex-row gap-3">
           <button onClick={generateReview} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate'}</button>
-          <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1">{confirming ? 'Locking in...' : 'Lock in next week'}</button>
+          <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1">{confirming ? 'Confirming...' : 'Confirm next week'}</button>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -17,6 +17,7 @@ export function NativeCalendarSync() {
   const [message, setMessage] = useState('');
   const [dismissed, setDismissed] = useState(() => Boolean(userId && localStorage.getItem(DISMISSED_KEY_PREFIX + userId) === 'true'));
   const [hiding, setHiding] = useState(false);
+  const skipNextEffectSync = useRef(false);
 
   function dismissAfterSuccess(text: string) {
     setMessage(text);
@@ -29,6 +30,10 @@ export function NativeCalendarSync() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !userId || !enabled || dismissed) return;
+    if (skipNextEffectSync.current) {
+      skipNextEffectSync.current = false;
+      return;
+    }
     let cancelled = false;
     async function sync() {
       const { data, error } = await supabase
@@ -64,11 +69,21 @@ export function NativeCalendarSync() {
       if (!enabled) {
         const granted = await requestNativeCalendarAccess();
         if (!granted) throw new Error('Calendar access was not granted.');
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'scheduled')
+          .gte('scheduled_at', new Date().toISOString())
+          .order('scheduled_at', { ascending: true });
+        if (error) throw error;
+        const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail) : 0;
         localStorage.setItem(ENABLE_KEY, 'true');
         localStorage.removeItem(DISMISSED_KEY_PREFIX + userId);
-        setDismissed(false);
+        skipNextEffectSync.current = true;
         setHiding(false);
         setEnabled(true);
+        dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your Google/device calendar.' : 'Calendar sync is up to date.');
       } else {
         localStorage.setItem(ENABLE_KEY, 'false');
         setEnabled(false);

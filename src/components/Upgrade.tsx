@@ -26,12 +26,7 @@ const freeBenefits = [
   '1 advanced weekly review/month',
 ];
 
-function UsageBar({ label, used, limit }: { label: string; used: number; limit: number }) {
-  const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
-  return <div className="border border-vow-border rounded-xl p-4"><div className="flex justify-between gap-4 text-xs mb-2"><span className="text-vow-muted">{label}</span><span className="text-vow-ink">{used}/{limit}</span></div><div className="h-1.5 bg-vow-surface overflow-hidden"><div className="h-full bg-vow-ink transition-all" style={{ width: `${pct}%` }} /></div></div>;
-}
-
-export function UpgradePage() {
+remove unused usage barexport function UpgradePage() {
   const [billing, setBilling] = useState<Billing>('monthly');
   const [usage, setUsage] = useState<EntitlementSnapshot | null>(null);
   const [restoreState, setRestoreState] = useState('');
@@ -94,22 +89,21 @@ export function UpgradePage() {
   return <div>
     <PageHeader title="VOW" subtitle="More planning power, deeper guidance and room to keep meaningful goals moving." />
 
-    <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
-      <p className="vow-label mb-3">Premium</p>
-      <h2 className="vow-heading text-3xl md:text-4xl text-vow-ink max-w-2xl leading-tight">Let VOW plan with you.</h2>
-      <p className="text-sm md:text-base text-vow-muted mt-4 max-w-2xl leading-relaxed">Premium unlocks the deeper planning layer: more goals, stronger guidance and adaptive planning as your circumstances change.</p>
-      <div className="grid sm:grid-cols-2 gap-3 mt-7">
-        {premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-3 border border-vow-border rounded-xl p-4 text-sm text-vow-ink"><span aria-hidden="true" className="shrink-0">✓</span><span>{benefit}</span></div>)}
+    <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-5">
+      <p className="vow-label mb-2">Current plan</p>
+      <div className="flex items-center justify-between gap-4">
+        <div><h2 className="vow-heading text-2xl text-vow-ink">{isPremium ? 'Premium' : 'Free'}</h2><p className="text-sm text-vow-muted mt-1">{isPremium ? 'Your full planning toolkit is active.' : 'Your goals and planning actions are available within the free plan limits.'}</p></div>
+        <span className="border border-vow-border px-3 py-1 text-xs text-vow-ink">{isPremium ? 'Active' : '$0'}</span>
       </div>
     </section>
 
-    {usage && usage.plan === 'free' && <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
-      <p className="vow-label mb-2">Your current usage</p>
-      <h2 className="vow-heading text-2xl text-vow-ink mb-5">See what Premium changes.</h2>
+    {usage && <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-5">
+      <p className="vow-label mb-2">Current usage</p>
+      <h2 className="vow-heading text-xl text-vow-ink mb-5">Your plan at a glance.</h2>
       <div className="grid md:grid-cols-3 gap-3">
-        <UsageBar label="Planning actions this month" used={usage.planning_used} limit={usage.planning_limit ?? 10} />
-        <UsageBar label="Adaptive replans" used={usage.adaptive_replans_used} limit={usage.adaptive_replans_limit ?? 1} />
-        <div className="border border-vow-border rounded-xl p-4"><div className="flex justify-between gap-4 text-xs"><span className="text-vow-muted">Active goals</span><span className="text-vow-ink">{usage.active_goals}/1</span></div><p className="text-xs text-vow-muted mt-2">Premium removes the one-goal ceiling.</p></div>
+        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Planning actions this month</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? 'Unlimited' : `${usage.planning_used}/${usage.planning_limit ?? 10}`}</p></div>
+        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Adaptive replans</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? 'Unlimited' : `${usage.adaptive_replans_used}/${usage.adaptive_replans_limit ?? 1}`}</p></div>
+        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Active goals</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? `${usage.active_goals} active` : `${usage.active_goals}/1`}</p></div>
       </div>
     </section>}
 
@@ -126,7 +120,7 @@ export function UpgradePage() {
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
           <div className="text-3xl font-medium text-vow-ink mb-1">{selectedProduct?.priceString || 'Price unavailable'}</div>
           <p className="text-xs text-vow-muted mb-5">{isYearly ? `per year${annualSavings !== null ? ` · save ${annualSavings}%` : ''}` : 'per month'}</p>
-          <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><span aria-hidden="true">✓</span><span>{benefit}</span></div>)}</div>
+          <p className="text-xs text-vow-muted">Deeper coaching, adaptive planning and more room for meaningful goals.</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
@@ -151,6 +145,7 @@ export function UpgradePage() {
       {manageState && <p role="alert" className="text-xs text-vow-muted mt-3">{manageState}</p>}
     </section>
 
+    <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-8"><p className="vow-label mb-3">What you unlock</p><h2 className="vow-heading text-xl text-vow-ink mb-4">More support as your goals grow.</h2><div className="grid sm:grid-cols-2 gap-3">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><span aria-hidden="true">✓</span><span>{benefit}</span></div>)}</div></section>
     <section className="border-t border-vow-border pt-7"><p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Built for real goals</p><p className="text-sm text-vow-muted leading-relaxed max-w-2xl">Run a 10K. Make ravioli. Learn Spanish. Build a robot. Pass your exams. Launch an app. VOW is about the planning intelligence underneath the goal — not the category itself.</p></section>
 
     {confirmCancel && <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-premium-title">

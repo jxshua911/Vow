@@ -1,12 +1,21 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { ArrowLeft } from '@/lib/ui-icons';
 
 type Props = { onBack: () => void; onLegal: () => void };
 
 export function SupportPage({ onBack, onLegal }: Props) {
+  const { session, displayName } = useAuth();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [reason, setReason] = useState('Bug or technical issue');
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (session?.user.email) setEmail((current) => current || session.user.email || '');
+    if (displayName && displayName !== 'there') setName((current) => current || displayName);
+  }, [session?.user.email, displayName]);
   const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -51,8 +60,8 @@ export function SupportPage({ onBack, onLegal }: Props) {
           {status === 'success' && <div role="status" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">Your support request was sent. We’ll get back to you.</div>}
           {status === 'error' && <div role="alert" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">We couldn’t send that right now. Please try again or email vowglobalapp@gmail.com.</div>}
           <form onSubmit={submit} className="space-y-3">
-            <label className="block"><span className="vow-label">Name</span><input required name="name" autoComplete="name" className="vow-input mt-2" placeholder="Your name" /></label>
-            <label className="block"><span className="vow-label">Email</span><input required type="email" name="email" autoComplete="email" className="vow-input mt-2" placeholder="you@example.com" /></label>
+            <label className="block"><span className="vow-label">Name</span><input required name="name" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} className="vow-input mt-2" placeholder="Your name" /></label>
+            <label className="block"><span className="vow-label">Email</span><input required type="email" name="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="vow-input mt-2" placeholder="you@example.com" /></label>
             <label className="block"><span className="vow-label">Issue type</span><select value={reason} onChange={(event) => setReason(event.target.value)} name="reason" className="vow-input mt-2"><option>Bug or technical issue</option><option>Account / login</option><option>Subscription / Premium</option><option>Privacy request</option><option>Account deletion</option><option>Feedback</option><option>Other</option></select></label>
             <label className="block"><span className="vow-label">Message</span><textarea required minLength={10} name="message" value={message} onChange={(event) => setMessage(event.target.value)} rows={3} className="vow-input mt-1 resize-y leading-5" placeholder="Tell us what happened and what you need help with." /></label>
             <button type="submit" disabled={status === 'sending'} className="vow-btn-primary disabled:opacity-50">{status === 'sending' ? 'Sending…' : 'Send support request'}</button>
