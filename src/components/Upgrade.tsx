@@ -39,9 +39,6 @@ export function UpgradePage() {
   const monthlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_MONTHLY);
   const yearlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_YEARLY);
   const selectedProduct = isYearly ? yearlyProduct : monthlyProduct;
-  const annualSavings = monthlyProduct && yearlyProduct && monthlyProduct.price > 0
-    ? Math.max(0, Math.round((1 - yearlyProduct.price / (monthlyProduct.price * 12)) * 100))
-    : null;
 
   useEffect(() => {
     void getEntitlementSnapshot().then(setUsage);
@@ -97,15 +94,6 @@ export function UpgradePage() {
       </div>
     </section>
 
-    {usage && <details className="mb-5 border border-vow-border rounded-xl px-4 py-3">
-      <summary className="cursor-pointer text-sm text-vow-muted">View current usage</summary>
-      <div className="pt-4">
-      <div className="grid md:grid-cols-3 gap-3">
-        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Planning actions this month</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? 'Unlimited' : `${usage.planning_used}/${usage.planning_limit ?? 10}`}</p></div>
-        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Adaptive replans</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? 'Unlimited' : `${usage.adaptive_replans_used}/${usage.adaptive_replans_limit ?? 1}`}</p></div>
-        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Active goals</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? `${usage.active_goals} active` : `${usage.active_goals}/1`}</p></div>
-      </div>
-    </div></details>}
 
     <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
       <p className="vow-label mb-3">Pricing</p>
@@ -118,14 +106,14 @@ export function UpgradePage() {
         </div>
         <div className="border border-vow-ink rounded-xl p-5">
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
-          <div className="text-3xl font-medium text-vow-ink mb-1">{selectedProduct?.priceString || 'Price unavailable'}</div>
-          <p className="text-xs text-vow-muted mb-5">{isYearly ? `per year${annualSavings !== null ? ` · save ${annualSavings}%` : ''}` : 'per month'}</p>
-          <p className="text-xs text-vow-muted">Deeper coaching, adaptive planning and more room for meaningful goals.</p>
+          <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? '$40' : '$4.99'}</div>
+          <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
+          <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
-        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">{monthlyProduct?.priceString ? `${monthlyProduct.priceString} / month` : 'Current Google Play price'}</span></button>
-        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">{yearlyProduct?.priceString ? `${yearlyProduct.priceString} / year${annualSavings !== null ? ` · save ${annualSavings}%` : ''}` : 'Current Google Play price'}</span></button>
+        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">'$4.99 / month'</span></button>
+        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">'$40 / year'</span></button>
       </div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
