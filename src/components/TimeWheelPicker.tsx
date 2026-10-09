@@ -5,7 +5,7 @@ type TimeWheelPickerProps = {
 };
 
 function parseTime(value: string) {
-  const match = /^(\\d{1,2}):(\\d{2})$/.exec(value);
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
   return {
     hour: match ? Math.min(23, Math.max(0, Number(match[1]))) : 9,
     minute: match ? Math.min(59, Math.max(0, Number(match[2]))) : 0,
