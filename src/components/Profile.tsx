@@ -11,6 +11,7 @@ import {
   clearCloudPushRegistration,
   isRemotePushConfigured,
   requestNotificationPermission,
+  requestExactAlarmPermission,
   getNotificationPreferences,
   setupCloudPushNotifications,
   setNotificationPreferences,
@@ -78,10 +79,15 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
           : 'Allow notifications in your device settings to receive session reminders.');
         return;
       }
-      // Reflect the explicit opt-in immediately; reminder reconciliation may take longer.
+      // Exact-alarm access improves timing, but declining it must not disable
+      // reminders entirely: schedule inexact notifications as a fallback.
+      const exactAlarmGranted = await requestExactAlarmPermission();
       setNotificationsEnabled(true);
       const preferences = await setNotificationPreferences({ enabled: true });
       setNotificationsEnabled(preferences.enabled);
+      if (exactAlarmGranted === false) {
+        setNotificationError('Session reminders are enabled, but Android may deliver them later than scheduled. Allow Alarms & reminders for VOW in Android settings for more precise timing.');
+      }
       if (Capacitor.getPlatform() === 'android' && isRemotePushConfigured()) {
         try {
           await setupCloudPushNotifications();
