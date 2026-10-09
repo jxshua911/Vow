@@ -595,7 +595,15 @@ export function GoalPlanner({
       // calendar sync; do not trigger a surprise permission prompt during planning.
       if (!ignoreCalendarConflicts && Capacitor.isNativePlatform() && localStorage.getItem('vow:native-calendar-sync') === 'true') {
         const rangeEnd = addDays(start, (selectedDurationWeeks || 1) * 7);
-        const events = await listNativeCalendarEvents(start, rangeEnd);
+        let events;
+        try {
+          events = await listNativeCalendarEvents(start, rangeEnd);
+        } catch (calendarError) {
+          console.warn('[VOW] Calendar collision check could not complete:', calendarError);
+          setCalendarConflicts(['VOW could not check your device calendar. Overlapping events may not be detected.']);
+          setSaving(false);
+          return;
+        }
         const conflicts: string[] = [];
         for (const item of filteredItems) {
           const sessionStart = buildDate(item.week, item.day, item.preferred_time).getTime();
