@@ -29,16 +29,6 @@ export function ReviewPage() {
     if (!session) return;
     setLoading(true);
     try {
-      const { data: planningReservation, error: planningReservationError } = await supabase.rpc('vow_reserve_entitlement', {
-        p_feature: 'planning_action',
-        p_metadata: { surface: 'weekly_review' },
-      });
-      if (planningReservationError) throw planningReservationError;
-      if (!planningReservation?.allowed) {
-        setReviewEntitlement(planningReservation as EntitlementResult);
-        return;
-      }
-      planningReservationId = planningReservation.reservation_id || null;
 
       const weekStart = toDateString(start);
       const { data: existing, error: existingError } = await supabase
