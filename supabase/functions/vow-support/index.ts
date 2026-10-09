@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
+const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
 const escapeHtml = (value: string) => value.replace(/[&<>\'\"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] || character);
 const clean = (value: unknown, max: number) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -20,7 +20,7 @@ Deno.serve(async (request) => {
   const issue = clean(body.issue, 120) || 'Support request';
   const email = user.email || '';
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const { data: submission, error: insertError } = await admin.from('support_submissions').insert({ user_id: user.id, email, message }).select('id, created_at').single();
+  const { data: submission, error: insertError } = await admin.from('support_submissions').insert({ user_id: user.id, name, email, issue, message }).select('id, created_at').single();
   if (insertError || !submission) return json({ persisted: false, error: 'We couldn\'t submit your request. Please try again.' }, 500);
   const resendKey = Deno.env.get('RESEND_API_KEY');
   const recipient = Deno.env.get('SUPPORT_RECIPIENT_EMAIL') || 'support@vowglobal.online';
