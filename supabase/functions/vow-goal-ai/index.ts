@@ -753,7 +753,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
   const vague = /^(do|work|practice|practise|study|learn|review|focus)\s+(this|that|it|more|better|the goal|your goal|the topic)\b/i;
   if (planned.some((x: any) => {
     const task = str(x.task, 350);
-    return generic.test(task) || vague.test(task) || task.split(/\s+/).filter(Boolean).length < 6;
+    return generic.test(task) || vague.test(task) || task.split(/\s+/).filter(Boolean).length < 4;
   })) return "GENERIC_SESSION_TASK";
 
   const contextTokens = meaningfulTokens([
