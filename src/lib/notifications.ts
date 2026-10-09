@@ -110,20 +110,27 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 
   await setupNotifications();
 
-  // VOW reminders are tied to a user's chosen session time. On Android 12+,
-  // explicitly request exact-alarm access instead of silently promising an
-  // exact reminder that the OS can defer.
-  if (Capacitor.getPlatform() === 'android') {
-    let exactAlarm = await LocalNotifications.checkExactNotificationSetting();
-    if (exactAlarm.exact_alarm !== 'granted') {
-      exactAlarm = await LocalNotifications.changeExactNotificationSetting();
-    }
-    if (exactAlarm.exact_alarm !== 'granted') {
-      throw new Error('EXACT_ALARM_PERMISSION_DENIED');
-    }
-  }
-
   return permission.display;
+}
+
+/**
+ * Request precise Android reminder timing only after the user explicitly
+ * enables session reminders. If access is declined, VOW can still schedule
+ * inexact local notifications instead of disabling reminders altogether.
+ */
+export async function requestExactAlarmPermission(): Promise<boolean | null> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
+
+  try {
+    let setting = await LocalNotifications.checkExactNotificationSetting();
+    if (setting.exact_alarm === 'granted') return true;
+
+    setting = await LocalNotifications.changeExactNotificationSetting();
+    return setting.exact_alarm === 'granted';
+  } catch (error) {
+    console.warn('[VOW] Exact-alarm access is unavailable; reminders will use the OS fallback:', error);
+    return false;
+  }
 }
 
 export async function scheduleReminder(id: number, title: string, body: string, at: Date, sessionId?: string): Promise<void> {
