@@ -772,7 +772,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
     if (!overlapsContext && !hasMeasure) weakSpecificity++;
     else if (!hasConcreteVerb && !hasMeasure) weakSpecificity++;
   }
-  if (planned.length && weakSpecificity / planned.length > 0.25) return "GENERIC_SESSION_TASK";
+  if (planned.length && weakSpecificity / planned.length > 0.6) return "GENERIC_SESSION_TASK";
   return null;
 }
 
