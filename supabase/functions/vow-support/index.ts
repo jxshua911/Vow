@@ -2,6 +2,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
+
+function publishableKey(): string {
+  const legacy = Deno.env.get('SUPABASE_ANON_KEY');
+  if (legacy) return legacy;
+  try {
+    return JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') || '{}').default || '';
+  } catch {
+    return '';
+  }
+}
+
+function secretKey(): string {
+  try {
+    const keys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}');
+    if (keys.default) return keys.default;
+  } catch {
+    console.warn('[VOW Support] Invalid secret-key environment JSON.');
+  }
+  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+}
 const escapeHtml = (value: string) => value.replace(/[&<>\'\"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] || character);
 const clean = (value: unknown, max: number) => typeof value === 'string' ? value.trim().slice(0, max) : '';
 
@@ -10,16 +30,29 @@ Deno.serve(async (request) => {
   if (request.method !== 'POST') return json({ error: 'Request could not be processed.' }, 405);
   const auth = request.headers.get('Authorization');
   if (!auth?.startsWith('Bearer ')) return json({ error: 'Request could not be processed.' }, 401);
-  const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } } });
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user) return json({ error: 'Request could not be processed.' }, 401);
+  const url = Deno.env.get('SUPABASE_URL');
+  const publicKey = publishableKey();
+  if (!url || !publicKey) {
+    console.error('[VOW Support] Supabase URL or publishable key is not configured.');
+    return json({ error: 'Support is temporarily unavailable. Please try again later.' }, 503);
+  }
+
+  const userClient = createClient(url, publicKey, { global: { headers: { Authorization: auth } } });
+  const { data: { user }, error: authError } = await userClient.auth.getUser();
+  if (authError || !user) return json({ error: 'Request could not be processed.' }, 401);
   const body = await request.json().catch(() => ({}));
   const message = clean(body.message, 10000);
   if (!message) return json({ error: 'Please enter a message before submitting.' }, 422);
   const name = clean(body.name, 120) || 'Not provided';
   const issue = clean(body.issue, 120) || 'Support request';
   const email = user.email || '';
-  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const serviceKey = secretKey();
+  if (!serviceKey) {
+    console.error('[VOW Support] Supabase secret key is not configured; request was not persisted.');
+    return json({ persisted: false, error: 'Support is temporarily unavailable. Please try again later.' }, 503);
+  }
+
+  const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: submission, error: insertError } = await admin.from('support_submissions').insert({ user_id: user.id, name, email, issue, message }).select('id, created_at').single();
   if (insertError || !submission) return json({ persisted: false, error: 'We couldn\'t submit your request. Please try again.' }, 500);
   const resendKey = Deno.env.get('RESEND_API_KEY');
