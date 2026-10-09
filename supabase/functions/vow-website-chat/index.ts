@@ -296,7 +296,57 @@ Deno.serve(async (req) => {
         .select("id, created_at")
         .single();
       if (error) throw error;
-      return json({ ok: true, submission: data });
+
+      // Keep the support request even when the mail provider is not configured.
+      // Delivery is reported explicitly so the app never claims an email was sent
+      // when the only confirmed action was storing the submission.
+      let emailSent = false;
+      const resendKey = Deno.env.get("RESEND_API_KEY");
+      const fromEmail = Deno.env.get("VOW_SUPPORT_FROM_EMAIL");
+      if (resendKey && fromEmail) {
+        try {
+          const delivery = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${resendKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: fromEmail,
+              to: adminEmails(),
+              reply_to: email,
+              subject: `[VOW Support] ${subject || "Support request"}`,
+              text: [
+                "A support request was submitted through VOW.",
+                "",
+                `Name: ${name || "Not provided"}`,
+                `Email: ${email}`,
+                `Issue: ${subject || "Support request"}`,
+                "",
+                "Message:",
+                message,
+                "",
+                `Submission ID: ${data.id}`,
+                `Created at: ${data.created_at}`,
+              ].join("\\n"),
+            }),
+          });
+          if (!delivery.ok) {
+            console.error("support-email-delivery-failed", { status: delivery.status });
+          } else {
+            emailSent = true;
+          }
+        } catch (deliveryError) {
+          console.error("support-email-delivery-exception", deliveryError instanceof Error ? deliveryError.message : String(deliveryError));
+        }
+      } else {
+        console.warn("support-email-not-configured", {
+          resend_key_present: Boolean(resendKey),
+          from_email_present: Boolean(fromEmail),
+        });
+      }
+
+      return json({ ok: true, submission: data, email_sent: emailSent });
     }
 
     const adminEmail = await requireAdmin(req);
