@@ -485,15 +485,15 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
 }
 
 
-type AiProvider = "groq" | "mistral" | "qwen";
+type AiProvider = "groq" | "mistral";
 
 function providerWeights(): Record<AiProvider, number> {
   // Launch defaults favour providers with genuine free/developer access.
   // Qwen is included only when its free quota is available for the account/region.
-  const defaults: Record<AiProvider, number> = { groq: 0.5, mistral: 0.35, qwen: 0.15 };
+  const defaults: Record<AiProvider, number> = { groq: 0.5, mistral: 0.35 };
   try {
     const raw = JSON.parse(Deno.env.get("VOW_AI_PROVIDER_WEIGHTS") || "{}");
-    for (const provider of ["groq", "mistral", "qwen"] as AiProvider[]) {
+    for (const provider of ["groq", "mistral"] as AiProvider[]) {
       const value = Number(raw?.[provider]);
       if (Number.isFinite(value) && value >= 0) defaults[provider] = value;
     }
@@ -505,10 +505,9 @@ function providerWeights(): Record<AiProvider, number> {
 
 function providerOrder(): AiProvider[] {
   const weights = providerWeights();
-  const enabled = (["groq", "mistral", "qwen"] as AiProvider[]).filter((p) => {
+  const enabled = (["groq", "mistral"] as AiProvider[]).filter((p) => {
     if (p === "groq") return Boolean(Deno.env.get("GROQ_API_KEY"));
-    if (p === "mistral") return Boolean(Deno.env.get("MISTRAL_API_KEY"));
-    return Boolean(Deno.env.get("DASHSCOPE_API_KEY"));
+    return Boolean(Deno.env.get("MISTRAL_API_KEY"));
   });
   if (!enabled.length) return [];
   const total = enabled.reduce((sum, p) => sum + weights[p], 0);
@@ -677,9 +676,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
         const result =
           provider === "groq"
             ? await callGroq(req, providerMessages, kind, researchRequired)
-            : provider === "mistral"
-            ? await callMistral(req, providerMessages, kind)
-            : await callQwen(req, providerMessages, kind);
+            : await callMistral(req, providerMessages, kind);
         console.log("[VOW AI] Provider succeeded", { provider });
         return result;
       } catch (providerError) {
@@ -1158,10 +1155,7 @@ Deno.serve(async (req) => {
       return json({ structured: r, text: JSON.stringify(r) });
     }
     if (mode === "goal-plan") {
-      let b: any;
-      try {
-        b = await ai(req,
-          [
+      const planMessages = [
             {
               role: "system",
               content: `You are VOW's expert planning and research engine. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base, domain profile, previous goals, and recent journal context are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. If AI research is required, you MUST perform at least one web_search before selecting or finalising the specialist domain; do not guess what an abbreviation, event, competition, slang term, or specialist phrase means. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. If a required input is genuinely missing, return JSON with clarification_needed:true and questions instead of a generic plan. Use previous goals and recent journal entries as personal context when relevant, but never expose unrelated private details or assume that past goals must continue. Never fill missing personal context with boilerplate. Verify resource URLs with web_search: when suitable, include one direct, genuinely relevant YouTube video and one authoritative website for this exact goal and level. Do not invent titles or URLs; omit an unavailable resource rather than fabricate it. The app may add clearly labelled YouTube searches and app suggestions separately. Duration (${w} weeks) and available days (${ds.join(
@@ -1169,10 +1163,10 @@ Deno.serve(async (req) => {
               )}) are HARD constraints. Follow-up answers are HARD personal context. Domain profile: ${JSON.stringify(domain)}. Return ONLY JSON with outcome, success_metric, baseline, assumptions, milestones (2-8 objects with title,description,week), weekly_session_templates (one object per week, each containing week and sessions; sessions must contain one concrete, distinct session for each selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), session_templates (fallback template per selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), weekly_focus (exactly one string per week), progression, checkpoints (3-8), risks (3-8), fallback_rules (2-6), summary, references (0-4 objects with url,title,resource_type). Make the plan genuinely domain-specific. Do not invent specialist claims when the knowledge/research does not support them. Each week's sessions must advance that week's focus rather than repeating the same task. Sessions must be concrete enough that the user can execute them without guessing what "work on it" means. Every week must meaningfully progress toward the outcome.`,
             },
             { role: "user", content: JSON.stringify({ message, ...context }) },
-          ],
-          "plan",
-          researchRequired
-        );
+          ];
+      let b: any;
+      try {
+        b = await ai(req, planMessages, "plan", researchRequired);
       } catch (e) {
         console.warn("plan AI failed", e);
         throw e;
@@ -1198,14 +1192,39 @@ Deno.serve(async (req) => {
           },
         });
       }
-      const validationError = validatePlan(
-        b,
-        w,
-        ds,
-        [str(g?.title || g?.outcome, 500), str(g?.why_it_matters, 300), message]
-          .filter(Boolean)
-          .join(" ")
-      );
+      const validationContext = [str(g?.title || g?.outcome, 500), str(g?.why_it_matters, 300), message]
+        .filter(Boolean)
+        .join(" ");
+      let validationError = validatePlan(b, w, ds, validationContext);
+      if (validationError === "GENERIC_SESSION_TASK" || validationError === "REPETITIVE_SCHEDULE") {
+        console.warn("[VOW AI] Plan failed quality validation; retrying once with corrective instructions", {
+          validation_error: validationError,
+        });
+        try {
+          const retry = await ai(req, [
+            ...planMessages,
+            { role: "assistant", content: JSON.stringify(b) },
+            {
+              role: "user",
+              content: `Rewrite the complete plan JSON. The previous draft failed VOW's quality check: ${validationError}. Keep the same goal, duration, selected days, and user answers. Every scheduled session task must be concrete, distinct, domain-specific, and at least six words long. Never use generic tasks such as "work on your goal", "practise more", "make progress", or "review the topic". For kickboxing, for example, name the specific drill, technique, round structure, safety focus, or measurable skill being practised; adapt examples to the actual goal. Make each week progress from the previous week. Preserve every required JSON field and return JSON only.`,
+            },
+          ], "plan", researchRequired);
+          if (retry?.clarification_needed !== true) {
+            b = retry;
+            validationError = validatePlan(b, w, ds, validationContext);
+            console.log("[VOW AI] Plan quality retry completed", {
+              validation_error: validationError || "passed",
+            });
+          } else {
+            console.warn("[VOW AI] Plan quality retry requested clarification; retaining the original validation failure.");
+          }
+        } catch (retryError) {
+          console.warn("[VOW AI] Plan quality retry failed", {
+            validation_error: validationError,
+            error: retryError instanceof Error ? retryError.message : String(retryError),
+          });
+        }
+      }
       if (validationError) {
         console.warn("plan validation failed", { validation_error: validationError });
         const qualityAlertType =
