@@ -807,12 +807,15 @@ export function GoalPlanner({
               </button>
             </div>
           )}
+          <p className="text-xs leading-5 text-vow-muted">
+            Confirming saves this plan and schedules your sessions. You can review future changes at your weekly review.
+          </p>
           <div className="flex gap-3">
             <button onClick={() => setPlan(null)} className="vow-btn-ghost">
               Back
             </button>
             <button onClick={handleCreate} disabled={saving} className="vow-btn-primary flex-1">
-              {saving ? 'Locking in…' : 'Lock in VOW'}
+              {saving ? 'Saving your plan…' : 'Confirm plan'}
             </button>
           </div>
         </div>
