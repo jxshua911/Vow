@@ -97,15 +97,15 @@ export function UpgradePage() {
       </div>
     </section>
 
-    {usage && <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-5">
-      <p className="vow-label mb-2">Current usage</p>
-      <h2 className="vow-heading text-xl text-vow-ink mb-5">Your plan at a glance.</h2>
+    {usage && <details className="mb-5 border border-vow-border rounded-xl px-4 py-3">
+      <summary className="cursor-pointer text-sm text-vow-muted">View current usage</summary>
+      <div className="pt-4">
       <div className="grid md:grid-cols-3 gap-3">
         <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Planning actions this month</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? 'Unlimited' : `${usage.planning_used}/${usage.planning_limit ?? 10}`}</p></div>
         <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Adaptive replans</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? 'Unlimited' : `${usage.adaptive_replans_used}/${usage.adaptive_replans_limit ?? 1}`}</p></div>
         <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Active goals</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? `${usage.active_goals} active` : `${usage.active_goals}/1`}</p></div>
       </div>
-    </section>}
+    </div></details>}
 
     <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
       <p className="vow-label mb-3">Pricing</p>
