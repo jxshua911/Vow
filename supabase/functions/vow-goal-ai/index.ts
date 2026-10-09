@@ -1173,12 +1173,13 @@ Deno.serve(async (req) => {
       }
       if (b?.clarification_needed === true) {
         const followupQuestions = arr(b.questions, 3).slice(0, 3);
-        if (followupQuestions.length < 2) {
-          await releasePlanningEntitlement(req, entitlementReservationId);
-          entitlementReservationId = null;
-          return json(
-            { error: "VOW needs more context before it can build a reliable personalised plan. Please add more detail and try again." },
-            502
+        // A single targeted question is valid: requiring two questions here
+        // turned useful model clarification into an HTTP 502 for the user.
+        if (followupQuestions.length === 0) {
+          const goalTitle = str(g?.title || g?.outcome, 160) || "this goal";
+          followupQuestions.push(
+            `What measurable result would show progress on "${goalTitle}" during the first week?`,
+            "What current skill level, starting point, or constraint should VOW account for?"
           );
         }
         await releasePlanningEntitlement(req, entitlementReservationId);
@@ -1188,7 +1189,7 @@ Deno.serve(async (req) => {
             clarification_needed: true,
             questions: followupQuestions,
             recommended_duration_weeks: w,
-            rationale: str(b.rationale, 500) || "VOW needs a bit more detail before it can build a reliable plan.",
+            rationale: str(b.rationale, 500) || "VOW needs one more detail before it can build a reliable, personalised plan.",
           },
         });
       }
