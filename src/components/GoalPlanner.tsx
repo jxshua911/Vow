@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { addDays, toDateString } from '@/lib/dates';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
@@ -12,6 +13,7 @@ import { userFacingError } from '@/lib/userFacingError';
 import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadillo';
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
+import { listNativeCalendarEvents } from '@/lib/nativeCalendar';
 
 type Clarification = {
   questions: string[];
@@ -265,6 +267,7 @@ export function GoalPlanner({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [resourceError, setResourceError] = useState('');
+  const [calendarConflicts, setCalendarConflicts] = useState<string[]>([]);
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
   const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
   const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
@@ -567,7 +570,7 @@ export function GoalPlanner({
     }
   }
 
-  async function handleCreate() {
+  async function handleCreate(ignoreCalendarConflicts = false) {
     if (!plan || !draftGoalId || saving) return;
     setSaving(true);
     setError('');
@@ -587,6 +590,36 @@ export function GoalPlanner({
       const filteredItems = plan.schedule.filter(x => availableDays.includes(x.day));
       if (!filteredItems.length)
         throw new Error('The generated schedule does not match your selected days. Please rebuild the plan.');
+
+      // Only inspect the device calendar when the user has already opted into
+      // calendar sync; do not trigger a surprise permission prompt during planning.
+      if (!ignoreCalendarConflicts && Capacitor.isNativePlatform() && localStorage.getItem('vow:native-calendar-sync') === 'true') {
+        const rangeEnd = addDays(start, (selectedDurationWeeks || 1) * 7);
+        const events = await listNativeCalendarEvents(start, rangeEnd);
+        const conflicts: string[] = [];
+        for (const item of filteredItems) {
+          const sessionStart = buildDate(item.week, item.day, item.preferred_time).getTime();
+          const sessionEnd = sessionStart + Math.max(5, Number(item.duration_minutes) || 30) * 60_000;
+          const collision = events.find((event) => {
+            if (event.summary.startsWith('VOW ·')) return false;
+            const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
+            const eventEnd = event.end.dateTime ? new Date(event.end.dateTime).getTime() : NaN;
+            return Number.isFinite(eventStart) && Number.isFinite(eventEnd) && sessionStart < eventEnd && sessionEnd > eventStart;
+          });
+          if (collision) {
+            const sessionDate = new Date(sessionStart);
+            const dateLabel = sessionDate.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            const itemLabel = `${dateLabel}: ${collision.summary}`;
+            if (!conflicts.includes(itemLabel)) conflicts.push(itemLabel);
+          }
+        }
+        if (conflicts.length) {
+          setCalendarConflicts(conflicts.slice(0, 8));
+          setSaving(false);
+          return;
+        }
+      }
+      setCalendarConflicts([]);
 
       const milestoneRows = plan.milestones.map((m, i) => ({
         title: m.title,
@@ -799,6 +832,19 @@ export function GoalPlanner({
               {resourceError && <p role="alert" className="mt-3 text-xs text-vow-muted">{resourceError}</p>}
             </section>
           ) : null}
+          {calendarConflicts.length > 0 && (
+            <section className="border-l-2 border-amber-500 bg-vow-gray/10 p-4 space-y-3" role="alert">
+              <p className="text-sm font-medium text-vow-ink">Possible calendar conflicts</p>
+              <p className="text-xs leading-5 text-vow-muted">Some planned sessions overlap events already in your device calendar. Adjust your selected days or times, or continue if these events can move.</p>
+              <ul className="list-disc pl-5 space-y-1 text-xs text-vow-ink">
+                {calendarConflicts.map((conflict) => <li key={conflict}>{conflict}</li>)}
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => { setCalendarConflicts([]); setPlan(null); }} className="vow-btn-ghost">Adjust schedule</button>
+                <button type="button" onClick={() => void handleCreate(true)} disabled={saving} className="vow-btn-primary">{saving ? 'Saving your plan…' : 'Continue anyway'}</button>
+              </div>
+            </section>
+          )}
           {error && (
             <div className="flex items-start gap-3 border-l-2 border-vow-ink pl-3">
               <p className="text-sm text-vow-ink flex-1">{error}</p>
