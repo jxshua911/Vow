@@ -16,7 +16,7 @@ export function SupportPage({ onBack, onLegal }: Props) {
     if (session?.user.email) setEmail((current) => current || session.user.email || '');
     if (displayName && displayName !== 'there') setName((current) => current || displayName);
   }, [session?.user.email, displayName]);
-  const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'stored' | 'error'>('idle');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,13 +30,13 @@ export function SupportPage({ onBack, onLegal }: Props) {
     setStatus('sending');
 
     try {
-      const { error } = await supabase.functions.invoke('vow-website-chat', {
+      const { data: result, error } = await supabase.functions.invoke('vow-website-chat', {
         body: { action: 'contact', name, email, subject: reason, message: text, source: 'vow-app-support' },
       });
       if (error) throw error;
       form.reset();
       setMessage('');
-      setStatus('success');
+      setStatus(result?.email_sent === true ? 'success' : 'stored');
     } catch (error) {
       console.error('[VOW] Support submission failed:', error);
       setStatus('error');
@@ -57,7 +57,8 @@ export function SupportPage({ onBack, onLegal }: Props) {
         <h1 className="vow-heading text-xl text-vow-ink mb-1">How can we help?</h1>
         <p className="text-xs text-vow-muted mb-4">Report an issue, ask a question, or send feedback.</p>
         <section className="border border-vow-border p-4">
-          {status === 'success' && <div role="status" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">Your support request was sent. We’ll get back to you.</div>}
+          {status === 'success' && <div role="status" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">Your support request was emailed to the VOW team. We’ll get back to you.</div>}
+          {status === 'stored' && <div role="status" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">Your request was saved, but email delivery isn’t configured or couldn’t be confirmed. For urgent help, email vowglobalapp@gmail.com directly.</div>}
           {status === 'error' && <div role="alert" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">We couldn’t send that right now. Please try again or email vowglobalapp@gmail.com.</div>}
           <form onSubmit={submit} className="space-y-3">
             <label className="block"><span className="vow-label">Name</span><input required name="name" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} className="vow-input mt-2" placeholder="Your name" /></label>
