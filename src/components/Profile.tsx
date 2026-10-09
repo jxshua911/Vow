@@ -78,6 +78,8 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
           : 'Allow notifications in your device settings to receive session reminders.');
         return;
       }
+      // Reflect the explicit opt-in immediately; reminder reconciliation may take longer.
+      setNotificationsEnabled(true);
       const preferences = await setNotificationPreferences({ enabled: true });
       setNotificationsEnabled(preferences.enabled);
       if (Capacitor.getPlatform() === 'android' && isRemotePushConfigured()) {
@@ -89,7 +91,11 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       }
     } catch (error) {
       console.error('[VOW] Enabling session reminders failed:', error);
-      setNotificationError('Could not enable session reminders. Please try again.');
+      // Permission may be granted even when reminder sync fails; keep UI aligned with saved preference.
+      setNotificationsEnabled(getNotificationPreferences().enabled);
+      setNotificationError(getNotificationPreferences().enabled
+        ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
+        : 'Could not enable session reminders. Please try again.');
     } finally {
       setUpdatingNotifications(false);
     }
