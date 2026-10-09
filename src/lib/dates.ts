@@ -10,6 +10,17 @@ export function getUserTimeZone(): string {
   }
 }
 
+export function getTimeZoneLabel(timeZone = getUserTimeZone()): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date());
+    const offset = parts.find((part) => part.type === 'timeZoneName')?.value || 'UTC';
+    const city = timeZone.split('/').slice(-1)[0].replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+    return city && city !== 'UTC' ? `${city} (${offset})` : offset;
+  } catch {
+    return timeZone;
+  }
+}
+
 export function startOfWeek(date: Date = new Date()): Date {
   const d = new Date(date);
   const day = d.getDay();
@@ -49,7 +60,8 @@ export function formatTime(dt: string): string {
   return new Date(dt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-export function formatDate(dt: string): string {
+export function formatDate(dt: string | null): string {
+  if (!dt) return 'No deadline';
   return new Date(dt).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 

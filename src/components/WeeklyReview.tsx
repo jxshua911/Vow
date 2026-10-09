@@ -1,17 +1,403 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Session, Goal, JournalEntry, UserSettings, Review, ProposedCommitment } from '@/types/database';
 import { weekRange, toDateString, formatDate, startOfWeek, endOfWeek, addDays } from '@/lib/dates';
-import { allocateSameDaySlot, reserveSlot, toOccupiedSlots } from '@/lib/scheduling';
 import { detectPatterns } from '@/lib/patterns';
 import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
-type GoalSchedule = { available_days?: string[]; preferred_times_by_day?: Record<string, string> };
-export function ReviewPage() { const { session } = useAuth(); const [review, setReview] = useState<Review | null>(null); const [existingReview, setExistingReview] = useState<Review | null>(null); const [pastReviews, setPastReviews] = useState<Review[]>([]); const [loading, setLoading] = useState(true); const [generating, setGenerating] = useState(false); const [confirming, setConfirming] = useState(false); const [actionError, setActionError] = useState(''); const { start, end } = weekRange(); const load = useCallback(async () => { if (!session) return; const weekStart = toDateString(start); const [existingRes, pastRes] = await Promise.all([supabase.from('reviews').select('*').eq('user_id', session.user.id).eq('week_start', weekStart).maybeSingle(), supabase.from('reviews').select('*').eq('user_id', session.user.id).order('week_start', { ascending: false }).limit(10)]); if (existingRes.error) throw existingRes.error; if (pastRes.error) throw pastRes.error; setExistingReview(existingRes.data as Review | null); setPastReviews((pastRes.data || []) as Review[]); setReview(existingRes.data as Review | null); setLoading(false); }, [session, start]); useEffect(() => { load().catch((err) => { console.error('Review load failed:', err); setLoading(false); }); }, [load]); async function generateReview() { if (!session) return; setGenerating(true); setActionError(''); try { const weekStart = toDateString(start); const weekEnd = toDateString(end); const [sessionsRes, goalsRes, journalRes, settingsRes] = await Promise.all([supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true }), supabase.from('goals').select('*').eq('user_id', session.user.id).in('status', ['active', 'locked', 'completed', 'abandoned']), supabase.from('journal_entries').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }), supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle()]); if (sessionsRes.error) throw sessionsRes.error; if (goalsRes.error) throw goalsRes.error; if (journalRes.error) throw journalRes.error; if (settingsRes.error) throw settingsRes.error; const allSessions = (sessionsRes.data || []) as Session[]; const goals = (goalsRes.data || []) as Goal[]; const journal = (journalRes.data || []) as JournalEntry[]; const settings = (settingsRes.data || null) as UserSettings | null; const weekSessions = allSessions.filter((s) => { const d = new Date(s.scheduled_at); return d >= start && d <= end; }); const committed = weekSessions.length; const completed = weekSessions.filter((s) => s.status === 'completed').length; const missed = weekSessions.filter((s) => s.status === 'skipped').length; const moved = weekSessions.filter((s) => s.status === 'moved').length; const completionPct = committed ? Math.round((completed / committed) * 100) : 0; const patterns = detectPatterns(allSessions, journal); const primaryGoal = goals.find((g) => g.status === 'active') || goals[0]; const recommendations = patterns.map((p) => ({ title: p.description, description: p.proposed_adjustment, category: p.type === 'overload' ? 'load' as const : p.type === 'milestone_calibration' ? 'milestone' as const : 'schedule' as const })); const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked'); const proposedCommitments: ProposedCommitment[] = activeGoals.map((g) => { const goalSessions = allSessions.filter((s) => s.goal_id === g.id); const goalCompleted = goalSessions.filter((s) => s.status === 'completed').length; const goalTotal = goalSessions.length; const goalPct = goalTotal ? goalCompleted / goalTotal : 1; let proposed = g.weekly_commitment_target; let notes = ''; if (goalPct < 0.5 && goalTotal >= 3) { proposed = Math.max(1, Math.floor(g.weekly_commitment_target * 0.7)); notes = `Reduced from ${g.weekly_commitment_target} based on recent completion rate. The plan may be too ambitious right now.`; } else if (goalPct >= 0.8) notes = 'You are hitting this consistently. Consider maintaining or slightly increasing.'; return { goal_id: g.id, goal_title: g.outcome, sessions_per_week: proposed, notes }; }); const reviewData = { user_id: session.user.id, week_start: weekStart, week_end: weekEnd, completion_pct: completionPct, committed_count: committed, completed_count: completed, missed_count: missed, moved_count: moved, biggest_win: biggestWin(weekSessions), biggest_setback: biggestSetback(weekSessions), patterns: patterns as unknown as Record<string, unknown>[], recommendations: recommendations as unknown as Record<string, unknown>[], coaching_text: buildCoachingText(weekSessions, patterns, settings, primaryGoal?.why_it_matters || null), proposed_commitments: proposedCommitments as unknown as Record<string, unknown>[], status: 'draft' as const }; if (existingReview && existingReview.status === 'draft') { const { data, error } = await supabase.from('reviews').update(reviewData).eq('id', existingReview.id).eq('user_id', session.user.id).select().maybeSingle(); if (error) throw error; if (data) { setReview(data as Review); setExistingReview(data as Review); } } else { const { data, error } = await supabase.from('reviews').insert(reviewData).select().maybeSingle(); if (error) throw error; if (data) { setReview(data as Review); setExistingReview(data as Review); } } await load(); setActionError(''); } catch (err) { console.error('Review generation failed:', err); setActionError(err instanceof Error ? err.message : 'Could not generate your weekly review.'); } finally { setGenerating(false); } }
-  async function confirmReview() { if (!review || !session) return; setConfirming(true); setActionError(''); try { const { error: reviewError } = await supabase.from('reviews').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', review.id).eq('user_id', session.user.id); if (reviewError) throw reviewError; const nextWeekStart = toDateString(addDays(startOfWeek(), 7)); const nextWeekEnd = toDateString(addDays(endOfWeek(), 7)); const proposed = review.proposed_commitments as unknown as ProposedCommitment[]; const goalIds = proposed.map((commitment) => commitment.goal_id); const [{ data: goalRows, error: goalError }, { data: planRows, error: planError }] = await Promise.all([supabase.from('goals').select('id,plan_json').eq('user_id', session.user.id).in('id', goalIds), supabase.from('goal_plan_items').select('goal_id,week_number,day_of_week,scheduled_at,duration_minutes,task').eq('user_id', session.user.id).in('goal_id', goalIds).eq('week_number', 2)]); if (goalError) throw goalError; if (planError) throw planError; const goalMap = new Map((goalRows || []).map((goal) => [goal.id, goal])); const planItemMap = new Map((planRows || []).map((item) => [`${item.goal_id}:${item.day_of_week}`, item])); for (const commitment of proposed) { const { error } = await supabase.from('commitment_log').insert({ user_id: session.user.id, week_start: nextWeekStart, week_end: nextWeekEnd, goal_id: commitment.goal_id, committed_sessions: commitment.sessions_per_week, completed_sessions: 0, skipped_sessions: 0, moved_sessions: 0, snapshot: { notes: commitment.notes, goal_title: commitment.goal_title } }); if (error) throw error; } const { data: existingSessions, error: existingError } = await supabase.from('sessions').select('scheduled_at,duration_minutes').eq('user_id', session.user.id).eq('status', 'scheduled'); if (existingError) throw existingError; const occupied = toOccupiedSlots((existingSessions || []).map((row) => ({ scheduledAt: row.scheduled_at, durationMinutes: row.duration_minutes }))); const dayIndex: Record<string, number> = { Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: 5, Sunday: 6 }; for (const commitment of proposed) { const goal = goalMap.get(commitment.goal_id); const schedule = (goal?.plan_json || {}) as GoalSchedule; const selectedDays = Array.isArray(schedule.available_days) ? schedule.available_days.filter((day) => day in dayIndex) : []; if (!selectedDays.length) throw new Error(`We couldn't find the schedule you chose for ${commitment.goal_title}. Open the goal and set its days and times before confirming next week.`); const daysToSchedule = selectedDays.slice(0, Math.max(1, commitment.sessions_per_week)); for (const day of daysToSchedule) { const preferredTime = schedule.preferred_times_by_day?.[day]; const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(preferredTime || ''); if (!timeMatch) throw new Error(`We couldn't find a time for ${day} on ${commitment.goal_title}. Open the goal and set a time before confirming next week.`); const sessionDate = new Date(`${nextWeekStart}T00:00:00`); sessionDate.setDate(sessionDate.getDate() + dayIndex[day]); sessionDate.setHours(Math.min(23, Number(timeMatch[1])), Math.min(59, Number(timeMatch[2])), 0, 0); const planItem = planItemMap.get(`${commitment.goal_id}:${day}`); const durationMinutes = Math.max(5, Number(planItem?.duration_minutes) || 45); const slot = allocateSameDaySlot(sessionDate, durationMinutes, occupied); if (!slot) throw new Error(`No available time remains on ${day} for ${commitment.goal_title}. Choose another day before confirming.`); const { error } = await supabase.from('sessions').insert({ goal_id: commitment.goal_id, user_id: session.user.id, title: planItem?.task || commitment.goal_title, scheduled_at: slot.date.toISOString(), duration_minutes: slot.durationMinutes, status: 'scheduled' }); if (error) throw error; reserveSlot(slot, occupied); } } await load(); } catch (err) { console.error('Confirm failed:', err); setActionError(err instanceof Error ? err.message : 'Could not lock in next week.'); } finally { setConfirming(false); } }
-  async function deleteReview(id: string) { if (!session) return; if (!confirm('Delete this review? The review record will be removed, but commitments and sessions already created from it will remain.')) return; setActionError(''); let deleted = false; const directDelete = await supabase.from('reviews').delete().eq('id', id).eq('user_id', session.user.id); if (!directDelete.error) { const { data: remaining, error: verifyError } = await supabase.from('reviews').select('id').eq('id', id).eq('user_id', session.user.id).maybeSingle(); if (!verifyError && !remaining) deleted = true; } if (!deleted) { const { data, error } = await supabase.rpc('delete_own_review', { p_review_id: id }); if (error) { setActionError(`Could not delete this review: ${error.message}`); return; } deleted = data === true; } if (!deleted) { setActionError('VOW could not delete that review. The database did not confirm the deletion.'); return; } if (review?.id === id) { setReview(null); setExistingReview(null); } setPastReviews((items) => items.filter((item) => item.id !== id)); setActionError(''); await load(); }
-  if (loading) return <div className="min-w-0 overflow-hidden"><PageHeader title="Weekly Review" /><div className="text-vow-muted text-sm py-8">Loading…</div></div>; if (review && review.status === 'confirmed') return <ConfirmedReviewView review={review} pastReviews={pastReviews} onDelete={deleteReview} />; if (!review && !existingReview) return <div className="min-w-0 overflow-hidden"><PageHeader title="Weekly Review" subtitle={`${formatDate(toDateString(start))} — ${formatDate(toDateString(end))}`} /><div className="border-t border-vow-border pt-12 text-center"><p className="vow-heading text-2xl text-vow-ink mb-3">No review generated yet</p><p className="text-vow-muted text-sm mb-8 max-w-md mx-auto leading-relaxed break-words">Generate your weekly accountability review. It reads your sessions, journal, and commitment history to give you honest, evidence-based feedback and propose next week's commitments.</p>{actionError && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 max-w-md mx-auto mb-6 text-left break-words" role="alert">{actionError}</p>}<button onClick={generateReview} disabled={generating} className="vow-btn-primary min-h-11">{generating ? 'Analysing your week…' : 'Generate weekly review'}</button></div>{pastReviews.length > 0 && <PastReviewsList reviews={pastReviews} onDelete={deleteReview} />}</div>; return <div className="min-w-0 overflow-hidden"><PageHeader title="Weekly Review" subtitle={`${formatDate(toDateString(start))} — ${formatDate(toDateString(end))}`} /><ReviewContent review={review!} /><div className="border-t border-vow-border pt-8 mt-10"><h3 className="vow-label mb-4">Next week</h3><div className="space-y-px border border-vow-border mb-6">{(review!.proposed_commitments as unknown as ProposedCommitment[]).map((c, i) => <div key={i} className="bg-vow-bg px-4 py-4 flex items-center justify-between gap-3 min-h-16"><div className="min-w-0 flex-1"><div className="text-sm text-vow-ink break-words">{c.goal_title}</div>{c.notes && <div className="text-xs text-vow-muted mt-1 break-words leading-relaxed">{c.notes}</div>}</div><div className="text-sm text-vow-ink font-medium flex-shrink-0">{c.sessions_per_week}x/week</div></div>)}</div><p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg break-words">Confirming locks these commitments into your immutable commitment log and schedules next week's sessions.</p>{actionError && <p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3 mb-6 break-words" role="alert">{actionError}</p>}<div className="flex gap-3"><button onClick={generateReview} disabled={generating} className="vow-btn-ghost min-h-11">{generating ? 'Regenerating…' : 'Regenerate'}</button><button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1">{confirming ? 'Locking in…' : 'Lock in next week'}</button></div></div></div>; }
-function ReviewContent({ review }: { review: Review }) { const score = Math.max(0, Math.min(100, Number(review.completion_pct) || 0)); return <div className="space-y-8 min-w-0"><section className="border border-vow-border p-5"><div className="flex items-end justify-between gap-4"><div><p className="vow-label mb-1">Turtle score</p><p className="text-xs text-vow-muted">How consistently you completed this week's commitments.</p></div><p className="text-3xl text-vow-ink tabular-nums">{score}</p></div><div className="mt-4 h-1 bg-vow-border"><div className="h-1 bg-vow-ink" style={{ width: `${score}%` }} /></div><div className="grid grid-cols-3 gap-3 mt-4 text-xs text-vow-muted"><span>{review.completed_count} completed</span><span>{review.missed_count} missed</span><span>{review.moved_count} moved</span></div></section><div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Your coach</p><div className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed break-words">{review.coaching_text}</div></div>{review.biggest_win && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Biggest win</p><p className="text-sm text-vow-ink leading-relaxed break-words">{review.biggest_win}</p></div>}{review.biggest_setback && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Biggest setback</p><p className="text-sm text-vow-ink leading-relaxed break-words">{review.biggest_setback}</p></div>}</div>; }
-function ConfirmedReviewView({ review, pastReviews, onDelete }: { review: Review; pastReviews: Review[]; onDelete: (id: string) => void }) { return <div className="min-w-0 overflow-hidden"><PageHeader title="Weekly Review" subtitle={`${formatDate(review.week_start)} — ${formatDate(review.week_end)}`} /><ReviewContent review={review} /><div className="border-t border-vow-border pt-8 mt-10"><div className="flex items-center justify-between gap-4"><div><p className="vow-label">Status</p><p className="text-sm text-vow-ink mt-1">Confirmed</p></div><button onClick={() => onDelete(review.id)} className="vow-btn-ghost min-h-11">Delete review</button></div></div><PastReviewsList reviews={pastReviews.filter((item) => item.id !== review.id)} onDelete={onDelete} /></div>; }
-function PastReviewsList({ reviews, onDelete }: { reviews: Review[]; onDelete: (id: string) => void }) { if (!reviews.length) return null; return <section className="mt-12 border-t border-vow-border pt-8"><h2 className="vow-label mb-4">Past reviews</h2><div className="border-t border-vow-border">{reviews.map((item) => <div key={item.id} className="border-b border-vow-border py-4 flex items-center gap-4 min-w-0"><div className="min-w-0 flex-1"><p className="text-sm text-vow-ink">{formatDate(item.week_start)} — {formatDate(item.week_end)}</p><p className="text-xs text-vow-muted mt-1">{item.completion_pct}% complete · {item.status}</p></div><button onClick={() => onDelete(item.id)} className="vow-btn-ghost min-h-11 shrink-0 text-xs">Delete</button></div>)}</div></section>; }
+import { ArrowRight } from '@/lib/ui-icons';
+import { syncUpcomingSessionNotifications } from '@/lib/notifications';
+import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
+import { UpgradePrompt } from './UpgradePrompt';
+
+export function ReviewPage() {
+  const { session } = useAuth();
+  const [review, setReview] = useState<Review | null>(null);
+  const [existingReview, setExistingReview] = useState<Review | null>(null);
+  const [pastReviews, setPastReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [reviewEntitlement, setReviewEntitlement] = useState<EntitlementResult | null>(null);
+  const generationInProgress = useRef(false);
+
+  const { start, end } = useMemo(() => weekRange(), []);
+
+  const load = useCallback(async () => {
+    if (!session) return;
+    setLoading(true);
+    try {
+
+      const weekStart = toDateString(start);
+      const { data: existing, error: existingError } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('week_start', weekStart)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      const { data: past, error: pastError } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('week_start', { ascending: false })
+        .limit(10);
+      if (pastError) throw pastError;
+
+      setExistingReview(existing as Review | null);
+      setReview(existing as Review | null);
+      setPastReviews((past || []) as Review[]);
+      setActionError(null);
+    } catch (error) {
+      console.error('Review loading failed:', error);
+      setActionError("We couldn't load your review. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [session, start]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function generateReview() {
+    if (!session || generationInProgress.current) return;
+    generationInProgress.current = true;
+    setGenerating(true);
+    setActionError(null);
+    setReviewEntitlement(null);
+    let planningReservationId: string | null = null;
+
+    try {
+      {
+        const entitlement = await getEntitlementSnapshot();
+        if (
+          entitlement &&
+          entitlement.plan !== 'premium' &&
+          entitlement.planning_used >= (entitlement.planning_limit ?? 10)
+        ) {
+          setReviewEntitlement({
+            allowed: false,
+            reason: 'usage_limit',
+            feature: 'planning_action',
+            used: entitlement.planning_used,
+            limit: entitlement.planning_limit ?? 10,
+          });
+          return;
+        }
+        if (
+          !existingReview &&
+          entitlement &&
+          entitlement.plan !== 'premium' &&
+          entitlement.advanced_reviews_used >= (entitlement.advanced_reviews_limit ?? 1)
+        ) {
+          setReviewEntitlement({
+            allowed: false,
+            reason: 'usage_limit',
+            feature: 'advanced_review',
+            used: entitlement.advanced_reviews_used,
+            limit: entitlement.advanced_reviews_limit ?? 1,
+          });
+          return;
+        }
+      }
+
+      const weekStart = toDateString(start);
+      const weekEnd = toDateString(end);
+
+      const [sessionsRes, goalsRes, journalRes, settingsRes] = await Promise.all([
+        supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true }),
+        supabase.from('goals').select('*').eq('user_id', session.user.id).in('status', ['active', 'locked', 'completed', 'abandoned']),
+        supabase.from('journal_entries').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+        supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle(),
+      ]);
+      const queryError = sessionsRes.error || goalsRes.error || journalRes.error || settingsRes.error;
+      if (queryError) throw queryError;
+
+      const allSessions = (sessionsRes.data || []) as Session[];
+      const goals = (goalsRes.data || []) as Goal[];
+      const journal = (journalRes.data || []) as JournalEntry[];
+      const settings = (settingsRes.data || null) as UserSettings | null;
+
+      const weekSessions = allSessions.filter((s) => {
+        const d = new Date(s.scheduled_at);
+        return d >= start && d <= end;
+      });
+
+      const committed = weekSessions.length;
+      const completed = weekSessions.filter((s) => s.status === 'completed').length;
+      const missed = weekSessions.filter((s) => s.status === 'skipped').length;
+      const moved = weekSessions.filter((s) => s.status === 'moved').length;
+      const completionPct = committed > 0 ? Math.round((completed / committed) * 100) : 0;
+
+      const patterns = detectPatterns(allSessions, journal);
+      const win = biggestWin(weekSessions);
+      const setback = biggestSetback(weekSessions);
+
+      const primaryGoal = goals.find((g) => g.status === 'active') || goals[0];
+      const whyItMatters = primaryGoal?.why_it_matters || null;
+      const coachingText = allSessions.length === 0 ? "No sessions were completed this week. Once you start your commitments, your review will show what worked and what to adjust." : buildCoachingText(weekSessions, patterns, settings, whyItMatters);
+
+      const recommendations = patterns.map((p) => ({
+        title: p.description,
+        description: p.proposed_adjustment,
+        category: p.type === 'overload' ? 'load' as const : p.type === 'milestone_calibration' ? 'milestone' as const : 'schedule' as const,
+      }));
+
+      const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
+      const proposedCommitments: ProposedCommitment[] = activeGoals.map((g) => {
+        const goalSessions = allSessions.filter((s) => s.goal_id === g.id);
+        const goalCompleted = goalSessions.filter((s) => s.status === 'completed').length;
+        const goalTotal = goalSessions.length;
+        const goalPct = goalTotal > 0 ? goalCompleted / goalTotal : 1;
+        let proposed = g.weekly_commitment_target;
+        let notes = '';
+        if (goalPct < 0.5 && goalTotal >= 3) {
+          proposed = Math.max(1, Math.floor(g.weekly_commitment_target * 0.7));
+          notes = `Reduced from ${g.weekly_commitment_target} based on recent completion rate. The plan may be too ambitious right now.`;
+        } else if (goalPct >= 0.8) {
+          notes = `You are hitting this consistently. Consider maintaining or slightly increasing.`;
+        }
+        return { goal_id: g.id, goal_title: g.outcome, sessions_per_week: proposed, notes };
+      });
+
+      const reviewData = {
+        user_id: session.user.id,
+        week_start: weekStart,
+        week_end: weekEnd,
+        completion_pct: completionPct,
+        committed_count: committed,
+        completed_count: completed,
+        missed_count: missed,
+        moved_count: moved,
+        biggest_win: win,
+        biggest_setback: setback,
+        patterns: patterns as unknown as Record<string, unknown>[],
+        recommendations: recommendations as unknown as Record<string, unknown>[],
+        coaching_text: coachingText,
+        proposed_commitments: proposedCommitments as unknown as Record<string, unknown>[],
+        status: existingReview?.status || 'draft',
+        confirmed_at: existingReview?.confirmed_at ?? null,
+      };
+
+      let savedReview;
+      if (existingReview) {
+        const { data, error } = await supabase.from('reviews').update(reviewData).eq('id', existingReview.id).select().maybeSingle();
+        if (error) throw error;
+        savedReview = data;
+      } else {
+        const { data, error } = await supabase.from('reviews').insert(reviewData).select().maybeSingle();
+        if (error) throw error;
+        savedReview = data;
+      }
+      if (!savedReview) throw new Error('Review save returned no row.');
+      if (planningReservationId) {
+        const { error: finalizeError } = await supabase.rpc('vow_finalize_entitlement_reservation', {
+          p_reservation_id: planningReservationId,
+        });
+        if (finalizeError) throw finalizeError;
+        planningReservationId = null;
+      }
+      if (!existingReview) {
+        const { error: usageError } = await supabase.rpc('vow_record_ai_usage', {
+          p_mode: 'review',
+          p_outcome: 'success',
+          p_latency_ms: null,
+          p_error_code: null,
+        });
+        if (usageError) console.warn('[VOW] Review usage could not be recorded:', usageError.message);
+      }
+      await refreshEntitlementSnapshot();
+      setReview(savedReview as Review);
+      setExistingReview(savedReview as Review);
+    } catch (err) {
+      if (planningReservationId) {
+        try {
+          await supabase.rpc('vow_release_entitlement_reservation', { p_reservation_id: planningReservationId });
+        } catch (releaseError) {
+          console.warn('[VOW] Review planning reservation could not be released:', releaseError);
+        }
+      }
+      console.error('Review generation failed:', err);
+      const failure = err && typeof err === 'object' ? err as { message?: unknown; code?: unknown } : null;
+      const message = typeof failure?.message === 'string' ? failure.message : '';
+      if (message.includes('VOW_PREMIUM_ADVANCED_REVIEW_REQUIRED')) {
+        const entitlement = await getEntitlementSnapshot();
+        setReviewEntitlement({
+          allowed: false,
+          reason: 'usage_limit',
+          feature: 'advanced_review',
+          used: entitlement?.advanced_reviews_used ?? 1,
+          limit: entitlement?.advanced_reviews_limit ?? 1,
+        });
+      } else if (/network|fetch|connection/i.test(message)) {
+        setActionError("VOW couldn't connect while saving your review. Check your connection and try again.");
+      } else {
+        const code = typeof failure?.code === 'string' ? ` (${failure.code})` : '';
+        setActionError(message
+          ? `VOW couldn't save your review${code}: ${message}`
+          : "VOW couldn't save your review. Please try again.");
+      }
+    } finally {
+      generationInProgress.current = false;
+      setGenerating(false);
+    }
+  }
+
+  async function confirmReview() {
+    if (!review || !session) return;
+    setConfirming(true);
+    setActionError(null);
+
+    try {
+      const nextWeekStart = toDateString(addDays(startOfWeek(), 7));
+      const nextWeekEnd = toDateString(addDays(endOfWeek(), 7));
+
+      const commitments = review.proposed_commitments as unknown as ProposedCommitment[];
+      if (commitments.length > 0) {
+        const { error } = await supabase.from('commitment_log').upsert(commitments.map((commitment) => ({
+          user_id: session.user.id,
+          week_start: nextWeekStart,
+          week_end: nextWeekEnd,
+          goal_id: commitment.goal_id,
+          committed_sessions: commitment.sessions_per_week,
+          completed_sessions: 0,
+          skipped_sessions: 0,
+          moved_sessions: 0,
+          snapshot: { notes: commitment.notes, goal_title: commitment.goal_title },
+        })), { onConflict: 'user_id,goal_id,week_start', ignoreDuplicates: true });
+        if (error) throw error;
+      }
+
+      const scheduledSessions: Array<Pick<Session, 'goal_id' | 'user_id' | 'title' | 'scheduled_at' | 'duration_minutes' | 'status'>> = [];
+      for (const commitment of commitments) {
+        for (let i = 0; i < commitment.sessions_per_week; i++) {
+          const sessionDate = addDays(new Date(`${nextWeekStart}T00:00:00`), i + 1);
+          sessionDate.setHours(9, 0, 0, 0);
+          scheduledSessions.push({
+            goal_id: commitment.goal_id,
+            user_id: session.user.id,
+            title: commitment.goal_title,
+            scheduled_at: sessionDate.toISOString(),
+            duration_minutes: 45,
+            status: 'scheduled',
+          });
+        }
+      }
+      if (scheduledSessions.length > 0) {
+        const goalIds = [...new Set(scheduledSessions.map((item) => item.goal_id))];
+        const scheduledAt = [...new Set(scheduledSessions.map((item) => item.scheduled_at))];
+        const { data: existingSessions, error: existingSessionsError } = await supabase
+          .from('sessions')
+          .select('goal_id,title,scheduled_at')
+          .eq('user_id', session.user.id)
+          .in('goal_id', goalIds)
+          .in('scheduled_at', scheduledAt);
+        if (existingSessionsError) throw existingSessionsError;
+        const existingKeys = new Set((existingSessions || []).map((item) => `${item.goal_id}|${item.title}|${item.scheduled_at}`));
+        const missingSessions = scheduledSessions.filter((item) => !existingKeys.has(`${item.goal_id}|${item.title}|${item.scheduled_at}`));
+        if (missingSessions.length > 0) {
+          const { error } = await supabase.from('sessions').insert(missingSessions);
+          if (error) throw error;
+        }
+      }
+
+      const { error: confirmError } = await supabase
+        .from('reviews')
+        .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+        .eq('id', review.id)
+        .select()
+        .single();
+      if (confirmError) throw confirmError;
+
+      const { data: upcomingSessions, error: upcomingSessionError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'scheduled')
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true });
+      if (upcomingSessionError) throw upcomingSessionError;
+      await syncUpcomingSessionNotifications((upcomingSessions || []) as Session[]);
+
+      await load();
+    } catch (err) {
+      console.error('Confirm failed:', err);
+      setActionError("We couldn't confirm next week's commitments. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  if (loading) return <div><PageHeader title="Weekly Review" /><div className="text-vow-muted text-sm">Loading...</div></div>;
+  if (review && review.status === 'confirmed') return <ConfirmedReviewView review={review} pastReviews={pastReviews} onRegenerate={generateReview} generating={generating} actionError={actionError} />;
+
+  if (!review && !existingReview) {
+    return (
+      <div>
+        <PageHeader title="Weekly Review" subtitle={`${formatDate(toDateString(start))} — ${formatDate(toDateString(end))}`} />
+        <div className="border-t border-vow-border pt-12 text-center">
+          <p className="vow-heading text-2xl text-vow-ink mb-3">No review generated yet</p>
+          <p className="text-vow-muted text-sm mb-8 max-w-md mx-auto leading-relaxed">Generate your weekly accountability review. It reads your sessions, journal, and commitment history to give you honest, evidence-based feedback and propose next week's commitments.</p>
+          {reviewEntitlement && <div className="mb-6 text-left"><UpgradePrompt result={reviewEntitlement} title="Your free advanced review has been used" compact /></div>}
+          <button onClick={generateReview} disabled={generating} className="vow-btn-primary">{generating ? 'Analyzing your week...' : 'Generate weekly review'}</button>
+          {actionError && <p className="text-sm text-vow-ink leading-relaxed mt-6 border-l-2 border-vow-ink pl-3 max-w-md mx-auto">{actionError}</p>}
+        </div>
+        {pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <PageHeader title="Weekly Review" subtitle={`${formatDate(toDateString(start))} — ${formatDate(toDateString(end))}`} />
+      <ReviewContent review={review!} />
+      <div className="border-t border-vow-border pt-8 mt-10">
+        <h3 className="vow-label mb-4">Confirm next week's commitments</h3>
+        {reviewEntitlement && <div className="mb-6"><UpgradePrompt result={reviewEntitlement} title="Your free advanced review has been used" compact /></div>}
+        {actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4">{actionError}</p>}
+        <div className="space-y-px border border-vow-border mb-6">
+          {(review!.proposed_commitments as unknown as ProposedCommitment[]).map((c, i) => (
+            <div key={i} className="bg-vow-bg px-4 py-3 flex items-center justify-between">
+              <div className="min-w-0 flex-1"><div className="text-sm text-vow-ink truncate">{c.goal_title}</div>{c.notes && <div className="text-xs text-vow-muted mt-0.5">{c.notes}</div>}</div>
+              <div className="text-sm text-vow-ink font-medium flex-shrink-0 ml-3">{c.sessions_per_week}x/week</div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg">Confirming finalizes next week's commitments and schedules the sessions. After confirmation, this week's plan is locked; changes can be made at the next weekly review.</p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button onClick={generateReview} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate'}</button>
+          <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1">{confirming ? 'Finalizing review…' : 'Finalize Review'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReviewContent({ review }: { review: Review }) {
+  const commitments = (review.proposed_commitments || []) as unknown as ProposedCommitment[];
+  return (
+    <div className="space-y-10">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border border border-vow-border"><MetricCell label="Committed" value={review.committed_count} /><MetricCell label="Completed" value={review.completed_count} /><MetricCell label="Missed" value={review.missed_count} /><MetricCell label="Moved" value={review.moved_count} /></div>
+      {review.committed_count > 0 ? <div className="flex items-center gap-8"><div className="relative w-20 h-20 flex-shrink-0"><svg className="w-20 h-20 -rotate-90" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="#E2E2DF" strokeWidth="2" /><circle cx="50" cy="50" r="44" fill="none" stroke="#111111" strokeWidth="2" strokeLinecap="square" strokeDasharray={`${(review.completion_pct / 100) * 276.46} 276.46`} className="transition-all duration-1000" /></svg><div className="absolute inset-0 flex items-center justify-center"><span className="text-lg vow-heading text-vow-ink">{Math.round(review.completion_pct)}%</span></div></div><div><p className="vow-label mb-1">Completion rate</p><p className="text-sm text-vow-ink">You completed {review.completed_count} of {review.committed_count} sessions.</p></div></div> : <div className="bg-vow-surface/45 border border-vow-border p-5"><p className="vow-label mb-2">First week</p><p className="text-sm text-vow-ink">This is your first review. Complete your commitments this week and VOW will use your actual progress to shape what comes next.</p></div>}
+      <div className="grid md:grid-cols-2 gap-px bg-vow-border border border-vow-border">{review.biggest_win && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest win</p><p className="text-sm text-vow-ink">{review.biggest_win}</p></div>}{review.biggest_setback && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest setback</p><p className="text-sm text-vow-ink">{review.biggest_setback}</p></div>}</div>
+      <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Your coach</p><div className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{review.coaching_text}</div></div>
+      {commitments.length > 0 && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Proposed next week</p><div className="space-y-px border border-vow-border">{commitments.map((c, i) => <div key={i} className="bg-vow-bg px-4 py-3 flex items-center justify-between"><div className="min-w-0 flex-1"><div className="text-sm text-vow-ink truncate">{c.goal_title}</div>{c.notes && <div className="text-xs text-vow-muted mt-0.5">{c.notes}</div>}</div><div className="text-sm text-vow-ink font-medium flex-shrink-0 ml-3">{c.sessions_per_week}x/week</div></div>)}</div></div>}
+    </div>
+  );
+}
+
+function ConfirmedReviewView({ review, pastReviews, onRegenerate, generating, actionError }: { review: Review; pastReviews: Review[]; onRegenerate: () => void; generating: boolean; actionError: string | null }) {
+  return <div><PageHeader title="Weekly Review" subtitle={`${formatDate(review.week_start)} — ${formatDate(review.week_end)}`} /><div className="border-l-2 border-vow-success pl-4 mb-10"><p className="text-sm text-vow-ink font-medium">Review confirmed</p><p className="text-xs text-vow-muted mt-0.5">Next week's commitments are locked in and sessions are scheduled.</p></div><ReviewContent review={review} /><div className="border-t border-vow-border pt-6 mt-8"><p className="text-xs text-vow-muted mb-4">Want another look before changing anything else?</p>{actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4" role="alert">{actionError}</p>}<button onClick={onRegenerate} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate review'}</button></div>{pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}</div>;
+}
+
+function PastReviewsList({ reviews }: { reviews: Review[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  if (reviews.length === 0) return null;
+  return <div className="border-t border-vow-border pt-8 mt-10"><h3 className="vow-label mb-4">Past reviews</h3><div className="border-t border-vow-border">{reviews.map((r) => <div key={r.id} className="border-b border-vow-border"><button onClick={() => setExpanded(expanded === r.id ? null : r.id)} className="w-full flex items-center justify-between py-4 text-left hover:opacity-70 transition-opacity"><div><div className="text-sm text-vow-ink">{formatDate(r.week_start)} — {formatDate(r.week_end)}</div><div className="text-xs text-vow-muted mt-0.5">{r.completed_count}/{r.committed_count} sessions — {Math.round(r.completion_pct)}% — {r.status}</div></div><ArrowRight className={`w-4 h-4 text-vow-muted transition-transform ${expanded === r.id ? 'rotate-90' : ''}`} /></button>{expanded === r.id && <div className="pb-8"><ReviewContent review={r} /></div>}</div>)}</div></div>;
+}
+
+function MetricCell({ label, value }: { label: string; value: number }) {
+  return <div className="bg-vow-bg px-4 py-5 text-center"><div className="text-2xl vow-heading text-vow-ink">{value}</div><div className="vow-label mt-1.5">{label}</div></div>;
+}

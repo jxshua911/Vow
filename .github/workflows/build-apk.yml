@@ -1,0 +1,110 @@
+name: Build VOW Android APK
+
+on:
+  push:
+    branches:
+      - capacitor-mobile
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vow-android-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Configure Android Firebase notifications
+        env:
+          ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$ANDROID_GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            node -e "JSON.parse(require('fs').readFileSync('android/app/google-services.json', 'utf8'))"
+            echo "VITE_ANDROID_REMOTE_NOTIFICATIONS=true" >> "$GITHUB_ENV"
+          else
+            echo "VITE_ANDROID_REMOTE_NOTIFICATIONS=false" >> "$GITHUB_ENV"
+            echo "::warning::ANDROID_GOOGLE_SERVICES_JSON is not configured; this build will provide on-device reminders only."
+          fi
+      - name: Build web app
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_PRODUCT_ID: ${{ secrets.VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_PRODUCT_ID }}
+          VITE_GOOGLE_PLAY_PREMIUM_YEARLY_PRODUCT_ID: ${{ secrets.VITE_GOOGLE_PLAY_PREMIUM_YEARLY_PRODUCT_ID }}
+          VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_BASE_PLAN_ID: ${{ secrets.VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_BASE_PLAN_ID }}
+          VITE_GOOGLE_PLAY_PREMIUM_YEARLY_BASE_PLAN_ID: ${{ secrets.VITE_GOOGLE_PLAY_PREMIUM_YEARLY_BASE_PLAN_ID }}
+        run: npm run build
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+      - name: Prepare release signing key
+        env:
+          VOW_RELEASE_KEYSTORE_B64: ${{ secrets.VOW_RELEASE_KEYSTORE_B64 }}
+          VOW_RELEASE_KEYSTORE_PASSWORD_SECRET: ${{ secrets.VOW_RELEASE_KEYSTORE_PASSWORD }}
+          VOW_RELEASE_KEY_ALIAS_SECRET: ${{ secrets.VOW_RELEASE_KEY_ALIAS }}
+          VOW_RELEASE_KEY_PASSWORD_SECRET: ${{ secrets.VOW_RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$VOW_RELEASE_KEYSTORE_B64" ] && [ -n "$VOW_RELEASE_KEYSTORE_PASSWORD_SECRET" ] && [ -n "$VOW_RELEASE_KEY_ALIAS_SECRET" ] && [ -n "$VOW_RELEASE_KEY_PASSWORD_SECRET" ]; then
+            echo "$VOW_RELEASE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/vow-release.keystore"
+            test -s "$RUNNER_TEMP/vow-release.keystore"
+            {
+              echo "VOW_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/vow-release.keystore"
+              echo "VOW_RELEASE_KEYSTORE_PASSWORD=$VOW_RELEASE_KEYSTORE_PASSWORD_SECRET"
+              echo "VOW_RELEASE_KEY_ALIAS=$VOW_RELEASE_KEY_ALIAS_SECRET"
+              echo "VOW_RELEASE_KEY_PASSWORD=$VOW_RELEASE_KEY_PASSWORD_SECRET"
+              echo "VOW_SIGNING_MODE=persistent"
+            } >> "$GITHUB_ENV"
+          else
+            echo "Persistent VOW release signing secrets are not configured; generating an ephemeral CI-only signing key for device-test builds."
+            keytool -genkeypair -v -keystore "$RUNNER_TEMP/vow-ci-release.keystore" -storepass "vow-ci-only" -keypass "vow-ci-only" -alias "vow-ci" -keyalg RSA -keysize 2048 -validity 7 -dname "CN=VOW CI, OU=QA, O=VOW, L=CI, ST=CI, C=GB"
+            test -s "$RUNNER_TEMP/vow-ci-release.keystore"
+            {
+              echo "VOW_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/vow-ci-release.keystore"
+              echo "VOW_RELEASE_KEYSTORE_PASSWORD=vow-ci-only"
+              echo "VOW_RELEASE_KEY_ALIAS=vow-ci"
+              echo "VOW_RELEASE_KEY_PASSWORD=vow-ci-only"
+              echo "VOW_SIGNING_MODE=ephemeral-ci"
+            } >> "$GITHUB_ENV"
+          fi
+      - name: Assemble VOW production release APK
+        working-directory: android
+        env:
+          VOW_VERSION_CODE: "17"
+          VOW_VERSION_NAME: "1.6"
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+      - name: Verify VOW production release APK
+        run: |
+          test -s android/app/build/outputs/apk/release/app-release.apk
+          grep -q '<string name="app_name">VOW</string>' android/app/src/main/res/values/strings.xml
+          grep -q 'android:label="@string/app_name"' android/app/src/main/AndroidManifest.xml
+      - name: Upload VOW production release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VOW APK 1.6 Production CI
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

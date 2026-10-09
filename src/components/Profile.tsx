@@ -1,134 +1,251 @@
 import { useEffect, useState } from 'react';
-import { registerPlugin } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
+import { userFacingError } from '@/lib/userFacingError';
+import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { PageHeader } from './AppShell';
-import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationsEnabled, setNotificationsEnabled } from '@/lib/notifications';
-import { MonochromeSwitch } from './MonochromeSwitch';
-import { ConnectPage } from './Connect';
-import { SecurityCenterPage } from './SecurityCenter';
-import { SupportPage } from './Support';
-
-type ProfileSubpage = 'main' | 'connect' | 'shared' | 'customise' | 'security' | 'support';
-type IconStyle = { id: string; label: string; background: string; foreground: string };
-type VowIconPlugin = { setVariant(options: { variant: string }): Promise<{ variant: string }> };
-const VowIcon = registerPlugin<VowIconPlugin>('VowIcon');
-const ICON_STYLES: IconStyle[] = [
-  { id: 'white-black', label: 'White · Black', background: '#F7F7F5', foreground: '#111111' },
-  { id: 'purple-green', label: 'Purple · Green', background: '#7C3AED', foreground: '#22C55E' },
-  { id: 'orange-blue', label: 'Orange · Blue', background: '#F97316', foreground: '#2563EB' },
-  { id: 'red-blue', label: 'Red · Blue', background: '#EF4444', foreground: '#2563EB' },
-  { id: 'blue-red', label: 'Blue · Red', background: '#2563EB', foreground: '#EF4444' },
-  { id: 'teal-white', label: 'Teal · White', background: '#0F766E', foreground: '#FFFFFF' },
-  { id: 'white-green', label: 'White · Green', background: '#F7F7F5', foreground: '#16A34A' },
-  { id: 'pink-orange', label: 'Pink · Orange', background: '#DB2777', foreground: '#F97316' },
-  { id: 'blue-white', label: 'Blue · White', background: '#2563EB', foreground: '#FFFFFF' },
-  { id: 'green-purple', label: 'Green · Purple', background: '#16A34A', foreground: '#7C3AED' },
-  { id: 'black-red', label: 'Black · Red', background: '#111111', foreground: '#F43F5E' },
-  { id: 'purple-gold', label: 'Purple · Gold', background: '#7C3AED', foreground: '#F59E0B' },
-  { id: 'orange-white', label: 'Orange · White', background: '#EA580C', foreground: '#FFFFFF' },
-  { id: 'pink-teal', label: 'Pink · Teal', background: '#DB2777', foreground: '#14B8A6' },
-  { id: 'black-blue', label: 'Black · Blue', background: '#111111', foreground: '#60A5FA' },
-  { id: 'teal-orange', label: 'Teal · Orange', background: '#0F766E', foreground: '#FB923C' },
-  { id: 'gold-purple', label: 'Gold · Purple', background: '#D4A72C', foreground: '#7C3AED' },
-  { id: 'green-teal', label: 'Green · Teal', background: '#16A34A', foreground: '#0F766E' },
-  { id: 'gold-blue', label: 'Gold · Blue', background: '#D4A72C', foreground: '#2563EB' },
-  { id: 'black-pink', label: 'Black · Pink', background: '#111111', foreground: '#F472B6' },
-];
+import {
+  cancelAllVowNotifications,
+  clearCloudPushRegistration,
+  isRemotePushConfigured,
+  requestNotificationPermission,
+  getNotificationPreferences,
+  setupCloudPushNotifications,
+  setNotificationPreferences,
+} from '@/lib/notifications';
 
 export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const { session, displayName, updateDisplayName } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [subpage, setSubpage] = useState<ProfileSubpage>('main');
-  const [notificationStatus, setNotificationStatus] = useState('checking');
-  const [requesting, setRequesting] = useState(false);
   const [name, setName] = useState(displayName);
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState('');
-  const [selectedStyle, setSelectedStyle] = useState('white-black');
-  const [iconMessage, setIconMessage] = useState('');
-  const [confirmSignOut, setConfirmSignOut] = useState(false);
-  const [notificationsEnabledByUser, setNotificationsEnabledByUser] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => getNotificationPreferences().enabled);
+  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
+  const [notificationError, setNotificationError] = useState('');
+  const [updatingNotifications, setUpdatingNotifications] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [signOutError, setSignOutError] = useState('');
 
-  useEffect(() => { getNotificationPermission().then(setNotificationStatus).catch(() => setNotificationStatus('unsupported')); }, []);
-  useEffect(() => { setNotificationsEnabledByUser(getNotificationsEnabled()); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
+
   useEffect(() => {
-    const userId = session?.user.id;
-    if (!userId) return;
-    const stored = localStorage.getItem(`vow:icon-style:${userId}`);
-    if (stored && ICON_STYLES.some((style) => style.id === stored)) setSelectedStyle(stored);
-  }, [session?.user.id]);
-  async function handleEnableNotifications() {
-    setRequesting(true);
-    try {
-      setNotificationsEnabled(true); setNotificationsEnabledByUser(true);
-      const status = await requestNotificationPermission(); setNotificationStatus(status);
-      if (status === 'granted' && session) {
-        const { data, error } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
-        if (error) throw error; if (data) await syncUpcomingSessionNotifications(data);
-      }
-    } catch { setNotificationStatus('denied'); } finally { setRequesting(false); }
-  }
-  function handleNotificationsToggle(enabled: boolean) {
-    setNotificationsEnabled(enabled); setNotificationsEnabledByUser(enabled);
-    if (!enabled) setNotificationStatus('denied');
-  }
-  async function handleIconChange(style: IconStyle) {
-    setSelectedStyle(style.id); setIconMessage('');
-    if (session?.user.id) localStorage.setItem(`vow:icon-style:${session.user.id}`, style.id);
-    try { await VowIcon.setVariant({ variant: style.id }); setIconMessage(`${style.label} selected.`); }
-    catch { setIconMessage(`${style.label} saved. The launcher will use it when native icon switching is available.`); }
-  }
-  async function shuffleIcon() {
-    const choices = ICON_STYLES.filter((style) => style.id !== selectedStyle);
-    await handleIconChange(choices[Math.floor(Math.random() * choices.length)]);
-  }
+    let active = true;
+    void getEntitlementSnapshot().then((snapshot) => {
+      if (active) setEntitlement(snapshot);
+    });
+    const handleEntitlementChange = (event: Event) => {
+      setEntitlement((event as CustomEvent<EntitlementSnapshot | null>).detail ?? null);
+    };
+    window.addEventListener('vow:entitlement-changed', handleEntitlementChange);
+    return () => {
+      active = false;
+      window.removeEventListener('vow:entitlement-changed', handleEntitlementChange);
+    };
+  }, []);
+
   async function handleSaveName() {
-    const nextName = name.trim(); if (!nextName || !session || nextName.length > 80) return;
-    setSavingName(true); setNameMessage(''); const { error } = await updateDisplayName(nextName);
-    setNameMessage(error ? error.message : 'Name saved.'); setSavingName(false); if (!error) setEditingName(false);
+    const nextName = name.trim();
+    if (!nextName || !session || nextName.length > 80) return;
+    setSavingName(true);
+    setNameMessage('');
+    try {
+      const { error } = await updateDisplayName(nextName);
+      if (error) throw error;
+      setNameMessage('Name saved.');
+      setEditingName(false);
+    } catch (error) {
+      console.error('[VOW] Display name could not be saved:', error);
+      setNameMessage(userFacingError(error, 'Could not save your name. Please try again.'));
+    } finally {
+      setSavingName(false);
+    }
   }
-  async function handleSignOut() { setConfirmSignOut(false); await supabase.auth.signOut(); }
-  const notificationsEnabled = notificationStatus === 'granted' && notificationsEnabledByUser;
-  if (subpage === 'connect') return <ConnectPage onBack={() => setSubpage('main')} />;
-  if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
-  if (subpage === 'customise') return <CustomisePage selectedStyle={selectedStyle} message={iconMessage} onIconChange={handleIconChange} onShuffle={shuffleIcon} onBack={() => setSubpage('main')} />;
-  if (subpage === 'security') return <div><button onClick={() => setSubpage('main')} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><SecurityCenterPage /></div>;
-  if (subpage === 'support') return <SupportPage onBack={() => setSubpage('main')} />;
-  return <div>
-    <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle="Your account and preferences." />
-    <div className="border border-vow-border divide-y divide-vow-border">
-      <button onClick={() => setSubpage('connect')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Connect</p><p className="text-xs text-vow-muted mt-1">Manage calendars and other services connected to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
-      <button onClick={() => setSubpage('customise')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Customise</p><p className="text-xs text-vow-muted mt-1">Build a VOW icon with the restored greater-than mark and a colour treatment you choose.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
-      <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
-      <button onClick={() => setSubpage('security')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Security & Privacy</p><p className="text-xs text-vow-muted mt-1">Review account security, privacy controls and data protection information.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
-      <button onClick={() => setSubpage('support')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Support</p><p className="text-xs text-vow-muted mt-1">Send a request or email support@vowglobal.online directly.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
-      <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">Privacy, connected services, security and service terms.</p></button>
-      <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0">{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
-      <div className="p-5"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">Choose whether VOW schedules reminders. Android permission is separate and is never overwritten.</p>{notificationStatus === 'denied' && <p className="text-xs text-vow-muted mt-2">Android notifications are blocked or reminders are switched off. Enable them in device settings, then return to VOW.</p>}{notificationStatus === 'unsupported' && <p className="text-xs text-vow-muted mt-2">Notifications are not available on this device.</p>}</div><MonochromeSwitch checked={notificationsEnabledByUser} onChange={handleNotificationsToggle} label="Enable VOW notifications" disabled={notificationStatus === 'unsupported' || requesting} /></div>{!notificationsEnabled && notificationsEnabledByUser && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft mt-4 disabled:opacity-50">{requesting ? 'Enabling…' : 'Allow notifications on this device'}</button>}{notificationsEnabled && <p className="text-xs text-vow-muted mt-4 border-t border-vow-border pt-4">VOW reminders are enabled and Android permission is granted.</p>}</div>
-      <div className="p-5"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">My name</p><p className="text-xs text-vow-muted mt-1 truncate">{name || 'Not provided'}</p></div><button onClick={() => { setEditingName(true); setNameMessage(''); }} className="vow-btn-soft shrink-0">Change name</button></div>{editingName && <div className="mt-4 border-t border-vow-border pt-4"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus className="vow-input" placeholder="What should VOW call you?" /><div className="flex gap-2 mt-2"><button onClick={handleSaveName} disabled={savingName || !name.trim()} className="vow-btn-primary disabled:opacity-50">{savingName ? 'Saving…' : 'Save name'}</button><button onClick={() => { setEditingName(false); setName(displayName); }} className="vow-btn-ghost">Cancel</button></div>{nameMessage && <p className="text-xs text-vow-muted mt-2">{nameMessage}</p>}</div>}</div>
-      <div className="p-5"><p className="text-sm text-vow-ink">Account email</p><p className="text-xs text-vow-muted mt-1 break-words">{session?.user?.email || 'Not provided'}</p></div>
-      <button onClick={() => setConfirmSignOut(true)} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Sign out</p><p className="text-xs text-vow-muted mt-1">Sign out of this VOW account.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
+
+  async function handleEnableNotifications() {
+    setUpdatingNotifications(true);
+    setNotificationError('');
+    try {
+      const permission = await requestNotificationPermission();
+      if (permission !== 'granted') {
+        setNotificationError(permission === 'unsupported'
+          ? 'Session reminders are not available on this device.'
+          : 'Allow notifications in your device settings to receive session reminders.');
+        return;
+      }
+      // Reflect the explicit opt-in immediately; reminder reconciliation may take longer.
+      setNotificationsEnabled(true);
+      const preferences = await setNotificationPreferences({ enabled: true });
+      setNotificationsEnabled(preferences.enabled);
+      if (Capacitor.getPlatform() === 'android' && isRemotePushConfigured()) {
+        try {
+          await setupCloudPushNotifications();
+        } catch (error) {
+          console.error('[VOW] Remote push registration failed; local reminders remain enabled:', error);
+        }
+      }
+    } catch (error) {
+      console.error('[VOW] Enabling session reminders failed:', error);
+      // Permission may be granted even when reminder sync fails; keep UI aligned with saved preference.
+      setNotificationsEnabled(getNotificationPreferences().enabled);
+      setNotificationError(getNotificationPreferences().enabled
+        ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
+        : 'Could not enable session reminders. Please try again.');
+    } finally {
+      setUpdatingNotifications(false);
+    }
+  }
+
+  async function handleDisableNotifications() {
+    setUpdatingNotifications(true);
+    setNotificationError('');
+    try {
+      const preferences = await setNotificationPreferences({ enabled: false });
+      setNotificationsEnabled(preferences.enabled);
+    } catch (error) {
+      console.error('[VOW] Disabling session reminders failed:', error);
+      setNotificationError('Could not update reminder settings. Please try again.');
+    } finally {
+      setUpdatingNotifications(false);
+    }
+  }
+
+  async function handleSignOut() {
+    setSignOutError('');
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) throw error;
+      void Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()])
+        .catch((error) => console.warn('[VOW] Post-sign-out reminder cleanup failed:', error));
+    } catch (error) {
+      console.error('[VOW] Sign out failed:', error);
+      setSignOutError('Could not sign out. Please try again.');
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const { data, error } = await supabase.functions.invoke('vow-account-delete', { body: { confirm: true } });
+      if (error) throw error;
+      if (!data?.deleted) throw new Error(data?.error || 'Account deletion was not completed.');
+      await supabase.auth.signOut({ scope: 'local' });
+      void Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()])
+        .catch((cleanupError) => console.warn('[VOW] Post-deletion reminder cleanup failed:', cleanupError));
+    } catch (error) {
+      console.error('[VOW] Account deletion failed:', error);
+      setDeleteError(userFacingError(error, 'Could not complete account deletion. Please try again.'));
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div>
+      <PageHeader title="Profile" />
+      <section className="divide-y divide-vow-border">
+        <div className="py-6">
+          <h2 className="vow-label mb-2">Personalization</h2>
+          <div className="divide-y divide-vow-border">
+            <div className="py-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm text-vow-ink">My Name</p>
+                  {!editingName && <p className="text-xs text-vow-muted mt-1 truncate">{displayName || 'Add your name'}</p>}
+                </div>
+                {!editingName && <button type="button" onClick={() => { setEditingName(true); setNameMessage(''); }} className="text-xs text-vow-muted underline underline-offset-4 hover:text-vow-ink">Edit</button>}
+              </div>
+              {editingName && <div className="mt-3">
+                <input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoFocus className="vow-input" placeholder="Your name" aria-label="Your name" />
+                <div className="flex gap-2 mt-2">
+                  <button type="button" onClick={() => void handleSaveName()} disabled={savingName || !name.trim()} className="vow-btn-primary disabled:opacity-50">{savingName ? 'Saving…' : 'Save'}</button>
+                  <button type="button" onClick={() => { setEditingName(false); setName(displayName); }} className="vow-btn-ghost">Cancel</button>
+                </div>
+              </div>}
+              {nameMessage && <p className="text-xs text-vow-muted mt-2" role="status">{nameMessage}</p>}
+            </div>
+
+            <div className="py-5 flex items-center justify-between gap-4">
+              <div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Choose light or dark mode.</p></div>
+              <button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? 'Dark mode' : 'Light mode'}</button>
+            </div>
+
+            <div className="py-5">
+              <div className="flex items-center justify-between gap-4">
+                <div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">Session reminders</p></div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={notificationsEnabled}
+                  aria-label="Session reminders"
+                  disabled={updatingNotifications}
+                  onClick={() => void (notificationsEnabled ? handleDisableNotifications() : handleEnableNotifications())}
+                  className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${notificationsEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}
+                >
+                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {updatingNotifications && <p className="text-xs text-vow-muted mt-2" role="status">Updating session reminders…</p>}
+              {notificationError && <p className="text-xs text-vow-muted mt-2" role="alert">{notificationError}</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="py-6">
+          <h2 className="vow-label mb-2">Legal &amp; Support</h2>
+          <div className="divide-y divide-vow-border">
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'support' }))} className="w-full py-5 text-left">
+              <p className="text-sm text-vow-ink">Support</p>
+            </button>
+
+            {onLegal && <button type="button" onClick={onLegal} className="w-full py-5 text-left">
+              <p className="text-sm text-vow-ink">Terms and Policies</p>
+            </button>}
+          </div>
+        </div>
+
+        <div className="py-6">
+          <h2 className="vow-label mb-2">Account</h2>
+          <div className="divide-y divide-vow-border">
+            <div className="py-5">
+              {!confirmDelete
+                ? <button type="button" onClick={() => { setDeleteError(''); setConfirmDelete(true); }} className="text-sm text-vow-muted hover:text-vow-ink">Delete Account</button>
+                : <div>
+                  <p className="text-sm text-vow-ink mb-1">Delete your account?</p>
+                  <p className="text-xs text-vow-muted mb-3">This permanently deletes your account and associated data. This action cannot be undone.</p>
+                  {deleteError && <p className="text-xs text-vow-muted mb-3" role="alert">{deleteError}</p>}
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setConfirmDelete(false)} disabled={deleting} className="vow-btn-ghost">Keep account</button>
+                    <button type="button" onClick={() => void handleDeleteAccount()} disabled={deleting} className="text-sm text-vow-ink underline underline-offset-4 disabled:opacity-50">{deleting ? 'Deleting…' : 'Confirm deletion'}</button>
+                  </div>
+                </div>}
+            </div>
+
+            <div className="py-5">
+              <button type="button" onClick={() => void handleSignOut()} className="text-sm text-vow-muted underline underline-offset-4 hover:text-vow-ink">Sign Out</button>
+              {signOutError && <p role="alert" className="text-xs text-vow-muted mt-2">{signOutError}</p>}
+            </div>
+          </div>
+        </div>
+
+        {entitlement?.plan === 'premium' && <div className="py-6">
+          <h2 className="vow-label mb-2">Premium</h2>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'upgrade' }))}
+            className="w-full py-5 text-left"
+          >
+            <p className="text-sm text-vow-ink">Manage subscription</p>
+            <p className="text-xs text-vow-muted mt-1">View or manage your Premium subscription.</p>
+          </button>
+        </div>}
+      </section>
     </div>
-    {confirmSignOut && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true"><div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Are you sure you want to sign out?</h2><p className="text-sm text-vow-muted leading-relaxed mb-6">You can sign back in whenever you are ready.</p><div className="flex gap-3"><button onClick={() => setConfirmSignOut(false)} className="vow-btn-ghost flex-1">Cancel</button><button onClick={handleSignOut} className="vow-btn-primary flex-1">Sign out</button></div></div></div>}
-  </div>;
-}
-
-function VowIconPreview({ background, foreground }: { background: string; foreground: string }) {
-  return <span className="mx-auto w-20 h-20 rounded-xl flex items-center justify-center overflow-hidden" style={{ background }} aria-hidden="true"><svg viewBox="0 0 108 108" className="w-full h-full" role="presentation"><path d="M32 24 L76 54 L32 84" fill="none" stroke={foreground} strokeWidth="8" strokeLinecap="butt" strokeLinejoin="miter" /></svg></span>;
-}
-
-function CustomisePage({ selectedStyle, message, onIconChange, onShuffle, onBack }: { selectedStyle: string; message: string; onIconChange: (style: IconStyle) => void; onShuffle: () => void; onBack: () => void }) {
-  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><PageHeader title="Customise" subtitle="Keep the VOW greater-than mark fixed, then choose or shuffle a colour treatment." /><section className="border border-vow-border p-5"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="vow-label mb-1">VOW Icon</p><p className="text-xs text-vow-muted">The app mark is always the greater-than sign. Colour is the custom part.</p></div><button type="button" onClick={onShuffle} className="vow-btn-soft shrink-0">Shuffle icon</button></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{ICON_STYLES.map((style) => <button key={style.id} onClick={() => onIconChange(style)} aria-pressed={selectedStyle === style.id} className={`border p-3 transition-colors ${selectedStyle === style.id ? 'border-vow-ink bg-vow-surface/60' : 'border-vow-border hover:border-vow-muted'}`}><VowIconPreview background={style.background} foreground={style.foreground} /><span className="block text-xs text-vow-ink mt-3">{style.label}</span></button>)}</div>{message && <p className="text-xs text-vow-muted mt-4">{message}</p>}</section></div>;
-}
-
-function SharedInformationPage({ session, displayName, onBack }: { session: ReturnType<typeof useAuth>['session']; displayName: string; onBack: () => void }) {
-  const userId = session?.user?.id; const email = session?.user?.email || '';
-  const phoneCalendarConnected = Boolean(userId && localStorage.getItem(`vow:native-calendar-sync:${userId}`) === 'true');
-  const googleCalendarConnected = Boolean(userId && localStorage.getItem(`vow:connections:${userId}`)?.includes('google-calendar'));
-  const rows = [{ label: 'Name', value: displayName || 'Not provided' }, { label: 'Email', value: email || 'Not provided' }, { label: 'Google Calendar', value: googleCalendarConnected ? 'Connected' : 'Not connected' }, { label: 'Phone Calendar', value: phoneCalendarConnected ? 'Connected' : 'Not connected' }];
-  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><PageHeader title="Account information" subtitle="A clear view of the account details and calendar connections currently available to VOW." /><div className="border border-vow-border divide-y divide-vow-border">{rows.map((row) => <div key={row.label} className="p-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2"><p className="text-xs text-vow-muted uppercase tracking-wide">{row.label}</p><p className="text-sm text-vow-ink sm:text-right break-words max-w-md">{row.value}</p></div>)}</div></div>;
+  );
 }

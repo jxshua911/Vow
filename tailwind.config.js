@@ -10,6 +10,7 @@ export default {
           muted: 'rgb(var(--vow-muted) / <alpha-value>)',
           border: 'rgb(var(--vow-border) / <alpha-value>)',
           success: 'rgb(var(--vow-success) / <alpha-value>)',
+          gray: 'rgb(var(--vow-gray) / <alpha-value>)',
         },
       },
       fontFamily: {

@@ -34,39 +34,38 @@ export function buildCoachingText(
 
   // Wins
   if (completionPct >= 80) {
-    lines.push(`That's a strong week — the majority of what you locked in got done.`);
+    lines.push(`Most of the commitments you set were completed.`);
   } else if (completionPct >= 50) {
-    lines.push(`You followed through on more than half of your commitments. Not perfect, but real progress.`);
+    lines.push(`More than half of your commitments were completed. Keep the parts of the plan that are working.`);
   } else if (total > 0) {
-    lines.push(`This was a tough week for follow-through. That's data, not a verdict.`);
+    lines.push(`Follow-through was lower this week. The useful question is what should change in the plan.`);
   }
 
-  // Patterns — each with a proposed adjustment, never a bare callout
+  // Keep the review user-facing: actionable adjustments only; never expose internal pattern-analysis language.
   if (patterns.length > 0) {
-    lines.push(`Here's what I noticed:`);
-    for (const p of patterns.slice(0, 3)) {
-      lines.push(`• ${p.description}.`);
-      if (p.hypothesis) lines.push(`  Hypothesis: ${p.hypothesis}`);
-      if (p.proposed_adjustment) lines.push(`  Suggestion: ${p.proposed_adjustment}`);
+    const actionable = patterns.slice(0, 2).map((p) => p.proposed_adjustment).filter(Boolean);
+    if (actionable.length > 0) {
+      lines.push(`For next week:`);
+      actionable.forEach((adjustment) => lines.push(`• ${adjustment}`));
     }
   }
 
   // Motivation dip — reference why_it_matters if completion is low
   if (completionPct < 50 && whyItMatters) {
-    lines.push(`When you set this goal, you wrote: "${whyItMatters}"`);
-    lines.push(`If that reason still holds, the issue may be the plan — not your commitment.`);
+    lines.push(`Your reason for this goal: "${whyItMatters}"`);
+    lines.push(`If that still matters to you, make next week's commitment easier to execute.`);
   }
 
   // Pause context acknowledgment
   if (settings?.pause_context) {
-    lines.push(`Note: you flagged an active life context — "${settings.pause_context}". I'm accounting for that and not counting these weeks against your patterns.`);
+    lines.push(`You flagged this context: "${settings.pause_context}". The next commitment should account for it.`);
   }
 
   // Closing — never shaming
   if (total === 0) {
     lines.push(`No sessions were scheduled this week. Want to lock in a lighter commitment for next week?`);
   } else if (completionPct < 50) {
-    lines.push(`No shame here — let's adjust the plan and try a smaller, more realistic commitment next week.`);
+    lines.push(`Next week, reduce the commitment to a level you can execute consistently.`);
   } else {
     lines.push(`Keep going. Lock in next week's commitments when you're ready.`);
   }

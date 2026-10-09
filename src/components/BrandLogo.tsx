@@ -1,7 +1,20 @@
 import type { ImgHTMLAttributes } from 'react';
-import { useTheme } from '@/lib/theme';
 
+/**
+ * Canonical VOW wordmark. This is the same source artwork used for the
+ * branded splash/auth surfaces; do not substitute generated or filtered marks.
+ */
 export function BrandLogo(props: Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'>) {
-  const { theme } = useTheme();
-  return <img {...props} src={theme === 'dark' ? '/vow-logo-white.svg' : '/vow-logo.svg'} alt={props.alt || 'VOW'} />;
+  const { style, ...rest } = props;
+  return (
+    <img
+      {...rest}
+      className={['vow-brand-logo', props.className].filter(Boolean).join(' ')}
+      src="/vow-logo.svg"
+      alt={props.alt || 'VOW'}
+      draggable={false}
+      decoding="async"
+      style={{ ...style }}
+    />
+  );
 }

@@ -1,0 +1,18 @@
+/**
+ * Triggers a browser download for an `.ics` `File`.
+ * Resolves after the object URL is revoked.
+ *
+ * @throws If `document` or `URL` is not available.
+ *
+ * @example
+ * const { ics } = await CapacitorCalendar.createEvent({
+ *   title: 'Team standup',
+ *   icsFileName: 'team-standup.ics',
+ * });
+ * if (ics) {
+ *   await downloadIcsFile(ics);
+ * }
+ *
+ * @since 8.5.0
+ */
+export declare function downloadIcsFile(file: File): Promise<void>;

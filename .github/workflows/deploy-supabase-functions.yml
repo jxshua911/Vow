@@ -1,12 +1,22 @@
 name: Deploy Supabase Edge Functions
 
 on:
-  push:
-    branches:
-      - capacitor-mobile
-    paths:
-      - 'supabase/functions/**'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      function:
+        description: 'Optional function name to deploy explicitly'
+        required: false
+        type: string
+      verify_secrets:
+        description: 'Verify deployed functions and required AI secret names without showing values'
+        required: false
+        default: false
+        type: boolean
+      restore_ai_rpc_grants:
+        description: 'Apply and verify the narrowly scoped authenticated AI guardrail RPC grants'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   deploy-functions:
@@ -15,53 +25,207 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: 2.98.2
+          version: latest
 
-      - name: Deploy Google Calendar auth function
-        run: supabase functions deploy google-calendar-auth --project-ref vqsrdausvmfjayffxiuh
+      - name: Deploy changed Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: vqsrdausvmfjayffxiuh
+          DEPLOY_FUNCTION: ${{ inputs.function }}
+          VERIFY_SECRETS: ${{ inputs.verify_secrets }}
+          RESTORE_AI_RPC_GRANTS: ${{ inputs.restore_ai_rpc_grants }}
+        run: |
+          set -euo pipefail
 
-      - name: Deploy Google Calendar events function
-        run: supabase functions deploy google-calendar-events --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          if [ "$RESTORE_AI_RPC_GRANTS" = "true" ]; then
+            sql="$(cat supabase/migrations/20261005114500_restore_authenticated_ai_guardrail_rpcs.sql)"
+            payload="$(jq -n --arg query "$sql" '{query: $query}')"
+            curl --fail-with-body --silent --show-error \
+              --request POST \
+              --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$payload"
+            echo
 
-      - name: Deploy VOW AI function
-        run: supabase functions deploy vow-goal-ai --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+            verify_sql="select
+              has_function_privilege('authenticated', 'public.vow_claim_ai_guardrail(uuid,numeric)', 'EXECUTE') as authenticated_can_claim,
+              has_function_privilege('authenticated', 'public.vow_record_ai_usage(text,text,integer,text)', 'EXECUTE') as authenticated_can_record,
+              has_function_privilege('authenticated', 'public.vow_release_ai_guardrail(uuid)', 'EXECUTE') as authenticated_can_release,
+              has_function_privilege('anon', 'public.vow_claim_ai_guardrail(uuid,numeric)', 'EXECUTE') as anon_can_claim,
+              has_function_privilege('anon', 'public.vow_record_ai_usage(text,text,integer,text)', 'EXECUTE') as anon_can_record,
+              has_function_privilege('anon', 'public.vow_release_ai_guardrail(uuid)', 'EXECUTE') as anon_can_release"
+            verify_payload="$(jq -n --arg query "$verify_sql" '{query: $query}')"
+            result="$(curl --fail-with-body --silent --show-error \
+              --request POST \
+              --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$verify_payload")"
+            echo "$result" | jq -e '
+              (type == "array") and (length == 1) and
+              (.[0].authenticated_can_claim == true) and
+              (.[0].authenticated_can_record == true) and
+              (.[0].authenticated_can_release == true) and
+              (.[0].anon_can_claim == false) and
+              (.[0].anon_can_record == false) and
+              (.[0].anon_can_release == false)
+            ' >/dev/null
+            echo "Authenticated AI guardrail RPC grants verified; anon remains denied."
+            exit 0
+          elif [ "$VERIFY_SECRETS" = "true" ]; then
+            echo "Deployed Edge Functions:"
+            supabase functions list --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: Deploy VOW Hamster function
-        run: supabase functions deploy vow-hamster --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+            echo "Checking required Edge Function secret names (values are never displayed):"
+            secret_names="$(supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" --output json | jq -r '.[].name')"
+            missing=0
+            for secret in GROQ_API_KEY OPENAI_API_KEY; do
+              if grep -Fxq "$secret" <<< "$secret_names"; then
+                echo "$secret=SET"
+              else
+                echo "$secret=MISSING"
+                missing=1
+              fi
+            done
+            exit "$missing"
+          elif [ -n "$DEPLOY_FUNCTION" ]; then
+            if [[ ! "$DEPLOY_FUNCTION" =~ ^[a-z0-9-]+$ ]] || [ ! -d "supabase/functions/$DEPLOY_FUNCTION" ]; then
+              echo "Invalid or unknown Edge Function: $DEPLOY_FUNCTION" >&2
+              exit 1
+            fi
+            functions=("$DEPLOY_FUNCTION")
+          else
+            base="${{ github.event.before }}"
+            if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+              base="${GITHUB_SHA}^"
+            fi
 
-      - name: Deploy VOW content safety function
-        run: supabase functions deploy vow-content-safety --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+            cooldown_migration="supabase/migrations/20261007120400_rebuild_ai_cooldown_rpc.sql"
+            if git diff --name-only "$base" "$GITHUB_SHA" -- "$cooldown_migration" | grep -Fxq "$cooldown_migration"; then
+              echo "Inspecting current AI cooldown schema (function signatures and cooldown-table columns only):"
+              before_sql="select jsonb_build_object(
+                'functions', coalesce((
+                  select jsonb_agg(jsonb_build_object(
+                    'arguments', pg_get_function_identity_arguments(p.oid),
+                    'returns', pg_get_function_result(p.oid)
+                  ))
+                  from pg_proc p
+                  join pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname = 'public' and p.proname = 'vow_claim_ai_cooldown'
+                ), '[]'::jsonb),
+                'cooldown_table_exists', to_regclass('public.vow_ai_request_cooldowns') is not null,
+                'cooldown_columns', coalesce((
+                  select jsonb_agg(jsonb_build_object('name', column_name, 'type', data_type) order by ordinal_position)
+                  from information_schema.columns
+                  where table_schema = 'public' and table_name = 'vow_ai_request_cooldowns'
+                ), '[]'::jsonb),
+                'guardrail_leases_exists', to_regclass('public.vow_ai_request_leases') is not null,
+                'guardrail_lease_columns', coalesce((
+                  select jsonb_agg(jsonb_build_object('name', column_name, 'type', data_type) order by ordinal_position)
+                  from information_schema.columns
+                  where table_schema = 'public' and table_name = 'vow_ai_request_leases'
+                ), '[]'::jsonb)
+              )"
+              before_payload="$(jq -n --arg query "$before_sql" '{query: $query}')"
+              curl --fail-with-body --silent --show-error \
+                --request POST \
+                --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+                --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                --header "Content-Type: application/json" \
+                --data "$before_payload"
+              echo
 
-      - name: Deploy VOW IP access gate function
-        run: supabase functions deploy vow-access-gate --no-verify-jwt --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+              migration_sql="$(cat "$cooldown_migration")"
+              migration_payload="$(jq -n --arg query "$migration_sql" '{query: $query}')"
+              curl --fail-with-body --silent --show-error \
+                --request POST \
+                --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+                --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                --header "Content-Type: application/json" \
+                --data "$migration_payload"
+              echo
 
-      - name: Deploy goal calendar sync function
-        run: supabase functions deploy google-calendar-sync-goal --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+              verify_sql="select
+                to_regprocedure('public.vow_claim_ai_cooldown(uuid,text)') is not null as function_exists,
+                to_regclass('public.vow_ai_request_cooldowns') is not null as table_exists,
+                has_function_privilege('service_role', 'public.vow_claim_ai_cooldown(uuid,text)', 'EXECUTE') as service_role_can_execute,
+                has_function_privilege('authenticated', 'public.vow_claim_ai_cooldown(uuid,text)', 'EXECUTE') as authenticated_can_execute,
+                to_regprocedure('public.vow_claim_ai_cooldown(uuid,text,integer)') is null as old_signature_removed,
+                to_regprocedure('public.vow_claim_ai_cooldown(uuid,text,numeric)') is null as old_numeric_signature_removed,
+                to_regclass('public.vow_ai_request_leases') is not null as guardrail_leases_preserved"
+              verify_payload="$(jq -n --arg query "$verify_sql" '{query: $query}')"
+              verify_result="$(curl --fail-with-body --silent --show-error \
+                --request POST \
+                --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+                --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                --header "Content-Type: application/json" \
+                --data "$verify_payload")"
+              echo "$verify_result" | jq -e '
+                (type == "array") and (length == 1) and
+                (.[0].function_exists == true) and
+                (.[0].table_exists == true) and
+                (.[0].service_role_can_execute == true) and
+                (.[0].authenticated_can_execute == false) and
+                (.[0].old_signature_removed == true) and
+                (.[0].old_numeric_signature_removed == true) and
+                (.[0].guardrail_leases_preserved == true)
+              ' >/dev/null
 
-      - name: Deploy VOW account export function
-        run: supabase functions deploy vow-account-export --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+              test_sql="begin;
+                do \$\$
+                declare
+                  test_user_id uuid;
+                  test_result jsonb;
+                begin
+                  select id into test_user_id from auth.users order by created_at limit 1;
+                  if test_user_id is null then
+                    raise exception 'No auth user available for cooldown RPC test';
+                  end if;
+                  test_result := public.vow_claim_ai_cooldown(test_user_id, 'clarify');
+                  if jsonb_typeof(test_result) <> 'object'
+                     or jsonb_typeof(test_result -> 'cooldown_seconds') <> 'number'
+                     or test_result ->> 'is_active' not in ('true', 'false') then
+                    raise exception 'Cooldown RPC returned an invalid response';
+                  end if;
+                end
+                \$\$;
+                rollback;"
+              test_payload="$(jq -n --arg query "$test_sql" '{query: $query}')"
+              curl --fail-with-body --silent --show-error \
+                --request POST \
+                --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+                --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                --header "Content-Type: application/json" \
+                --data "$test_payload"
+              echo
+              echo "AI cooldown RPC migration applied and verified; guardrail leases preserved."
+            fi
 
-      - name: Deploy VOW account deletion function
-        run: supabase functions deploy vow-account-delete --project-ref vqsrdausvmfjayffxiuh
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+            changed_files="$(git diff --name-only "$base" "$GITHUB_SHA" -- 'supabase/functions/*')"
+            mapfile -t functions < <(
+              printf '%s\n' "$changed_files" |
+                awk -F/ 'NF >= 3 {print $3}' |
+                sort -u
+            )
+          fi
+
+          if [ "${#functions[@]}" -eq 0 ]; then
+            echo "No Edge Function source changes detected; nothing to deploy."
+            exit 0
+          fi
+
+          for function in "${functions[@]}"; do
+            echo "Deploying changed function: $function"
+            if [ "$function" = "vow-blind-benchmark" ]; then
+              supabase functions deploy "$function" --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+            else
+              supabase functions deploy "$function" --project-ref "$SUPABASE_PROJECT_REF"
+            fi
+          done

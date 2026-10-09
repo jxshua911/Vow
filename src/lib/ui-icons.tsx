@@ -17,12 +17,6 @@ export const ChevronDown=(p:Props)=><Icon {...p}>{path('M6 9L12 15L18 9')}</Icon
 export const ChevronUp=(p:Props)=><Icon {...p}>{path('M6 15L12 9L18 15')}</Icon>;
 export const ArrowLeft=(p:Props)=><Icon {...p}>{path('M19 12H5M11 6L5 12L11 18')}</Icon>;
 export const ArrowRight=(p:Props)=><Icon {...p}>{path('M5 12H19M13 6L19 12L13 18')}</Icon>;
-export const ArrowUpRight=(p:Props)=><Icon {...p}>{path('M5 19L19 5M9 5H19V15')}</Icon>;
-export const ArrowDownRight=(p:Props)=><Icon {...p}>{path('M5 5L19 19M19 9V19H9')}</Icon>;
-export const Minus=(p:Props)=><Icon {...p}>{path('M5 12H19')}</Icon>;
-export const Flame=(p:Props)=><Icon {...p}>{path('M12 21C8.5 21 6 18.6 6 15.5C6 12.8 7.7 10.8 10.2 8.1C10.7 10.2 12 11.2 13.2 11.7C13.1 9.1 14.1 6.9 16 4C18.6 6.5 20 9.4 20 13.2C20 17.8 16.8 21 12 21Z')}</Icon>;
-export const Trophy=(p:Props)=><Icon {...p}>{path('M8 4H16V9C16 12.3 14.3 14 12 14C9.7 14 8 12.3 8 9V4ZM8 6H5V8C5 10.2 6.3 12 8.5 12M16 6H19V8C19 10.2 17.7 12 15.5 12M12 14V18M8 20H16M9 18H15')}</Icon>;
-export const Award=(p:Props)=><Icon {...p}><circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5"/>{path('M9.5 11L8 20L12 17.5L16 20L14.5 11')}</Icon>;
 export const Calendar=(p:Props)=><Icon {...p}><rect x="4" y="5.5" width="16" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>{path('M8 3.5V7.5M16 3.5V7.5M4 9.5H20')}</Icon>;
 export const Clock=(p:Props)=><Icon {...p}><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5"/>{path('M12 8V12L15 14')}</Icon>;
 export const Mail=(p:Props)=><Icon {...p}><rect x="4" y="6" width="16" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>{path('M5 7L12 13L19 7')}</Icon>;

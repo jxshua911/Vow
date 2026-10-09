@@ -1,0 +1,734 @@
+[
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_gold_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_gold_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_teal_white_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_teal_white_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_black_red.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_black_red.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_pink_orange.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_pink_orange.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xxxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xxxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_blue_red_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_blue_red_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_green_purple.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_green_purple.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-hdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-hdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_white_green.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_white_green.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-xxxhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-xxxhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_pink_orange_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_pink_orange_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/xml_file_paths.xml.flat",
+        "source": "com.vow.app-main-31:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-xhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-xhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_blue_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_blue_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-night-xxxhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-night-xxxhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_ic_vow_splash.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/ic_vow_splash.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-xxhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-xxhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_purple_gold.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_purple_gold.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_ic_vow_white.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/ic_vow_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_orange.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_orange.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_red_blue.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_red_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black_blue_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black_blue_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-hdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-hdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_white_black.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_white_black.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_teal_orange_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_teal_orange_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_red.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_red.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-night-xxhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-night-xxhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_gold_launcher.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_gold_launcher.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-hdpi_ic_launcher_background.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-hdpi/ic_launcher_background.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_ic_vow_black.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/ic_vow_black.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_gold_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_gold_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-nodpi_vow_icon_exact.png.flat",
+        "source": "com.vow.app-main-31:/drawable-nodpi/vow_icon_exact.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_green_purple.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_green_purple.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_gold_purple.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_gold_purple.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-night_ic_vow_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable-night/ic_vow_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-night-mdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-night-mdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_teal_orange.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_teal_orange.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_ic_vow_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/ic_vow_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_green_teal.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_green_teal.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xxhdpi_ic_launcher_background.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xxhdpi/ic_launcher_background.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_green.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_green.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-ldpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-ldpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_gold_purple_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_gold_purple_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_teal_white.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_teal_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_blue_red.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_blue_red.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_black_pink.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_black_pink.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_exact.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_exact.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_orange_blue.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_orange_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-ldpi_ic_launcher_background.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-ldpi/ic_launcher_background.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_black_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_black_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-night_ic_vow_launcher_round.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-night/ic_vow_launcher_round.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-night_ic_vow_launcher_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable-night/ic_vow_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_empty_splash.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_empty_splash.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_ic_vow_launcher_round.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/ic_vow_launcher_round.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_blue_white_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_blue_white_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-night-hdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-night-hdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_white_black.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_white_black.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_orange_white.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_orange_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_ic_vow_gold.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/ic_vow_gold.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_orange_white_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_orange_white_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_teal.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_teal.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_orange_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_orange_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-ldpi_ic_launcher_foreground.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-ldpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black_launcher.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black_launcher.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_purple_green_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_purple_green_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_gold_blue.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_gold_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_orange_white.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_orange_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_white_black_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_white_black_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_ic_vow_white.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/ic_vow_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-night-xxhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-night-xxhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_ic_vow_black.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/ic_vow_black.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_pink_teal.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_pink_teal.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_purple_green.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_purple_green.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_gold_purple.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_gold_purple.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-xxxhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-xxxhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-mdpi_ic_launcher_background.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-mdpi/ic_launcher_background.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-xhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-xhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-night-xhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-night-xhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_pink.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_pink.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_green_teal.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_green_teal.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_blue.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_purple_green.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_purple_green.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_pink_orange.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_pink_orange.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-night_ic_vow_launcher_legacy.xml.flat",
+        "source": "com.vow.app-main-31:/drawable-night/ic_vow_launcher_legacy.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_white_black.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_white_black.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_gold_blue_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_gold_blue_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-night_ic_vow_splash.xml.flat",
+        "source": "com.vow.app-main-31:/drawable-night/ic_vow_splash.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-xxhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-xxhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-mdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-mdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_red_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_red_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xxxhdpi_ic_launcher_background.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xxxhdpi/ic_launcher_background.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_pink_teal.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_pink_teal.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-night_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-night/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_white.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_purple_gold_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_purple_gold_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-ldpi_ic_launcher.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-ldpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_white_green_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_white_green_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_purple_gold.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_purple_gold.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_black_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_black_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_ic_vow_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/ic_vow_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/layout_activity_main.xml.flat",
+        "source": "com.vow.app-main-31:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black_blue.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_gold_purple.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_gold_purple.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black_pink.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black_pink.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_ic_stat_vow.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/ic_stat_vow.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_teal_orange.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_teal_orange.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_orange_white.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_orange_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_black_pink.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_black_pink.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-mdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-mdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-night-ldpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-night-ldpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_red_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_red_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_blue_red.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_blue_red.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_purple.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_purple.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_blue_white.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_blue_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_pink_orange.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_pink_orange.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-land-night-hdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-land-night-hdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_green_teal.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_green_teal.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_gold.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_gold.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_orange_blue_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_orange_blue_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_ic_vow_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/ic_vow_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_purple_gold.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_purple_gold.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-night_ic_vow_monochrome.xml.flat",
+        "source": "com.vow.app-main-31:/drawable-night/ic_vow_monochrome.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-mdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-mdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_red_blue_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_red_blue_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-night-ldpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-night-ldpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_blue_red.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_blue_red.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_white_green.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_white_green.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-v24_ic_launcher_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable-v24/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_blue_launcher.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_blue_launcher.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_white_launcher.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_white_launcher.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-hdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-hdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_white_green.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_white_green.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_black_red.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_black_red.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_pink_teal_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_pink_teal_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_ic_vow_launcher.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/ic_vow_launcher.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_green_purple.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_green_purple.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_orange_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_orange_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/xml_config.xml.flat",
+        "source": "com.vow.app-main-31:/xml/config.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_ic_vow_monochrome.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/ic_vow_monochrome.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_ic_vow_launcher.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/ic_vow_launcher.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_purple_green.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_purple_green.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black_red.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black_red.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_white_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_white_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-xhdpi_ic_launcher_background.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-xhdpi/ic_launcher_background.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_teal_white.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_teal_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black_pink_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black_pink_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-night_ic_vow_launcher.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-night/ic_vow_launcher.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_blue_white.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_blue_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_black_red_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_black_red_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-night-xhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-night-xhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_gold_blue.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_gold_blue.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_ic_vow_launcher_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/ic_vow_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-ldpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-ldpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_blue_white.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_blue_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_teal_white.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_teal_white.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-night-mdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-night-mdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_ic_vow_launcher_legacy.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/ic_vow_launcher_legacy.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_green_purple_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_green_purple_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_vow_icon_pink_teal.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/vow_icon_pink_teal.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable-port-night-xxxhdpi_splash.png.flat",
+        "source": "com.vow.app-main-31:/drawable-port-night-xxxhdpi/splash.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_ic_vow_gold.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/ic_vow_gold.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi-v26_vow_icon_teal_orange.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi-v26/vow_icon_teal_orange.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-ldpi_ic_launcher_round.png.flat",
+        "source": "com.vow.app-main-31:/mipmap-ldpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/drawable_vow_icon_green_teal_foreground.xml.flat",
+        "source": "com.vow.app-main-31:/drawable/vow_icon_green_teal_foreground.xml"
+    },
+    {
+        "merged": "com.vow.app-debug-29:/mipmap-anydpi_ic_vow_launcher_round.xml.flat",
+        "source": "com.vow.app-main-31:/mipmap-anydpi/ic_vow_launcher_round.xml"
+    }
+]

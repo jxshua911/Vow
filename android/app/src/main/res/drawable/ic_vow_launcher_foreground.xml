@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<scale xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@drawable/vow_icon_white_foreground" android:scaleWidth="120%" android:scaleHeight="120%" android:scaleGravity="center" android:level="10000" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FF000000" android:pathData="M28.9,24.79 L29,36.18 L67.29,54.53 L28.9,73.2 L28.9,84.27 L79,60.33 L78.89,48.73 Z" />
+</vector>

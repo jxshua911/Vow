@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,7 +50,7 @@ serve(async (req) => {
     return json({ activities });
   } catch (error) {
     console.error(error);
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    return json({ error: "Strava activities could not be loaded right now. Please try again." }, 500);
   }
 });
 

@@ -1,0 +1,21 @@
+import type { CreateEventOptions } from '../schemas/interfaces/create-event-options';
+/**
+ * Builds an RFC 5545 `VCALENDAR` document with one `VEVENT` from CreateEventOptions.
+ * When `startDate` is omitted, uses the current time. When `endDate` is omitted, uses
+ * one hour after the start (or the next day for all-day events).
+ */
+export declare function buildEventIcs(options: CreateEventOptions): string;
+/**
+ * Resolves the `.ics` download filename.
+ * Uses `icsFileName` when set; otherwise derives a name from `title` (fallback `event.ics`).
+ * Appends `.ics` when the chosen name has no such extension.
+ */
+export declare function resolveIcsFileName(options: Pick<CreateEventOptions, 'icsFileName' | 'title'>): string;
+/**
+ * Escapes TEXT values per RFC 5545 §3.3.11.
+ */
+export declare function escapeText(value: string): string;
+/**
+ * Folds a content line so each physical line is at most 75 octets (RFC 5545 §3.1).
+ */
+export declare function foldLine(line: string): string;

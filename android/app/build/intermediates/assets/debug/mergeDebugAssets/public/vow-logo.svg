@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="46 66 653 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="VOW logo">
+  <g fill="none" stroke="#000000" stroke-width="18" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M55 75 L185 150 L55 225"/>
+    <circle cx="330" cy="150" r="72"/>
+    <path d="M450 75 L510 225 L570 105 L630 225 L690 75"/>
+  </g>
+</svg>

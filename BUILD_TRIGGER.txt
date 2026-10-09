@@ -1,2 +1,2 @@
-VOW mobile build trigger
-Final UI and logo pass — 2026-09-06.
+VOW Android build trigger — 2026-10-07 device QA rebuild
+Latest capacitor-mobile source + current backend fixes.

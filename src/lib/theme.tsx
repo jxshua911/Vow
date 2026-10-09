@@ -1,6 +1,4 @@
-import { Capacitor } from '@capacitor/core';
-import { StatusBar, Style } from '@capacitor/status-bar';
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 export type VowTheme = 'light' | 'dark';
 
@@ -29,16 +27,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [showThemeSplash, setShowThemeSplash] = useState(false);
   const timerRef = useRef<number | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
     try { localStorage.setItem('vow:theme', theme); } catch { /* storage may be unavailable */ }
-
-    if (!Capacitor.isNativePlatform()) return;
-    void StatusBar.setStyle({ style: theme === 'dark' ? Style.Light : Style.Dark }).catch(() => {
-      // Theme switching should remain usable if the native status bar is unavailable.
-    });
   }, [theme]);
 
   useEffect(() => () => {
@@ -68,7 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     {children}
     {showThemeSplash && (
       <div className="vow-theme-splash" data-theme={theme} role="status" aria-label={`Switched to ${theme} mode`}>
-        <img className="vow-theme-splash-logo" src={theme === 'dark' ? '/vow-logo-white.svg' : '/vow-logo.svg'} alt="VOW" />
+        <img className="vow-brand-logo vow-theme-splash-logo" src="/vow-logo.svg" alt="VOW" />
       </div>
     )}
   </ThemeContext.Provider>;

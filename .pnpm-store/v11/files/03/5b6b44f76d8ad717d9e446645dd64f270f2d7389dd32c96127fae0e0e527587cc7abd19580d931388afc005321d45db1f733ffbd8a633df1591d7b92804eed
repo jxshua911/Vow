@@ -1,0 +1,135 @@
+import { WebPlugin } from '@capacitor/core';
+import { buildEventIcs, resolveIcsFileName } from './web/ics';
+export class CapacitorCalendarWeb extends WebPlugin {
+    checkPermission(_options) {
+        return this.throwUnimplemented(this.checkPermission.name);
+    }
+    checkAllPermissions() {
+        return this.throwUnimplemented(this.checkAllPermissions.name);
+    }
+    requestPermission(_options) {
+        return this.throwUnimplemented(this.requestPermission.name);
+    }
+    createRemindersList(_options) {
+        return this.throwUnimplemented(this.createRemindersList.name);
+    }
+    deleteRemindersList(_options) {
+        return this.throwUnimplemented(this.deleteRemindersList.name);
+    }
+    requestAllPermissions() {
+        return this.throwUnimplemented(this.requestAllPermissions.name);
+    }
+    requestWriteOnlyCalendarAccess() {
+        return this.throwUnimplemented(this.requestWriteOnlyCalendarAccess.name);
+    }
+    requestReadOnlyCalendarAccess() {
+        return this.throwUnimplemented(this.requestReadOnlyCalendarAccess.name);
+    }
+    requestFullCalendarAccess() {
+        return this.throwUnimplemented(this.requestFullCalendarAccess.name);
+    }
+    requestFullRemindersAccess() {
+        return this.throwUnimplemented(this.requestFullRemindersAccess.name);
+    }
+    createEventWithPrompt(_options) {
+        return this.throwUnimplemented(this.createEventWithPrompt.name);
+    }
+    modifyEventWithPrompt(_options) {
+        return this.throwUnimplemented(this.modifyEventWithPrompt.name);
+    }
+    createEvent(options) {
+        try {
+            const content = buildEventIcs(options);
+            const ics = new File([content], resolveIcsFileName(options), {
+                type: 'text/calendar;charset=utf-8',
+            });
+            return Promise.resolve({ id: null, ics });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return Promise.reject(new Error(message));
+        }
+    }
+    commit() {
+        return this.throwUnimplemented(this.commit.name);
+    }
+    modifyEvent(_options) {
+        return this.throwUnimplemented(this.modifyEvent.name);
+    }
+    selectCalendarsWithPrompt(_options) {
+        return this.throwUnimplemented(this.selectCalendarsWithPrompt.name);
+    }
+    fetchAllCalendarSources() {
+        return this.throwUnimplemented(this.fetchAllCalendarSources.name);
+    }
+    listCalendars() {
+        return this.throwUnimplemented(this.listCalendars.name);
+    }
+    fetchAllRemindersSources() {
+        return this.throwUnimplemented(this.fetchAllRemindersSources.name);
+    }
+    getDefaultCalendar(_options) {
+        return this.throwUnimplemented(this.getDefaultCalendar.name);
+    }
+    getDefaultRemindersList() {
+        return this.throwUnimplemented(this.getDefaultRemindersList.name);
+    }
+    openReminders() {
+        return this.throwUnimplemented(this.openReminders.name);
+    }
+    getRemindersLists() {
+        return this.throwUnimplemented(this.getRemindersLists.name);
+    }
+    openCalendar(_options) {
+        return this.throwUnimplemented(this.openCalendar.name);
+    }
+    createCalendar(_options) {
+        return this.throwUnimplemented(this.createCalendar.name);
+    }
+    deleteCalendar(_options) {
+        return this.throwUnimplemented(this.deleteCalendar.name);
+    }
+    createReminder(_options) {
+        return this.throwUnimplemented(this.createReminder.name);
+    }
+    deleteRemindersById(_options) {
+        return this.throwUnimplemented(this.deleteRemindersById.name);
+    }
+    deleteReminder(_options) {
+        return this.throwUnimplemented(this.deleteReminder.name);
+    }
+    modifyReminder(_options) {
+        return this.throwUnimplemented(this.modifyReminder.name);
+    }
+    getReminderById(_options) {
+        return this.throwUnimplemented(this.getReminderById.name);
+    }
+    getRemindersFromLists(_options) {
+        return this.throwUnimplemented(this.getRemindersFromLists.name);
+    }
+    deleteEventsById(_options) {
+        return this.throwUnimplemented(this.deleteEventsById.name);
+    }
+    deleteEvent(_options) {
+        return this.throwUnimplemented(this.deleteEvent.name);
+    }
+    deleteEventWithPrompt(_options) {
+        return this.throwUnimplemented(this.deleteEventWithPrompt.name);
+    }
+    listEventsInRange(_options) {
+        return this.throwUnimplemented(this.listEventsInRange.name);
+    }
+    modifyCalendar(_options) {
+        return this.throwUnimplemented(this.modifyCalendar.name);
+    }
+    deleteReminderWithPrompt(_options) {
+        return this.throwUnimplemented(this.deleteReminderWithPrompt.name);
+    }
+    updateRemindersList(_options) {
+        return this.throwUnimplemented(this.updateRemindersList.name);
+    }
+    throwUnimplemented(methodName) {
+        return Promise.reject(this.unimplemented(`${methodName} is not implemented on the web.`));
+    }
+}
+//# sourceMappingURL=web.js.map

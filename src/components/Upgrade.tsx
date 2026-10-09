@@ -1,0 +1,159 @@
+import { useEffect, useState } from 'react';
+import { PageHeader } from './AppShell';
+import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
+import { getPremiumProducts, openPremiumManagement, purchasePremium, restorePremium } from '@/lib/premiumPurchases';
+import { VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY } from '@/lib/premiumConfig';
+import { userFacingError } from '@/lib/userFacingError';
+
+type Billing = 'monthly' | 'yearly';
+
+const premiumBenefits = [
+  'Unlimited active goals',
+  'Unlimited planning actions',
+  'Unlimited adaptive plan rebuilding',
+  'Deeper AI coaching and planning',
+  'Goal-specific planning methodology',
+  'Advanced weekly review insights',
+  'Full plan history',
+];
+
+const freeBenefits = [
+  '1 active goal',
+  'Personalised plan with milestones',
+  'Scheduled sessions and progress tracking',
+  '10 planning actions/month',
+  '1 adaptive replan/month',
+  '1 advanced weekly review/month',
+];
+
+export function UpgradePage() {
+  const [billing, setBilling] = useState<Billing>('monthly');
+  const [usage, setUsage] = useState<EntitlementSnapshot | null>(null);
+  const [restoreState, setRestoreState] = useState('');
+  const [manageState, setManageState] = useState('');
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [purchaseState, setPurchaseState] = useState('');
+  const [products, setProducts] = useState<Array<{ identifier: string; price: number; priceString: string }>>([]);
+  const isYearly = billing === 'yearly';
+  const isPremium = usage?.plan === 'premium';
+  const monthlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_MONTHLY);
+  const yearlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_YEARLY);
+  const selectedProduct = isYearly ? yearlyProduct : monthlyProduct;
+  const annualSavings = monthlyProduct && yearlyProduct && monthlyProduct.price > 0
+    ? Math.max(0, Math.round((1 - yearlyProduct.price / (monthlyProduct.price * 12)) * 100))
+    : null;
+
+  useEffect(() => {
+    void getEntitlementSnapshot().then(setUsage);
+    void getPremiumProducts().then((result) => {
+      setProducts((result.products || []).map((product) => ({
+        identifier: product.identifier,
+        price: Number(product.price || 0),
+        priceString: product.priceString || '',
+      })));
+    }).catch(() => setProducts([]));
+  }, []);
+
+  async function handleRestore() {
+    setRestoreState('');
+    try {
+      const result = await restorePremium();
+      setRestoreState(result.restored ? 'Your Premium purchase has been restored.' : 'No active VOW purchase was found.');
+      if (result.restored) setUsage(await getEntitlementSnapshot());
+    } catch (err) {
+      setRestoreState(userFacingError(err, 'We could not restore your Premium purchase. Please try again.'));
+    }
+  }
+
+  async function handlePurchase() {
+    setPurchaseState('');
+    try {
+      const productId = isYearly ? VOW_PREMIUM_YEARLY : VOW_PREMIUM_MONTHLY;
+      await purchasePremium(productId);
+      setPurchaseState('Premium is now active.');
+      setUsage(await getEntitlementSnapshot());
+    } catch (err) {
+      setPurchaseState(userFacingError(err, 'We could not complete the Premium purchase. Please try again.'));
+    }
+  }
+
+  async function handleManage() {
+    setManageState('');
+    try {
+      await openPremiumManagement();
+    } catch (err) {
+      setManageState(userFacingError(err, 'We could not open Google Play subscription management.'));
+    }
+  }
+
+  return <div>
+    <PageHeader title="VOW" subtitle="More planning power, deeper guidance and room to keep meaningful goals moving." />
+
+    <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-5">
+      <p className="vow-label mb-2">Current plan</p>
+      <div className="flex items-center justify-between gap-4">
+        <div><h2 className="vow-heading text-2xl text-vow-ink">{isPremium ? 'Premium' : 'Free'}</h2><p className="text-sm text-vow-muted mt-1">{isPremium ? 'Your full planning toolkit is active.' : 'Your goals and planning actions are available within the free plan limits.'}</p></div>
+        <span className="border border-vow-border px-3 py-1 text-xs text-vow-ink">{isPremium ? 'Active' : '$0'}</span>
+      </div>
+    </section>
+
+    {usage && <details className="mb-5 border border-vow-border rounded-xl px-4 py-3">
+      <summary className="cursor-pointer text-sm text-vow-muted">View current usage</summary>
+      <div className="pt-4">
+      <div className="grid md:grid-cols-3 gap-3">
+        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Planning actions this month</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? 'Unlimited' : `${usage.planning_used}/${usage.planning_limit ?? 10}`}</p></div>
+        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Adaptive replans</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? 'Unlimited' : `${usage.adaptive_replans_used}/${usage.adaptive_replans_limit ?? 1}`}</p></div>
+        <div className="border border-vow-border rounded-xl p-4"><p className="text-xs text-vow-muted mb-2">Active goals</p><p className="text-sm text-vow-ink">{usage.plan === 'premium' ? `${usage.active_goals} active` : `${usage.active_goals}/1`}</p></div>
+      </div>
+    </div></details>}
+
+    <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
+      <p className="vow-label mb-3">Pricing</p>
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <div className="border border-vow-border rounded-xl p-5">
+          <p className="text-sm font-medium text-vow-ink mb-4">Free</p>
+          <div className="text-3xl font-medium text-vow-ink mb-1">$0</div>
+          <p className="text-xs text-vow-muted mb-5">Start planning</p>
+          <div className="space-y-2.5">{freeBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
+        </div>
+        <div className="border border-vow-ink rounded-xl p-5">
+          <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
+          <div className="text-3xl font-medium text-vow-ink mb-1">{selectedProduct?.priceString || 'Price unavailable'}</div>
+          <p className="text-xs text-vow-muted mb-5">{isYearly ? `per year${annualSavings !== null ? ` · save ${annualSavings}%` : ''}` : 'per month'}</p>
+          <p className="text-xs text-vow-muted">Deeper coaching, adaptive planning and more room for meaningful goals.</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
+        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">{monthlyProduct?.priceString ? `${monthlyProduct.priceString} / month` : 'Current Google Play price'}</span></button>
+        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">{yearlyProduct?.priceString ? `${yearlyProduct.priceString} / year${annualSavings !== null ? ` · save ${annualSavings}%` : ''}` : 'Current Google Play price'}</span></button>
+      </div>
+      {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
+        <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
+        <p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.</p>
+        <button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button>
+      </div>}
+      {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
+        <p className="text-sm font-medium text-vow-ink">Premium is active</p>
+        <p className="text-xs text-vow-muted mt-1">Manage or cancel your subscription through Google Play.</p>
+        <button type="button" onClick={() => setConfirmCancel(true)} className="vow-btn-ghost mt-4">Manage or cancel subscription</button>
+      </div>}
+      <div className="flex flex-col sm:flex-row gap-3 mt-4">
+        <button type="button" onClick={handleRestore} className="vow-btn-soft">Restore purchase</button>
+      </div>
+      {restoreState && <p role="status" className="text-xs text-vow-muted mt-3">{restoreState}</p>}
+      {purchaseState && <p role="status" className="text-xs text-vow-muted mt-3">{purchaseState}</p>}
+      {manageState && <p role="alert" className="text-xs text-vow-muted mt-3">{manageState}</p>}
+    </section>
+
+    <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-8"><p className="vow-label mb-3">What you unlock</p><h2 className="vow-heading text-xl text-vow-ink mb-4">More support as your goals grow.</h2><div className="grid sm:grid-cols-2 gap-3">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><span aria-hidden="true">✓</span><span>{benefit}</span></div>)}</div></section>
+    <section className="border-t border-vow-border pt-7"><p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Built for real goals</p><p className="text-sm text-vow-muted leading-relaxed max-w-2xl">Run a 10K. Make ravioli. Learn Spanish. Build a robot. Pass your exams. Launch an app. VOW is about the planning intelligence underneath the goal — not the category itself.</p></section>
+
+    {confirmCancel && <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-premium-title">
+      <div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full rounded-xl">
+        <h2 id="cancel-premium-title" className="vow-heading text-xl text-vow-ink mb-2">Are you sure you want to cancel Premium?</h2>
+        <p className="text-sm text-vow-muted leading-relaxed mb-6">Google Play will handle the cancellation. You can keep your Premium access for the current billing period, subject to Google Play's subscription rules.</p>
+        <div className="flex gap-3"><button type="button" onClick={() => setConfirmCancel(false)} className="vow-btn-ghost flex-1">Keep Premium</button><button type="button" onClick={() => { setConfirmCancel(false); void handleManage(); }} className="vow-btn-primary flex-1">Continue to Google Play</button></div>
+      </div>
+    </div>}
+  </div>;
+}

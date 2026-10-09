@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,50 +15,34 @@ function secret() {
   try {
     const keys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
     if (keys.default) return keys.default;
-  } catch {}
+  } catch {
+    // Fall back to the service-role environment variable below.
+  }
   return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 }
 
 function authClient(req: Request) {
   let key = Deno.env.get("SUPABASE_ANON_KEY") || "";
   if (!key) {
-    try { key = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}").default || ""; } catch {}
+    try {
+      key = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}").default || "";
+    } catch {
+      // Fall back to an empty key; authentication will fail safely below.
+    }
   }
-  return createClient(Deno.env.get("SUPABASE_URL")!, key, { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } });
+  return createClient(Deno.env.get("SUPABASE_URL")!, key, {
+    global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
+  });
 }
 
 function adminClient() {
-  return createClient(Deno.env.get("SUPABASE_URL")!, secret(), { auth: { persistSession: false, autoRefreshToken: false } });
+  return createClient(Deno.env.get("SUPABASE_URL")!, secret(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 function normalise(value: string) {
-  return value.normalize("NFKC").toLowerCase().replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000);
-}
-
-function clientIp(req: Request) {
-  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return req.headers.get("cf-connecting-ip")?.trim() || forwarded || req.headers.get("x-real-ip")?.trim() || null;
-}
-
-async function hashIp(ip: string) {
-  const material = `${secret()}:${ip.trim()}`;
-  const bytes = new TextEncoder().encode(material);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function getActiveIpBan(ip: string | null) {
-  if (!ip || !secret()) return null;
-  const ipHash = await hashIp(ip);
-  const { data, error } = await adminClient()
-    .from("moderation_ip_bans")
-    .select("banned_until, reason")
-    .eq("ip_hash", ipHash)
-    .maybeSingle();
-  if (error) throw new Error("MODERATION_IP_LOOKUP_FAILED");
-  if (!data) return null;
-  if (data.banned_until && new Date(data.banned_until).getTime() <= Date.now()) return null;
-  return data;
+  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 4000);
 }
 
 type Classification = {
@@ -105,52 +89,48 @@ function classify(input: string): Classification {
   return { status: "safe", category: "none", severity: "ambiguous", confidence: 0.99, message: "" };
 }
 
-function addMonths(date: Date, months: number) {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
-}
-
-async function upsertIpBan(ip: string | null, userId: string, bannedUntil: Date | null, reason: string) {
-  if (!ip || !secret()) return;
-  const ipHash = await hashIp(ip);
+async function enforceSeriousViolation(userId: string, classification: Classification) {
   const db = adminClient();
-  const { data: existing, error: existingError } = await db
-    .from("moderation_ip_bans")
-    .select("id, banned_until")
-    .eq("ip_hash", ipHash)
-    .maybeSingle();
-  if (existingError) throw new Error("MODERATION_IP_LOOKUP_FAILED");
+  const { data: strikeNumber, error: strikeError } = await db.rpc("vow_record_moderation_violation", {
+    p_user_id: userId,
+    p_category: classification.category,
+    p_severity: classification.severity,
+    p_confidence: clamp(classification.confidence),
+  });
+  if (strikeError || typeof strikeNumber !== "number" || !Number.isInteger(strikeNumber) || strikeNumber < 1) {
+    throw new Error("MODERATION_HISTORY_FAILED");
+  }
 
-  if (existing?.banned_until === null) return;
+  if (strikeNumber <= 3) {
+    return {
+      action: "reword_required" as const,
+      strikeNumber,
+      retryAfterSeconds: null,
+    };
+  }
 
-  const { error } = existing
-    ? await db.from("moderation_ip_bans").update({ user_id: userId, banned_until: bannedUntil?.toISOString() ?? null, reason }).eq("id", existing.id)
-    : await db.from("moderation_ip_bans").insert({ ip_hash: ipHash, user_id: userId, banned_until: bannedUntil?.toISOString() ?? null, reason });
-  if (error) throw new Error("MODERATION_IP_BAN_FAILED");
-}
-
-async function enforceSeriousViolation(userId: string, classification: Classification, ip: string | null) {
-  const db = adminClient();
-  const { count, error: countError } = await db.from("moderation_events").select("id", { count: "exact", head: true }).eq("user_id", userId).in("severity", ["high", "critical"]);
-  if (countError) throw new Error("MODERATION_HISTORY_FAILED");
-  const strikeNumber = (count || 0) + 1;
-  let action: "suspended" | "banned";
-  let banDuration: string;
+  const action: "suspended" | "banned" = strikeNumber === 4 ? "suspended" : "banned";
+  const banDuration = action === "suspended" ? "24h" : "876000h";
   let bannedUntil: Date | null = null;
-  if (strikeNumber === 1) { action = "suspended"; banDuration = "168h"; bannedUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); }
-  else if (strikeNumber === 2) { action = "suspended"; banDuration = "1464h"; bannedUntil = addMonths(new Date(), 2); }
-  else { action = "banned"; banDuration = "876000h"; }
+  if (action === "suspended") bannedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   const { data: userData, error: userError } = await db.auth.admin.getUserById(userId);
   if (userError || !userData.user) throw new Error("MODERATION_USER_LOOKUP_FAILED");
   const existingMeta = userData.user.app_metadata || {};
-  const nextMeta = { ...existingMeta, moderation_strikes: strikeNumber, moderation_status: action === "banned" ? "permanently_banned" : "suspended", moderation_banned_until: bannedUntil ? bannedUntil.toISOString() : null };
+  const nextMeta = {
+    ...existingMeta,
+    moderation_strikes: strikeNumber,
+    moderation_status: action === "banned" ? "permanently_banned" : "suspended",
+    moderation_banned_until: bannedUntil ? bannedUntil.toISOString() : null,
+  };
   const { error: banError } = await db.auth.admin.updateUserById(userId, { ban_duration: banDuration, app_metadata: nextMeta });
   if (banError) throw new Error("MODERATION_ENFORCEMENT_FAILED");
-  await upsertIpBan(ip, userId, bannedUntil, `VOW moderation strike ${strikeNumber}: ${classification.category}`);
-  const { error: eventError } = await db.from("moderation_events").insert({ user_id: userId, category: classification.category, severity: classification.severity, confidence: clamp(classification.confidence), action, strike_number: strikeNumber });
-  if (eventError) throw new Error("MODERATION_EVENT_RECORD_FAILED");
+
+  if (action === "banned") {
+    console.error("[VOW] Permanent moderation ban issued. Review the owner-visible moderation event.", {
+      strike_number: strikeNumber,
+    });
+  }
   return { action, strikeNumber, retryAfterSeconds: bannedUntil ? Math.max(1, Math.ceil((bannedUntil.getTime() - Date.now()) / 1000)) : null };
 }
 
@@ -158,32 +138,66 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
   try {
-    const ip = clientIp(req);
-    const ipBan = await getActiveIpBan(ip);
-    if (ipBan) {
-      return json({ status: "suspended", category: "access_restricted", confidence: 1, message: "Access to VOW is temporarily or permanently restricted from this network address." }, 403);
-    }
-
     if (!(req.headers.get("Authorization") || "").startsWith("Bearer ")) return json({ error: "Authentication required." }, 401);
     const { data, error } = await authClient(req).auth.getUser();
     if (error || !data.user) return json({ error: "Authentication required." }, 401);
     const body = await req.json();
     const text = typeof body?.text === "string" ? body.text.trim() : "";
     if (!text) return json({ status: "safe" });
+
     const classification = classify(text);
     if (classification.status === "safe" || classification.status === "ambiguous") {
       if (classification.status === "ambiguous") {
-        await adminClient().from("moderation_events").insert({ user_id: data.user.id, category: classification.category, severity: classification.severity, confidence: clamp(classification.confidence), action: "reword_required", strike_number: null });
+        const { error: eventError } = await adminClient().from("moderation_events").insert({
+          user_id: data.user.id,
+          category: classification.category,
+          severity: classification.severity,
+          confidence: clamp(classification.confidence),
+          action: "reword_required",
+          strike_number: null,
+        });
+        if (eventError) throw new Error("MODERATION_EVENT_RECORD_FAILED");
       }
       return json({ status: classification.status, category: classification.category, confidence: classification.confidence, message: classification.message });
     }
-    const enforcement = await enforceSeriousViolation(data.user.id, classification, ip);
+
+    if (classification.category === "self_harm") {
+      const { error: eventError } = await adminClient().from("moderation_events").insert({
+        user_id: data.user.id,
+        category: classification.category,
+        severity: classification.severity,
+        confidence: clamp(classification.confidence),
+        action: "reword_required",
+        strike_number: null,
+      });
+      if (eventError) throw new Error("MODERATION_EVENT_RECORD_FAILED");
+      return json({
+        status: "blocked",
+        category: classification.category,
+        confidence: classification.confidence,
+        message: classification.message,
+      });
+    }
+
+    const enforcement = await enforceSeriousViolation(data.user.id, classification);
+    const status = enforcement.action === "banned"
+      ? "banned"
+      : enforcement.action === "suspended"
+        ? "suspended"
+        : enforcement.strikeNumber === 3
+          ? "warning"
+          : "blocked";
     const message = enforcement.action === "banned"
-      ? "This account has been permanently banned because of repeated serious safety violations, and this network address has also been blocked."
-      : enforcement.strikeNumber === 1
-        ? "This content was blocked and access to your VOW account and network address has been suspended for 7 days because of a serious safety violation."
-        : "This content was blocked and access to your VOW account and network address has been suspended for 2 months because of a repeated serious safety violation.";
-    return json({ status: "suspended", category: classification.category, confidence: classification.confidence, message, strike_number: enforcement.strikeNumber, retry_after_seconds: enforcement.retryAfterSeconds });
+      ? "Your account has been permanently suspended after repeated serious safety violations."
+      : enforcement.action === "suspended"
+        ? "Your account is temporarily suspended for 24 hours because of repeated serious safety violations."
+        : enforcement.strikeNumber === 3
+          ? "Final warning: this serious safety violation is not allowed. Another violation may suspend your account."
+          : enforcement.strikeNumber === 1
+            ? "Please rephrase this goal so it clearly describes a safe activity."
+            : "This is your second safety warning. Please change the goal before trying again.";
+
+    return json({ status, category: classification.category, confidence: classification.confidence, message, strike_number: enforcement.strikeNumber, retry_after_seconds: enforcement.retryAfterSeconds });
   } catch (error) {
     console.error("content safety", error);
     return json({ error: "VOW could not complete its safety check." }, 500);

@@ -1,141 +1,204 @@
-import { specialistFor } from './domainRouter';
+import { INTEGRATIONS, recommendIntegrations, type IntegrationDefinition } from './integrations/catalog';
 
 export type ArmadilloResult = {
   category: string;
   goal_type: string;
   metric: string;
-  target: string | null;
-  direction: 'increase' | 'decrease' | 'complete' | 'maintain' | 'build' | 'progress';
-  secondary_metric: string | null;
-  time_target: string | null;
   evidence: string[];
-  evidence_source: string[];
   integration: string | null;
-  planning_strategy: string;
-  needs_clarification: boolean;
-  clarification_reasons: string[];
-  safety_flag: boolean;
-  safety_note: string | null;
   fallback: string;
   confidence: number;
+  methodology: string;
+  required_inputs: string[];
+  needs_ai_research: boolean;
+  research_reason: string | null;
+  target?: string | null;
+  time_target?: string | null;
 };
 
-type CanonicalBase = {
-  category: string;
-  goal_type: string;
-  metric: string;
-  evidence: string[];
-  integration: string | null;
-  planning_strategy: string;
-};
+const rules = [
+  {
+    category: 'Sports',
+    goal_type: 'Running',
+    metric: 'distance, pace, time',
+    evidence: ['activity distance', 'activity pace', 'activity time'],
+    integration: 'Strava',
+    methodology: 'Build running volume gradually, establish a measurable baseline, then progress pace or distance through structured sessions and recovery.',
+    required_inputs: ['current running baseline', 'target distance or time', 'available training days'],
+    keywords: ['run', 'running', '5k', '10k', 'marathon', 'half marathon', 'mile', 'km', 'xc', 'cross country'],
+  },
+  {
+    category: 'Sports',
+    goal_type: 'Cycling',
+    metric: 'distance, duration',
+    evidence: ['ride distance', 'ride duration'],
+    integration: 'Strava',
+    methodology: 'Establish current riding volume and pace, then progress duration or distance with purposeful sessions and recovery.',
+    required_inputs: ['current cycling baseline', 'target distance or time', 'available training days'],
+    keywords: ['cycle', 'cycling', 'bike', 'biking', 'ride', 'kilometre'],
+  },
+  {
+    category: 'Sports',
+    goal_type: 'Football',
+    metric: 'sessions, minutes, performance',
+    evidence: ['training sessions', 'match activity', 'manual performance notes'],
+    integration: 'Strava',
+    methodology: 'Combine technical practice, position-specific work, conditioning, and match exposure while tracking consistent performance indicators.',
+    required_inputs: ['position or role', 'current performance level', 'available training days'],
+    keywords: ['football', 'soccer', 'match', 'football training'],
+  },
+  {
+    category: 'Languages',
+    goal_type: 'Language Learning',
+    metric: 'vocabulary, comprehension, speaking, practice time',
+    evidence: ['language practice sessions', 'vocabulary progress', 'speaking practice'],
+    integration: 'Google Calendar',
+    methodology: 'Establish a baseline, build useful vocabulary and grammar, practise comprehension and speaking, then increase real-world exposure.',
+    required_inputs: ['target language', 'current level', 'target outcome or deadline'],
+    keywords: ['spanish', 'french', 'japanese', 'german', 'swahili', 'italian', 'portuguese', 'mandarin', 'language'],
+  },
+  {
+    category: 'Crafts/Hobbies',
+    goal_type: 'Craft or Hobby',
+    metric: 'practice sessions, completed projects, demonstrated skill',
+    evidence: ['practice sessions', 'completed projects', 'manual progress updates'],
+    integration: null,
+    methodology: 'Identify the skill level and desired finished outcome, learn the core techniques, practise deliberately, and build progressively harder projects.',
+    required_inputs: ['specific skill or craft', 'current level', 'target project or outcome'],
+    keywords: ['knit', 'knitting', 'crochet', 'sew', 'sewing', 'embroidery', 'woodwork', 'woodworking', 'pottery', 'draw', 'drawing', 'paint', 'painting', 'craft'],
+  },
+  {
+    category: 'Sports',
+    goal_type: 'Sailing / Regatta',
+    metric: 'race results, starts, boat handling, tactics, training sessions',
+    evidence: ['sailing sessions', 'race results', 'training notes', 'manual performance tracking'],
+    integration: null,
+    methodology: 'Establish the sailor and boat baseline, identify the regatta format and competitive demands, then progress boat handling, starts, tactics, race execution and post-race analysis.',
+    required_inputs: ['current sailing level', 'boat/class and competition format', 'target event or result'],
+    keywords: ['sailing', 'sail', 'sailor', 'regatta', 'tanzacat', 'catamaran', 'dinghy'],
+  },
+  {
+    category: 'Education',
+    goal_type: 'Study',
+    metric: 'study time, task completion, accuracy',
+    evidence: ['study sessions', 'completed tasks', 'practice results'],
+    integration: 'Google Calendar',
+    methodology: 'Turn the outcome into specific study tasks, schedule focused sessions, use retrieval or practice, and review measurable progress.',
+    required_inputs: ['subject or skill', 'current level', 'target outcome or deadline'],
+    keywords: ['study', 'revise', 'revision', 'exam', 'homework', 'physics', 'chemistry', 'biology', 'maths', 'mathematics', 'school', 'coursework', 'assignment'],
+  },
+  {
+    category: 'Education',
+    goal_type: 'Psychology Study',
+    metric: 'assessment marks, topic accuracy, timed-question performance, exam technique',
+    evidence: ['psychology study sessions', 'practice-question results', 'topic accuracy', 'mock assessment marks'],
+    integration: 'Google Calendar',
+    methodology: 'Establish the current grade and assessment baseline, diagnose weak psychology topics and exam skills, then use retrieval, application questions, feedback and progressively timed practice to close the gap to the target grade.',
+    required_inputs: ['current psychology grade or marks', 'exam board/course and assessment format', 'weak topics or recent assessment feedback', 'target assessment date'],
+    keywords: ['psychology', 'psychological', 'psychology exam', 'psychology revision'],
+  },
+  {
+    category: 'Reading',
+    goal_type: 'Reading',
+    metric: 'pages, books, reading time',
+    evidence: ['pages read', 'books completed', 'reading sessions'],
+    integration: null,
+    methodology: 'Define the reading outcome, set a sustainable cadence, and track pages, sessions, or completed books against the commitment.',
+    required_inputs: ['book or reading topic', 'target amount', 'available reading time'],
+    keywords: ['read', 'reading', 'book', 'books', 'pages'],
+  },
+  {
+    category: 'Mindfulness',
+    goal_type: 'Meditation',
+    metric: 'sessions, duration',
+    evidence: ['meditation sessions', 'meditation duration'],
+    integration: 'Medito',
+    methodology: 'Build a consistent mindfulness habit with a realistic session length, frequency, and gradual progression.',
+    required_inputs: ['preferred practice type', 'current consistency', 'target frequency'],
+    keywords: ['meditate', 'meditation', 'mindfulness'],
+  },
+  {
+    category: 'Technology/Projects',
+    goal_type: 'GitHub Contributions',
+    metric: 'contributions, pull requests, commits',
+    evidence: ['GitHub activity'],
+    integration: 'GitHub',
+    methodology: 'Translate the project outcome into concrete deliverables, milestones, and reviewable implementation work, then track shipped progress.',
+    required_inputs: ['project outcome', 'current project state', 'target deliverables'],
+    keywords: ['github', 'commit', 'commits', 'pull request', 'contribution', 'coding project'],
+  },
+  {
+    category: 'Career/Projects',
+    goal_type: 'Project',
+    metric: 'deliverables, milestones, completion',
+    evidence: ['project milestones', 'completed deliverables', 'project review'],
+    integration: 'Google Calendar',
+    methodology: 'Define the finished outcome, break it into deliverables and milestones, schedule focused work, and review progress against the intended result.',
+    required_inputs: ['project outcome', 'current project state', 'target deliverables or deadline'],
+    keywords: ['portfolio', 'project', 'career', 'cv', 'resume', 'job', 'application', 'internship'],
+  },
+];
 
-const GENERIC_SKILL_KEYWORDS = ['learn', 'learning', 'master', 'mastery', 'teach myself', 'teach myself how', 'get good at', 'become good at', 'practice', 'practise', 'improve my skills', 'develop a skill', 'learn how to'];
+export function analyseGoalForEvidence(input: {
+  title?: string | null;
+  outcome?: string | null;
+  why_it_matters?: string | null;
+}): ArmadilloResult {
+  const text = [input.title, input.outcome, input.why_it_matters].filter(Boolean).join(' ').toLowerCase();
+  const rawText = [input.title, input.outcome, input.why_it_matters].filter(Boolean).join(' ');
+  const tokens = rawText.match(/\b[A-Z][A-Z0-9]{1,7}\b/g) || [];
+  const stopAcronyms = new Set(['AI', 'CV', 'UX', 'UI', 'GPS', 'API', 'SQL', 'CSS', 'HTML', 'PDF', 'IGCSE', 'SAT', 'GPA']);
+  const unknownAcronym = tokens.find(token => !stopAcronyms.has(token));
+  const knownAmbiguousTerms = /\b(t100|im|hyrox|spartan|ocr|utmb|bjj|mma|xc|cross[- ]?country|ironman|iron man|70\.3|70\s*\.\s*3)\b/i;
+  const hasAmbiguousSignal = Boolean(unknownAcronym || knownAmbiguousTerms.test(text));
 
-function extractTarget(text: string, goalType: string): string | null {
-  const numeric = text.match(/(\d+(?:\.\d+)?)\s*(km|kilometres?|kilometers?|miles?|mi|pages?|books?|hours?|hrs?|minutes?|mins?|sessions?|repetitions?|reps?|days?|weeks?)/i);
-  if (numeric) return numeric[0].trim();
-  const money = text.match(/(?:save|saving|budget)\s+(?:of\s+)?([$£€]?\s*\d+(?:[,.]\d+)?)/i);
-  if (money) return money[1].trim();
-  const named = text.match(/\b(5k|10k|half marathon|marathon)\b/i);
-  if (named) return named[0];
-  if (goalType === 'Reading' && /daily|every day/i.test(text)) return 'daily reading target';
-  return null;
-}
+  const match = rules.find(rule => rule.keywords.some(keyword => text.includes(keyword)));
 
-function extractTimeTarget(text: string): string | null {
-  const numeric = text.match(/\b(?:under|below|within)\s+(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?)\b/i);
-  if (numeric) return numeric[0].trim();
-  if (/\b(?:under|below|within)\s+(?:an?|one)\s+hour\b/i.test(text)) return 'under 60 minutes';
-  return null;
-}
-
-function directionFor(text: string): ArmadilloResult['direction'] {
-  if (/\b(?:reduce|decrease|lower|cut|spend less)\b/i.test(text)) return 'decrease';
-  if (/\b(?:maintain|keep|sustain)\b/i.test(text)) return 'maintain';
-  if (/\b(?:finish|complete|ship|submit|deliver|make|create)\b/i.test(text)) return 'complete';
-  if (/\b(?:improve|increase|grow|raise|more|faster|better)\b/i.test(text)) return 'increase';
-  if (/\b(?:build|develop|establish|learn|practice|practise|master)\b/i.test(text)) return 'build';
-  return 'progress';
-}
-
-function safetyFor(text: string, goalType: string): { flag: boolean; note: string | null } {
-  const shortEndurance = ['Running', 'Cycling', 'Swimming'].includes(goalType) && /\b(?:marathon|half marathon|10k|10 km|5k|5 km|50 km|100 km)\b/i.test(text) && /\bin\s+(?:[1-3]\s+(?:days?|weeks?)|a\s+few\s+days)\b/i.test(text);
-  return shortEndurance ? { flag: true, note: 'The timeframe is aggressive for an endurance target. VOW should keep the stated goal visible but prioritise a realistic workload and avoid sudden increases.' } : { flag: false, note: null };
-}
-
-function canonicalBase(text: string): { base: CanonicalBase | null; genericSkill: boolean } {
-  const specialist = specialistFor({ title: text });
-  if (specialist) {
+  if (!match)
     return {
-      base: {
-        category: specialist.domain,
-        goal_type: specialist.goal_types[0] || 'Goal',
-        metric: specialist.evidence.join(', '),
-        evidence: specialist.evidence,
-        integration: null,
-        planning_strategy: specialist.planning_lens,
-      },
-      genericSkill: false,
-    };
-  }
-
-  const genericSkill = GENERIC_SKILL_KEYWORDS.some(keyword => text.includes(keyword));
-  if (genericSkill) {
-    return {
-      base: {
-        category: 'Skill Development',
-        goal_type: 'Skill Acquisition',
-        metric: 'skills mastered, practice sessions, completed applications or projects',
-        evidence: ['practice sessions', 'skills completed', 'real-world applications or finished projects'],
-        integration: null,
-        planning_strategy: 'identify the skill baseline, teach fundamentals, practise progressively, apply the skill and assess against the desired outcome',
-      },
-      genericSkill: true,
-    };
-  }
-
-  return {
-    base: {
-      category: 'General',
-      goal_type: 'Goal',
+      category: 'Unknown',
+      goal_type: hasAmbiguousSignal ? 'Needs clarification' : 'Needs research',
       metric: 'measurable progress toward the stated outcome',
-      evidence: ['manual progress updates', 'goal milestones', 'completed sessions or actions'],
+      evidence: ['user clarification', 'manual progress updates', 'goal milestones'],
       integration: null,
-      planning_strategy: 'define the clearest measurable outcome, establish a baseline, then break it into progressive repeatable actions',
-    },
-    genericSkill: false,
+      fallback: 'VOW could not confidently map this goal to a specialist methodology. Groq research must investigate the goal before a specialist is selected.',
+      confidence: hasAmbiguousSignal ? 0.2 : 0.35,
+      methodology: 'Research the goal and establish the correct domain, measurable baseline, milestones, and methodology before planning.',
+      required_inputs: hasAmbiguousSignal
+        ? ['what the ambiguous term means in this goal']
+        : ['specific desired outcome', 'current baseline', 'deadline or target timeframe'],
+      needs_ai_research: true,
+      research_reason: hasAmbiguousSignal
+        ? 'The goal contains an abbreviation, event name, or specialist term that needs research.'
+        : 'No deterministic specialist rule matched the goal.',
+    };
+
+  return {
+    category: match.category,
+    goal_type: match.goal_type,
+    metric: match.metric,
+    evidence: match.evidence,
+    integration: match.integration,
+    fallback: 'Manual tracking remains fully usable if the suggested integration is not connected.',
+    confidence: hasAmbiguousSignal ? 0.45 : 0.9,
+    methodology: match.methodology,
+    required_inputs: match.required_inputs,
+    needs_ai_research: hasAmbiguousSignal,
+    research_reason: hasAmbiguousSignal
+      ? 'The goal contains an abbreviation, event name, or specialist term that should be verified with live research before the specialist methodology is finalised.'
+      : null,
   };
 }
 
-export function analyseGoalForEvidence(input: { title?: string | null; outcome?: string | null; why_it_matters?: string | null }): ArmadilloResult {
-  const text = [input.title, input.outcome, input.why_it_matters].filter(Boolean).join(' ').trim().toLowerCase();
-  const { base, genericSkill } = canonicalBase(text);
-  const target = extractTarget(text, base!.goal_type);
-  const timeTarget = extractTimeTarget(text);
-  const vague = /\b(?:get better|improve|do more|be better|get fit|work on|try to)\b/i.test(text);
-  const safety = safetyFor(text, base!.goal_type);
-  const needsClarification = true;
-  const reasons = genericSkill || base!.category === 'General' || vague || !target
-    ? ['Ask 2–3 goal-specific questions to establish starting level, desired outcome and practical constraints. Blank answers mean Level 1 beginner assumptions.']
-    : ['Ask 2–3 goal-specific questions to personalise the progression, even when the goal is already measurable.'];
-
-  return {
-    category: base!.category,
-    goal_type: base!.goal_type,
-    metric: base!.metric,
-    target,
-    direction: directionFor(text),
-    secondary_metric: timeTarget ? 'time' : null,
-    time_target: timeTarget,
-    evidence: base!.evidence,
-    evidence_source: base!.integration ? [base!.integration, 'manual tracking'] : ['manual tracking'],
-    integration: base!.integration,
-    planning_strategy: base!.planning_strategy,
-    needs_clarification: needsClarification,
-    clarification_reasons: reasons,
-    safety_flag: safety.flag,
-    safety_note: safety.note,
-    fallback: 'Manual tracking remains the source of truth if an integration is unavailable or not connected.',
-    confidence: base!.category !== 'General' ? 0.94 : genericSkill ? 0.82 : 0.55,
-  };
+export function recommendGoalIntegrations(input: {
+  title?: string | null;
+  outcome?: string | null;
+  why_it_matters?: string | null;
+}): IntegrationDefinition[] {
+  const primaryName = analyseGoalForEvidence(input).integration;
+  const primary = INTEGRATIONS.find((integration) => integration.name === primaryName);
+  const matched = recommendIntegrations([input.title || '', input.outcome || '', input.why_it_matters || '']);
+  return primary
+    ? [primary, ...matched.filter((integration) => integration.id !== primary.id)]
+    : matched;
 }

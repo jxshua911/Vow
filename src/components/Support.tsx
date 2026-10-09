@@ -1,9 +1,82 @@
-import { useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
-import { PageHeader } from './AppShell';
+import { useAuth } from '@/lib/auth';
+import { ArrowLeft } from '@/lib/ui-icons';
 
-export function SupportPage({ onBack }: { onBack: () => void }) {
-  const [message, setMessage] = useState(''); const [status, setStatus] = useState(''); const [busy, setBusy] = useState(false);
-  async function submit(event: React.FormEvent) { event.preventDefault(); if (!message.trim() || busy) return; setBusy(true); setStatus(''); const { data, error } = await supabase.functions.invoke('vow-support', { body: { message } }); if (error || !data?.persisted) setStatus('We could not save that right now. Please email support@vowglobal.online directly.'); else { setMessage(''); setStatus(data.accepted ? 'Your support request was accepted for delivery.' : 'Your request was saved, but email delivery is unavailable. Please email support@vowglobal.online directly.'); } setBusy(false); }
-  return <div><button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6">← Back to profile</button><PageHeader title="Support" subtitle="Tell us what happened and we’ll keep your request on record." /><form onSubmit={submit} className="max-w-xl border border-vow-border p-5"><label htmlFor="support-message" className="vow-label block mb-2">How can we help?</label><textarea id="support-message" value={message} onChange={(event) => setMessage(event.target.value)} rows={7} maxLength={10000} required className="vow-input resize-y" placeholder="Describe the issue or question…" /><button type="submit" disabled={busy || !message.trim()} className="vow-btn-primary w-full mt-4 disabled:opacity-50">{busy ? 'Sending…' : 'Send support request'}</button>{status && <p className="text-sm text-vow-ink mt-4" role="status">{status}</p>}<p className="text-xs text-vow-muted mt-5">You can also email <a className="underline" href="mailto:support@vowglobal.online">support@vowglobal.online</a>. Alternative: <a className="underline" href="mailto:vowglobalapp@gmail.com">vowglobalapp@gmail.com</a>.</p></form></div>;
+type Props = { onBack: () => void; onLegal: () => void };
+
+export function SupportPage({ onBack, onLegal }: Props) {
+  const { session, displayName } = useAuth();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [reason, setReason] = useState('Bug or technical issue');
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (session?.user.email) setEmail((current) => current || session.user.email || '');
+    if (displayName && displayName !== 'there') setName((current) => current || displayName);
+  }, [session?.user.email, displayName]);
+  const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'stored' | 'error'>('idle');
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (status === 'sending') return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const email = String(data.get('email') || '').trim();
+    const name = String(data.get('name') || '').trim();
+    const text = String(data.get('message') || '').trim();
+    if (!email || !name || text.length < 10) return;
+    setStatus('sending');
+
+    try {
+      const { data: result, error } = await supabase.functions.invoke('vow-website-chat', {
+        body: { action: 'contact', name, email, subject: reason, message: text, source: 'vow-app-support' },
+      });
+      if (error) throw error;
+      form.reset();
+      setMessage('');
+      setStatus(result?.email_sent === true ? 'success' : 'stored');
+    } catch (error) {
+      console.error('[VOW] Support submission failed:', error);
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-vow-bg">
+      <header className="border-b border-vow-border bg-vow-bg" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-4 px-4 sm:px-8">
+          <button type="button" onClick={onBack} className="flex h-11 shrink-0 items-center gap-2 border border-vow-border px-3 text-sm text-vow-muted transition-colors hover:border-vow-ink hover:text-vow-ink" aria-label="Back to profile">
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+          <span className="text-sm font-medium text-vow-ink">Support</span>
+        </div>
+      </header>
+      <main className="mx-auto max-w-3xl px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-8">
+        <h1 className="vow-heading text-xl text-vow-ink mb-1">How can we help?</h1>
+        <p className="text-xs text-vow-muted mb-4">Report an issue, ask a question, or send feedback.</p>
+        <section className="border border-vow-border p-4">
+          {status === 'success' && <div role="status" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">Your support request was emailed to the VOW team. We’ll get back to you.</div>}
+          {status === 'stored' && <div role="status" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">Your request was saved, but email delivery isn’t configured or couldn’t be confirmed. For urgent help, email vowglobalapp@gmail.com directly.</div>}
+          {status === 'error' && <div role="alert" className="mb-4 border-l-2 border-vow-ink bg-vow-surface/60 px-3 py-2 text-xs leading-5">We couldn’t send that right now. Please try again or email vowglobalapp@gmail.com.</div>}
+          <form onSubmit={submit} className="space-y-3">
+            <label className="block"><span className="vow-label">Name</span><input required name="name" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} className="vow-input mt-2" placeholder="Your name" /></label>
+            <label className="block"><span className="vow-label">Email</span><input required type="email" name="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="vow-input mt-2" placeholder="you@example.com" /></label>
+            <label className="block"><span className="vow-label">Issue type</span><select value={reason} onChange={(event) => setReason(event.target.value)} name="reason" className="vow-input mt-2"><option>Bug or technical issue</option><option>Account / login</option><option>Subscription / Premium</option><option>Privacy request</option><option>Account deletion</option><option>Feedback</option><option>Other</option></select></label>
+            <label className="block"><span className="vow-label">Message</span><textarea required minLength={10} name="message" value={message} onChange={(event) => setMessage(event.target.value)} rows={3} className="vow-input mt-1 resize-y leading-5" placeholder="Tell us what happened and what you need help with." /></label>
+            <button type="submit" disabled={status === 'sending'} className="vow-btn-primary disabled:opacity-50">{status === 'sending' ? 'Sending…' : 'Send support request'}</button>
+          </form>
+          <div className="mt-4 border-t border-vow-border pt-3">
+            <p className="text-xs text-vow-muted">Prefer email?</p>
+            <a href="mailto:vowglobalapp@gmail.com" className="mt-1 inline-block text-sm text-vow-ink underline underline-offset-4">vowglobalapp@gmail.com</a>
+          </div>
+        </section>
+        <button type="button" onClick={onLegal} className="mt-3 w-full border border-vow-border p-3 text-left text-sm text-vow-muted transition-colors hover:border-vow-ink hover:text-vow-ink">
+          <span className="block font-medium text-vow-ink">Terms, Privacy &amp; Copyright</span>
+          <span className="mt-1 block text-xs">Open the EULA, privacy policy, and copyright information.</span>
+        </button>
+      </main>
+    </div>
+  );
 }

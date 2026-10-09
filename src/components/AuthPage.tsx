@@ -1,82 +1,54 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabase';
-import { checkVowAccess } from '@/lib/accessGate';
 import { NATIVE_OAUTH_REDIRECT } from '@/lib/nativeAuth';
+import { Mail, Lock, ArrowRight } from '@/lib/ui-icons';
 import { GoogleIcon } from './GoogleIcon';
 import { BrandLogo } from './BrandLogo';
+import { userFacingError } from '@/lib/userFacingError';
 
-function Glyph({ children, className = '' }: { children: string; className?: string }) {
-  return <span aria-hidden="true" className={`inline-flex items-center justify-center font-medium leading-none ${className}`}>{children}</span>;
+type AuthMode = 'signin' | 'signup'; type AuthMethod = 'options' | 'email';
+async function isPasswordCompromised(password: string): Promise<boolean> {
+  const data = new TextEncoder().encode(password); const digest = await crypto.subtle.digest('SHA-1', data);
+  const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+  const response = await fetch('https://api.pwnedpasswords.com/range/' + hash.slice(0, 5), { headers: { 'Add-Padding': 'true' }, cache: 'no-store' });
+  if (!response.ok) throw new Error('Password safety check failed');
+  const suffix = hash.slice(5); return (await response.text()).split('\n').some((line) => line.trim().toUpperCase().startsWith(suffix + ':'));
 }
-
 export function AuthPage() {
-  const [emailMode, setEmailMode] = useState(false);
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<AuthMode>('signup'); const [method, setMethod] = useState<AuthMethod>('options');
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false);
 
-  const openEmail = (next: 'signin' | 'signup' = 'signin') => { setMode(next); setEmailMode(true); setError(null); };
-  const closeEmail = () => { if (loading) return; setEmailMode(false); setError(null); setEmail(''); setPassword(''); };
-  async function assertAccess() { const access = await checkVowAccess(); if (!access.allowed) throw new Error(access.message || 'Access to VOW is restricted from this network.'); }
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault(); if (loading) return;
-    const cleanEmail = email.trim();
-    if (!cleanEmail || !password) { setError('Please enter your email and password.'); return; }
-    setError(null); setLoading(true);
-    try {
-      await assertAccess();
-      const result = mode === 'signup' ? await supabase.auth.signUp({ email: cleanEmail, password }) : await supabase.auth.signInWithPassword({ email: cleanEmail, password });
-      if (result.error) throw result.error;
-      if (mode === 'signup' && !result.data.session) setError('Account created. Check your email to confirm your account.');
-    } catch (err) { setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.'); }
-    finally { setLoading(false); }
-  }
-
-  async function handleOAuthSignIn() {
-    if (loading) return;
-    setError(null); setLoading(true);
-    let finished: { remove: () => Promise<void> } | null = null;
-    try {
-      await assertAccess();
-      const options = Capacitor.isNativePlatform() ? { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true } : { redirectTo: window.location.origin };
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({ provider: 'google', options });
-      if (oauthError) throw oauthError;
-      if (!data?.url) throw new Error('Unable to start sign-in. Please try again.');
-      if (Capacitor.isNativePlatform()) {
-        finished = await Browser.addListener('browserFinished', async () => {
-          setLoading(false);
-          const listener = finished;
-          finished = null;
-          if (listener) await listener.remove();
-        });
-        await Browser.open({ url: data.url, presentationStyle: 'popover' });
-      } else setLoading(false);
-    } catch (err) {
-      const listener = finished;
-      finished = null;
-      if (listener) await listener.remove();
-      setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
+  useEffect(() => {
+    const onOAuthError = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
       setLoading(false);
-    }
-  }
+      setError(userFacingError(new Error(typeof detail === 'string' ? detail : 'Google sign-in failed. Please try again.'), 'Google sign-in failed. Please try again.'));
+    };
+    window.addEventListener('vow:oauth-error', onOAuthError);
+    return () => window.removeEventListener('vow:oauth-error', onOAuthError);
+  }, []);
 
+  function switchMode(next: AuthMode) { setMode(next); setError(null); setMessage(''); }
+  async function handleSubmit(event: React.FormEvent) { event.preventDefault(); setError(null); setMessage(''); setLoading(true); try {
+    if (mode === 'signup') { if (password.length < 12) throw new Error('Use a password with at least 12 characters.'); if (password.length > 128) throw new Error('Use a password with 128 characters or fewer.'); if (await isPasswordCompromised(password)) throw new Error('That password has appeared in a known data breach. Please choose a different password.'); const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password }); if (signUpError) throw signUpError; if (!data.session) setMessage('Check your email to confirm your account, then sign in.'); }
+    else { const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password }); if (signInError) throw signInError; }
+  } catch (err) { setError(userFacingError(err, 'Something went wrong. Please try again.')); } finally { setLoading(false); } }
+  async function handleGoogle() { setError(null); setMessage(''); setLoading(true); try {
+    const redirectTo = Capacitor.isNativePlatform() ? NATIVE_OAUTH_REDIRECT : window.location.origin;
+    const { data, error: oauthError } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, skipBrowserRedirect: Capacitor.isNativePlatform() } });
+    if (oauthError) throw oauthError; if (Capacitor.isNativePlatform() && data?.url) { const finished = await Browser.addListener('browserFinished', () => setLoading(false)); await Browser.open({ url: data.url }); window.setTimeout(() => { void finished.remove(); }, 120000); }
+  } catch (err) { setError(userFacingError(err, 'Google sign-in failed. Please try again.')); setLoading(false); } }
   return <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12"><div className="w-full max-w-sm">
-    <div className="text-center mb-12"><BrandLogo className="w-44 max-w-full h-auto mx-auto mb-7" /><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
-    {!emailMode ? <div className="space-y-3">
-      <button onClick={handleOAuthSignIn} disabled={loading} className="w-full flex items-center justify-center gap-2.5 border border-vow-border py-3 text-sm font-medium text-vow-ink hover:border-vow-ink transition-colors disabled:opacity-40"><GoogleIcon className="w-4 h-4" />Continue with Google</button>
-      <button onClick={() => openEmail('signin')} disabled={loading} className="w-full flex items-center justify-center gap-2.5 bg-vow-ink text-vow-bg py-3 text-sm font-medium hover:opacity-85 transition-opacity disabled:opacity-40"><Glyph className="text-base">@</Glyph>Sign in with email</button>
-      {error && <p className="text-sm text-vow-ink leading-relaxed pt-3 border-l-2 border-vow-ink pl-3">{error}</p>}
-      <p className="text-xs text-vow-muted mt-8 text-center leading-relaxed">New to VOW? <button onClick={() => openEmail('signup')} className="text-vow-ink underline underline-offset-2">Create an account with email</button></p>
-    </div> : <div>
-      <button onClick={closeEmail} disabled={loading} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors disabled:opacity-40"><Glyph>←</Glyph>Back</button>
-      <div className="flex border border-vow-border mb-8"><button onClick={() => setMode('signin')} disabled={loading} className={`flex-1 py-3 text-sm ${mode === 'signin' ? 'bg-vow-ink text-vow-bg font-medium' : 'text-vow-muted'}`}>Sign in</button><button onClick={() => setMode('signup')} disabled={loading} className={`flex-1 py-3 text-sm border-l border-vow-border ${mode === 'signup' ? 'bg-vow-ink text-vow-bg font-medium' : 'text-vow-muted'}`}>Create account</button></div>
-      <form onSubmit={handleSubmit} className="space-y-5"><div><label className="vow-label block mb-2">Email</label><div className="relative"><Glyph className="absolute left-3 top-1/2 -translate-y-1/2 text-vow-muted">@</Glyph><input type="email" required autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} className="vow-input pl-10" placeholder="you@example.com" autoFocus disabled={loading} /></div></div><div><label className="vow-label block mb-2">Password</label><div className="relative"><Glyph className="absolute left-3 top-1/2 -translate-y-1/2 text-vow-muted">•</Glyph><input type="password" required minLength={6} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.target.value)} className="vow-input pl-10" placeholder="At least 6 characters" disabled={loading} /></div></div>{error && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3">{error}</p>}<button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 bg-vow-ink text-vow-bg text-sm font-medium py-3 disabled:opacity-40">{loading ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Sign in'}<Glyph>→</Glyph></button></form>
-      <p className="text-xs text-vow-muted mt-8 text-center leading-relaxed">{mode === 'signup' ? 'Your journal and goals stay private to your VOW account. See Terms & Policies for how connected services and other processing work.' : 'Welcome back. Pick up where you left off.'}</p>
-    </div>}
+    <div className="text-center mb-10"><BrandLogo className="mx-auto w-28 h-auto mb-6" /><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
+    {method === 'options' ? <div className="space-y-4">
+      <button type="button" onClick={handleGoogle} disabled={loading} className="w-full flex items-center justify-center gap-3 border border-vow-border bg-vow-surface py-3.5 text-sm font-medium text-vow-ink hover:bg-vow-border transition-colors disabled:opacity-40"><GoogleIcon className="w-5 h-5" /> Continue with Google</button>
+      <div className="flex items-center gap-4"><div className="h-px flex-1 bg-vow-border" /><span className="text-xs text-vow-muted">or</span><div className="h-px flex-1 bg-vow-border" /></div>
+      <button type="button" onClick={() => { setError(null); setMessage(''); setMethod('email'); }} className="w-full flex items-center justify-center gap-3 border border-vow-border bg-vow-surface py-3.5 text-sm font-medium text-vow-ink hover:bg-vow-border transition-opacity"><Mail className="w-5 h-5 shrink-0" /> Continue with Email</button>
+    </div> : <><button type="button" onClick={() => { setError(null); setMessage(''); setLoading(false); setMethod('options'); }} className="text-sm text-vow-muted hover:text-vow-ink transition-colors mb-6">← Back</button>
+      <div className="flex border border-vow-border mb-6"><button type="button" onClick={() => switchMode('signup')} className={`flex-1 py-3 text-sm transition-colors ${mode === 'signup' ? 'bg-vow-ink text-vow-bg font-medium' : 'text-vow-muted hover:text-vow-ink'}`}>Create account</button><button type="button" onClick={() => switchMode('signin')} className={`flex-1 py-3 text-sm transition-colors border-l border-vow-border ${mode === 'signin' ? 'bg-vow-ink text-vow-bg font-medium' : 'text-vow-muted hover:text-vow-ink'}`}>Sign in</button></div>
+      <form onSubmit={handleSubmit} className="space-y-5"><div><label className="vow-label block mb-2" htmlFor="vow-email">Email</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" /><input id="vow-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="vow-input pl-10" placeholder="you@example.com" autoComplete="email" disabled={loading} /></div></div><div><label className="vow-label block mb-2" htmlFor="vow-password">Password</label><div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-vow-muted" /><input id="vow-password" type="password" required minLength={mode === 'signup' ? 12 : 1} value={password} onChange={(e) => setPassword(e.target.value)} className="vow-input pl-10" placeholder={mode === 'signup' ? 'At least 12 characters' : 'Your password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} disabled={loading} /></div></div>{error && <div className="vow-error" role="alert"><span>{error}</span><button type="button" className="vow-error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">×</button></div>}{message && <p className="text-xs text-vow-muted" role="status">{message}</p>}<button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 bg-vow-ink text-vow-bg text-sm font-medium py-3 hover:opacity-85 transition-opacity disabled:opacity-40">{loading ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'} <ArrowRight className="w-4 h-4" /></button></form>
+    </>}
   </div></div>;
 }

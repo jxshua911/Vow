@@ -1,0 +1,4 @@
+
+> vow@1.0.9 typecheck
+> tsc --noEmit -p tsconfig.app.json
+

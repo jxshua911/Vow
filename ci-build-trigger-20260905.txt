@@ -1,1 +1,0 @@
-CI build trigger - current VOW build.

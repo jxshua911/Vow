@@ -1,29 +1,30 @@
 import { supabase } from '@/lib/supabase';
 
-export type ContentSafetyStatus = 'safe' | 'ambiguous' | 'blocked' | 'suspended';
+export type ContentSafetyStatus = 'safe' | 'ambiguous' | 'blocked' | 'warning' | 'suspended' | 'banned';
 
 export type ContentSafetyResult = {
   status: ContentSafetyStatus;
-  category?: string;
-  confidence?: number;
   message?: string;
-  retryAfterSeconds?: number;
 };
 
+function isContentSafetyStatus(value: unknown): value is ContentSafetyStatus {
+  return ['safe', 'ambiguous', 'blocked', 'warning', 'suspended', 'banned'].includes(String(value));
+}
+
+/**
+ * Safety checks and progressive enforcement are performed by the server so
+ * goal creation and planning share one authoritative moderation history.
+ */
 export async function checkContentSafety(text: string): Promise<ContentSafetyResult> {
   const value = text.trim();
-  if (!value) return { status: 'safe' };
+  if (!value) return { status: 'blocked', message: 'Please enter a planning request.' };
 
-  const { data, error } = await supabase.functions.invoke('vow-content-safety', { body: { text: value } });
-  if (error || !data || typeof data !== 'object') {
-    throw new Error('VOW could not verify that wording right now. Please try again.');
+  const { data, error } = await supabase.functions.invoke('vow-content-safety', {
+    body: { text: value },
+  });
+  if (error) throw error;
+  if (!data || !isContentSafetyStatus(data.status)) {
+    throw new Error('VOW safety check returned an invalid response.');
   }
-  const result = data as Record<string, unknown>;
-  return {
-    status: result.status === 'ambiguous' || result.status === 'blocked' || result.status === 'suspended' ? result.status : 'safe',
-    category: typeof result.category === 'string' ? result.category : undefined,
-    confidence: typeof result.confidence === 'number' ? result.confidence : undefined,
-    message: typeof result.message === 'string' ? result.message : undefined,
-    retryAfterSeconds: typeof result.retry_after_seconds === 'number' ? result.retry_after_seconds : undefined,
-  };
+  return { status: data.status, message: typeof data.message === 'string' ? data.message : undefined };
 }

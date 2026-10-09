@@ -7,12 +7,20 @@ export const NATIVE_CALENDAR_REDIRECT = 'com.vow.app://calendar-callback';
 
 export async function initNativeAuthListener() {
   const listener = await App.addListener('appUrlOpen', async ({ url }) => {
-    if (!url.startsWith(NATIVE_OAUTH_REDIRECT) && !url.startsWith(NATIVE_CALENDAR_REDIRECT)) return;
-
     try {
       const urlObj = new URL(url);
+      const isOAuthCallback =
+        urlObj.protocol === 'com.vow.app:' &&
+        urlObj.hostname === 'callback' &&
+        urlObj.pathname === '';
+      const isCalendarCallback =
+        urlObj.protocol === 'com.vow.app:' &&
+        urlObj.hostname === 'calendar-callback' &&
+        urlObj.pathname === '';
 
-      if (url.startsWith(NATIVE_CALENDAR_REDIRECT)) {
+      if (!isOAuthCallback && !isCalendarCallback) return;
+
+      if (isCalendarCallback) {
         await Browser.close().catch(() => undefined);
         const success = urlObj.searchParams.get('success') === 'true';
         const error = urlObj.searchParams.get('error');
@@ -53,6 +61,7 @@ export async function initNativeAuthListener() {
       }
 
       console.log('[VOW OAuth] Session established successfully.');
+      window.dispatchEvent(new CustomEvent('vow:oauth-success'));
     } catch (error) {
       console.error('[VOW OAuth] Callback handling failed:', error);
       window.dispatchEvent(new CustomEvent('vow:oauth-error', {

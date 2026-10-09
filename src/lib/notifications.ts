@@ -1,105 +1,340 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type PermissionStatus } from '@capacitor/local-notifications';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { VOW_BUILD_TIER } from '@/lib/buildTier';
+import { supabase } from '@/lib/supabase';
 import type { Session } from '@/types/database';
 
 export type NotificationPermission = PermissionStatus['display'];
-export type NotificationPreferences = { sound: boolean; vibration: boolean };
+export type NotificationPreferences = { enabled: boolean; sound: boolean; vibration: boolean };
 
-type NotificationChannel = 'sound-vibration' | 'sound-only' | 'vibration-only' | 'silent';
+const CHANNEL_PREFIX = 'vow-reminders';
 const PREF_KEY = 'vow:notification-preferences';
-const CHANNELS: Record<NotificationChannel, string> = {
-  'sound-vibration': 'vow-reminders-sound-vibration-v4',
-  'sound-only': 'vow-reminders-sound-v4',
-  'vibration-only': 'vow-reminders-vibration-v4',
-  silent: 'vow-reminders-silent-v4',
-};
-const DEFAULT_PREFERENCES: NotificationPreferences = { sound: true, vibration: true };
-const ENABLED_KEY = 'vow:notifications-enabled';
-const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
-const NOTIFICATION_GROUP = 'vow-reminders';
+const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: false, sound: true, vibration: true };
+const PUSH_TOKEN_KEY = 'vow:fcm-token';
+let pushListenersReady = false;
+let pushRegistrationWaiter: { resolve: () => void; reject: (error: Error) => void; timeoutId: number } | null = null;
+let cloudPushSetupPromise: Promise<void> | null = null;
+
+export function isRemotePushConfigured(): boolean {
+  return import.meta.env.VITE_ANDROID_REMOTE_NOTIFICATIONS === 'true';
+}
+
+function finishPushRegistration(error?: Error): void {
+  if (!pushRegistrationWaiter) return;
+  window.clearTimeout(pushRegistrationWaiter.timeoutId);
+  const waiter = pushRegistrationWaiter;
+  pushRegistrationWaiter = null;
+  if (error) waiter.reject(error);
+  else waiter.resolve();
+}
+
+function channelId(preferences: NotificationPreferences): string {
+  const sound = preferences.sound ? 'sound' : 'silent';
+  const vibration = preferences.vibration ? 'vibrate' : 'quiet';
+  return `${CHANNEL_PREFIX}-${sound}-${vibration}-v1`;
+}
+
+function isVowNotification(notification: { title: string; extra?: unknown }): boolean {
+  if (notification.extra && typeof notification.extra === 'object' && 'vow' in notification.extra) {
+    return (notification.extra as { vow?: unknown }).vow === true;
+  }
+  // Legacy VOW reminders did not persist channelId in pending notification
+  // records, so retain a title-based fallback for reminders created by older builds.
+  return notification.title.startsWith('VOW ·');
+}
 
 export function getNotificationPreferences(): NotificationPreferences {
   try {
     const stored = localStorage.getItem(PREF_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<NotificationPreferences>;
-      return { sound: parsed.sound !== false, vibration: parsed.vibration !== false };
+      return {
+        enabled: parsed.enabled === true,
+        sound: parsed.sound !== false,
+        vibration: parsed.vibration !== false,
+      };
     }
-  } catch { /* fall through to defaults */ }
+  } catch {
+    // Notification delivery should not depend on localStorage being available.
+  }
   return DEFAULT_PREFERENCES;
 }
 
-export function getNotificationsEnabled(): boolean {
-  try { return localStorage.getItem(ENABLED_KEY) !== 'false'; } catch { return true; }
-}
+export async function setNotificationPreferences(preferences: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
+  const next = { ...getNotificationPreferences(), ...preferences };
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch { /* ignore */ }
 
-export function setNotificationsEnabled(enabled: boolean): void {
-  try { localStorage.setItem(ENABLED_KEY, String(enabled)); } catch { /* ignore */ }
-}
+  if (!Capacitor.isNativePlatform()) return next;
 
-export async function setNotificationPreferences(preferences: NotificationPreferences): Promise<void> {
-  try { localStorage.setItem(PREF_KEY, JSON.stringify(preferences)); } catch { /* ignore */ }
-  if (Capacitor.isNativePlatform()) await setupNotifications(preferences);
+  if (!next.enabled) {
+    await cancelAllVowNotifications();
+    await clearCloudPushRegistration();
+    return next;
+  }
+
+  if (await getNotificationPermission() === 'granted') {
+    await syncCurrentUserUpcomingSessionNotifications();
+  }
+  return next;
 }
 
 export async function setupNotifications(preferences = getNotificationPreferences()): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  await LocalNotifications.createChannel({ id: CHANNELS['sound-vibration'], name: 'VOW reminders', description: 'VOW reminders with sound and vibration.', importance: 4, visibility: 1, vibration: true, sound: 'default' });
-  await LocalNotifications.createChannel({ id: CHANNELS['sound-only'], name: 'VOW reminders · sound', description: 'VOW reminders with sound and no vibration.', importance: 4, visibility: 1, vibration: false, sound: 'default' });
-  await LocalNotifications.createChannel({ id: CHANNELS['vibration-only'], name: 'VOW reminders · vibration', description: 'VOW reminders with vibration and no sound.', importance: 4, visibility: 1, vibration: true, sound: undefined });
-  await LocalNotifications.createChannel({ id: CHANNELS.silent, name: 'VOW reminders · silent', description: 'VOW reminders without sound or vibration.', importance: 3, visibility: 1, vibration: false, sound: undefined });
-  void preferences;
+
+  await LocalNotifications.createChannel({
+    id: channelId(preferences),
+    name: 'VOW reminders',
+    description: 'Scheduled VOW commitment reminders.',
+    importance: 4,
+    visibility: 1,
+    vibration: preferences.vibration,
+    sound: preferences.sound ? 'default' : undefined,
+  });
 }
 
 export async function getNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
   if (!Capacitor.isNativePlatform()) return 'unsupported';
-  return (await LocalNotifications.checkPermissions()).display;
+  const result = await LocalNotifications.checkPermissions();
+  return result.display;
 }
 
 export async function requestNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
   if (!Capacitor.isNativePlatform()) return 'unsupported';
+
   const current = await LocalNotifications.checkPermissions();
-  if (current.display === 'granted') { await setupNotifications(); return current.display; }
+  if (current.display === 'granted') {
+    await setupNotifications();
+    return current.display;
+  }
+
   const result = await LocalNotifications.requestPermissions();
   if (result.display === 'granted') await setupNotifications();
   return result.display;
 }
 
-export async function scheduleReminder(id: number, title: string, body: string, at: Date, group = NOTIFICATION_GROUP, groupSummary = false): Promise<void> {
+export async function scheduleReminder(id: number, title: string, body: string, at: Date, sessionId?: string): Promise<void> {
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
-  if (await getNotificationPermission() !== 'granted') return;
-  await setupNotifications();
-  await LocalNotifications.schedule({ notifications: [{ id, title, body, channelId: CHANNELS['sound-vibration'], smallIcon: VOW_NOTIFICATION_ICON, group, groupSummary, schedule: { at, allowWhileIdle: true } }] });
+
+  const preferences = getNotificationPreferences();
+  if (!preferences.enabled || await getNotificationPermission() !== 'granted') return;
+
+  await setupNotifications(preferences);
+
+  // Always replace an existing reminder with the same stable ID. This is
+  // essential when a session is moved or its notification settings change.
+  await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => undefined);
+
+  await LocalNotifications.schedule({
+    notifications: [{
+      id,
+      title,
+      body,
+      channelId: channelId(preferences),
+      sound: preferences.sound ? 'default' : undefined,
+      extra: { vow: true, ...(sessionId ? { sessionId } : {}) },
+      schedule: { at, allowWhileIdle: true },
+    }],
+  });
 }
 
 export async function cancelReminder(id: number): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  await LocalNotifications.cancel({ notifications: [{ id }] });
+  await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => undefined);
 }
 
-function notificationId(sessionId: string): number { let hash = 0; for (let i = 0; i < sessionId.length; i += 1) hash = ((hash << 5) - hash + sessionId.charCodeAt(i)) | 0; return Math.abs(hash || 1); }
-function groupNotificationId(key: string): number { let hash = 0; for (let i = 0; i < key.length; i += 1) hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0; return Math.abs(hash || 1); }
-function notificationGroupKey(at: Date): string { return `${NOTIFICATION_GROUP}-${at.getFullYear()}-${at.getMonth()}-${at.getDate()}-${at.getHours()}-${at.getMinutes()}`; }
+export async function cancelAllVowNotifications(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+
+  const pending = await LocalNotifications.getPending();
+  const ids = pending.notifications
+    .filter((notification) => isVowNotification(notification))
+    .map((notification) => notification.id);
+
+  if (ids.length > 0) {
+    await LocalNotifications.cancel({ notifications: ids.map((id) => ({ id })) });
+  }
+}
+
+export function notificationId(sessionId: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < sessionId.length; i += 1) {
+    hash ^= sessionId.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  // Android notification IDs are signed 32-bit integers; keep the value
+  // positive and never use zero.
+  const id = (hash >>> 0) & 0x7fffffff;
+  return id || 1;
+}
 
 export async function syncUpcomingSessionNotifications(sessions: Session[]): Promise<void> {
-  if (!getNotificationsEnabled() || !Capacitor.isNativePlatform() || await getNotificationPermission() !== 'granted') return;
-  const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now());
-  const groups = new Map<string, Session[]>();
-  for (const session of upcoming) {
-    const at = new Date(session.scheduled_at);
-    const key = notificationGroupKey(at);
-    groups.set(key, [...(groups.get(key) || []), session]);
+  if (!Capacitor.isNativePlatform()) return;
+
+  const preferences = getNotificationPreferences();
+  if (!preferences.enabled) {
+    await cancelAllVowNotifications();
+    return;
   }
-  await Promise.all([...groups.entries()].map(async ([key, bucket]) => {
-    const at = new Date(bucket[0].scheduled_at);
-    if (bucket.length === 1) {
-      const session = bucket[0];
-      await scheduleReminder(notificationId(session.id), `VOW · ${session.title}`, `${session.duration_minutes} min commitment. This is the time you set aside for it.`, at, NOTIFICATION_GROUP, false);
-      return;
+
+  if (await getNotificationPermission() !== 'granted') return;
+
+  await setupNotifications(preferences);
+
+  const now = Date.now();
+  const upcoming = sessions.filter((session) => {
+    const at = new Date(session.scheduled_at).getTime();
+    return session.status === 'scheduled' && Number.isFinite(at) && at > now;
+  });
+
+  const desiredIds = new Set(upcoming.map((session) => notificationId(session.id)));
+
+  // Reconcile every VOW channel, including the previous v4 channel. This
+  // cleans up reminders created by older app builds and catches deleted,
+  // completed, skipped and moved sessions.
+  const pending = await LocalNotifications.getPending();
+  const staleIds = pending.notifications
+    .filter((notification) => isVowNotification(notification) && !desiredIds.has(notification.id))
+    .map((notification) => notification.id);
+
+  if (staleIds.length > 0) {
+    await LocalNotifications.cancel({ notifications: staleIds.map((id) => ({ id })) });
+  }
+
+  // Cancel + recreate desired IDs as well. This makes a sync authoritative:
+  // changed session times, text, sound and vibration are actually applied.
+  const desiredPendingIds = upcoming.map((session) => notificationId(session.id));
+  if (desiredPendingIds.length > 0) {
+    await LocalNotifications.cancel({ notifications: desiredPendingIds.map((id) => ({ id })) }).catch(() => undefined);
+  }
+
+  for (const session of upcoming) {
+    await scheduleReminder(
+      notificationId(session.id),
+      `VOW · ${session.title}`,
+      `${session.duration_minutes} min commitment. This is the time you set aside for it.`,
+      new Date(session.scheduled_at),
+      session.id,
+    );
+  }
+}
+
+async function syncCurrentUserUpcomingSessionNotifications(): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await syncUserUpcomingSessionNotifications(user.id);
+}
+
+export async function syncUserUpcomingSessionNotifications(userId: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+
+  const preferences = getNotificationPreferences();
+  if (!preferences.enabled) {
+    await cancelAllVowNotifications();
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'scheduled')
+    .gte('scheduled_at', new Date().toISOString())
+    .order('scheduled_at', { ascending: true });
+
+  if (error) throw error;
+  await syncUpcomingSessionNotifications((data || []) as Session[]);
+}
+
+
+async function getStoredPushToken(): Promise<string | null> {
+  try { return localStorage.getItem(PUSH_TOKEN_KEY); } catch { return null; }
+}
+
+async function clearStoredPushToken(): Promise<void> {
+  try { localStorage.removeItem(PUSH_TOKEN_KEY); } catch { /* ignore */ }
+}
+
+export function setupCloudPushNotifications(): Promise<void> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return Promise.resolve();
+  if (!getNotificationPreferences().enabled) return Promise.resolve();
+  if (!isRemotePushConfigured()) return Promise.reject(new Error('REMOTE_PUSH_NOT_CONFIGURED'));
+  if (cloudPushSetupPromise) return cloudPushSetupPromise;
+  cloudPushSetupPromise = registerCloudPushNotifications();
+  return cloudPushSetupPromise.finally(() => {
+    cloudPushSetupPromise = null;
+  });
+}
+
+async function registerCloudPushNotifications(): Promise<void> {
+  const permission = await PushNotifications.checkPermissions();
+  if (permission.receive !== 'granted') {
+    const requested = await PushNotifications.requestPermissions();
+    if (requested.receive !== 'granted') throw new Error('REMOTE_PUSH_PERMISSION_DENIED');
+  }
+
+  if (!pushListenersReady) {
+    await PushNotifications.addListener('registration', async ({ value }) => {
+      try {
+        localStorage.setItem(PUSH_TOKEN_KEY, value);
+        const { error } = await supabase.rpc('vow_touch_push_device', {
+          p_token: value,
+          p_build_tier: VOW_BUILD_TIER,
+        });
+        if (error) throw error;
+        finishPushRegistration();
+      } catch (error) {
+        console.error('[VOW] Push registration sync failed:', error);
+        finishPushRegistration(new Error('PUSH_REGISTRATION_SYNC_FAILED'));
+      }
+    });
+
+    await PushNotifications.addListener('registrationError', (error) => {
+      console.error('[VOW] Push registration failed:', error);
+      finishPushRegistration(new Error('PUSH_REGISTRATION_FAILED'));
+    });
+
+    pushListenersReady = true;
+  }
+
+  await setupNotifications(getNotificationPreferences());
+  const registration = new Promise<void>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      finishPushRegistration(new Error('PUSH_REGISTRATION_TIMEOUT'));
+    }, 15_000);
+    pushRegistrationWaiter = { resolve, reject, timeoutId };
+  });
+  try {
+    await PushNotifications.register();
+    await registration;
+  } catch (error) {
+    finishPushRegistration(error instanceof Error ? error : new Error('PUSH_REGISTRATION_FAILED'));
+    throw error;
+  }
+}
+
+export async function clearCloudPushRegistration(): Promise<void> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+
+  const token = await getStoredPushToken();
+  try {
+    if (token) {
+      await supabase.from('vow_push_devices').delete().eq('token', token);
     }
-    await Promise.all(bucket.map((session) => scheduleReminder(notificationId(session.id), `VOW · ${session.title}`, `${session.duration_minutes} min commitment. This is the time you set aside for it.`, at, key, false)));
-    const detail = bucket.slice(0, 3).map((session) => session.title).join(' · ');
-    const suffix = bucket.length > 3 ? ` +${bucket.length - 3} more` : '';
-    await scheduleReminder(groupNotificationId(key), `VOW · ${bucket.length} commitments`, `${detail}${suffix}`, at, key, true);
-  }));
+  } catch (error) {
+    console.warn('[VOW] Push registration cleanup failed:', error);
+  }
+
+  try { await PushNotifications.unregister(); } catch { /* ignore */ }
+  await clearStoredPushToken();
+}
+
+export async function setupCloudPushActionListener(onNavigate: (sessionId?: string) => void): Promise<() => void> {
+  if (!isRemotePushConfigured() || !Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return () => undefined;
+
+  const handle = await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
+    const sessionId = typeof notification.data?.sessionId === 'string' ? notification.data.sessionId : undefined;
+    onNavigate(sessionId);
+  });
+  return () => { void handle.remove(); };
 }

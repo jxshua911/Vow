@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/vow_icon_background"
+        android:pathData="M0,0 H108 V108 H0 Z" />
+    <group
+        android:translateX="25.5"
+        android:translateY="21"
+        android:scaleX="0.195"
+        android:scaleY="0.195">
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M0,0 L1,64 L228,169 L227,171 L215,177 L206,180 L0,276 L0,338 L49,317 L66,308 L297,203 L297,136 L17,6 Z"/>
+    </group>
+</vector>
