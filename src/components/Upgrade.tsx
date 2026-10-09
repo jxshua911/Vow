@@ -26,7 +26,7 @@ const freeBenefits = [
   '1 advanced weekly review/month',
 ];
 
-remove unused usage barexport function UpgradePage() {
+export function UpgradePage() {
   const [billing, setBilling] = useState<Billing>('monthly');
   const [usage, setUsage] = useState<EntitlementSnapshot | null>(null);
   const [restoreState, setRestoreState] = useState('');
