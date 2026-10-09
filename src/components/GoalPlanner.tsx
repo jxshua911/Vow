@@ -856,7 +856,7 @@ export function GoalPlanner({
           {error && (
             <div className="flex items-start gap-3 border-l-2 border-vow-ink pl-3">
               <p className="text-sm text-vow-ink flex-1">{error}</p>
-              <button onClick={handleCreate} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">
+              <button onClick={() => void handleCreate()} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">
                 Retry
               </button>
             </div>
@@ -868,7 +868,7 @@ export function GoalPlanner({
             <button onClick={() => setPlan(null)} className="vow-btn-ghost">
               Back
             </button>
-            <button onClick={handleCreate} disabled={saving} className="vow-btn-primary flex-1">
+            <button onClick={() => void handleCreate()} disabled={saving} className="vow-btn-primary flex-1">
               {saving ? 'Saving your plan…' : 'Confirm plan'}
             </button>
           </div>
