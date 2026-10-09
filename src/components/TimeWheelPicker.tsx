@@ -27,10 +27,10 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
     onChange(formatTime(Math.floor(total / 60), total % 60));
   }
   return (
-    <div className="flex items-center justify-between gap-3 border border-vow-border px-3 py-2 bg-vow-gray/10">
-      <span className="vow-label">{label}</span>
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={() => adjust(-5)} className="h-8 w-8 border border-vow-border text-vow-muted hover:text-vow-ink" aria-label="Earlier by five minutes">↑</button>
+    <div className="inline-flex items-center gap-1.5">
+      
+      <div className="flex items-center gap-1.5">
+        <button type="button" onClick={() => adjust(-5)} className="h-7 w-7 border border-vow-border text-vow-muted hover:text-vow-ink" aria-label="Earlier by five minutes">↑</button>
         <input
           type="time"
           value={formatTime(hour, minute)}
@@ -38,7 +38,7 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
             const next = parseTime(event.target.value);
             if (event.target.value) onChange(formatTime(next.hour, next.minute));
           }}
-          className="h-9 w-[7.5rem] border border-vow-border bg-vow-bg px-2 text-sm tabular-nums text-vow-ink"
+          className="h-8 w-[6.25rem] border border-vow-border bg-vow-bg px-1.5 text-sm tabular-nums text-vow-ink"
           aria-label={label}
         />
         <button type="button" onClick={() => adjust(5)} className="h-8 w-8 border border-vow-border text-vow-muted hover:text-vow-ink" aria-label="Later by five minutes">↓</button>
