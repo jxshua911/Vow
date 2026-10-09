@@ -186,9 +186,9 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
                   aria-label="Session reminders"
                   disabled={updatingNotifications}
                   onClick={() => void (notificationsEnabled ? handleDisableNotifications() : handleEnableNotifications())}
-                  className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${notificationsEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}
+                  className={`relative h-7 w-12 shrink-0 rounded-full border border-vow-border p-1 transition-colors disabled:opacity-50 ${notificationsEnabled ? 'bg-vow-ink' : 'bg-vow-surface'}`}
                 >
-                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <span className={`absolute left-1 top-1 h-5 w-5 rounded-full shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-5 bg-vow-bg' : 'translate-x-0 bg-vow-muted'}`} />
                 </button>
               </div>
               {updatingNotifications && <p className="text-xs text-vow-muted mt-2" role="status">Updating session reminders…</p>}
