@@ -91,8 +91,8 @@ jobs:
       - name: Assemble VOW production release APK
         working-directory: android
         env:
-          VOW_VERSION_CODE: "17"
-          VOW_VERSION_NAME: "1.6"
+          VOW_VERSION_CODE: "18"
+          VOW_VERSION_NAME: "1.7"
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace
@@ -104,7 +104,7 @@ jobs:
       - name: Upload VOW production release APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.6 Production CI
+          name: VOW APK 1.7 Production CI
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
