@@ -5,7 +5,7 @@ type TimeWheelPickerProps = {
 };
 
 function parseTime(value: string) {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+  const match = /^(\\d{1,2}):(\\d{2})$/.exec(value);
   return {
     hour: match ? Math.min(23, Math.max(0, Number(match[1]))) : 9,
     minute: match ? Math.min(59, Math.max(0, Number(match[2]))) : 0,
@@ -22,26 +22,26 @@ function wrap(value: number, max: number) {
 
 export function TimeWheelPicker({ value, onChange, label = 'Session time' }: TimeWheelPickerProps) {
   const { hour, minute } = parseTime(value);
-  function adjust(amount: number) {
-    const total = wrap(hour * 60 + minute + amount, 24 * 60);
-    onChange(formatTime(Math.floor(total / 60), total % 60));
-  }
+  const updateHour = (amount: number) => onChange(formatTime(wrap(hour + amount, 24), minute));
+  const updateMinute = (amount: number) => onChange(formatTime(hour, wrap(minute + amount, 60)));
+
+  const arrowClass = 'h-7 w-9 border border-vow-border text-vow-muted hover:text-vow-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-vow-ink';
+  const valueClass = 'w-9 text-center text-lg font-medium tabular-nums text-vow-ink';
+
   return (
-    <div className="inline-flex items-center gap-1.5">
-      
-      <div className="flex items-center gap-1.5">
-        <button type="button" onClick={() => adjust(-5)} className="h-7 w-7 border border-vow-border text-vow-muted hover:text-vow-ink" aria-label="Earlier by five minutes">↑</button>
-        <input
-          type="time"
-          value={formatTime(hour, minute)}
-          onChange={(event) => {
-            const next = parseTime(event.target.value);
-            if (event.target.value) onChange(formatTime(next.hour, next.minute));
-          }}
-          className="h-8 w-[6.25rem] border border-vow-border bg-vow-bg px-1.5 text-sm tabular-nums text-vow-ink"
-          aria-label={label}
-        />
-        <button type="button" onClick={() => adjust(5)} className="h-8 w-8 border border-vow-border text-vow-muted hover:text-vow-ink" aria-label="Later by five minutes">↓</button>
+    <div className="inline-flex items-end gap-2" aria-label={label}>
+      <div className="flex flex-col items-center gap-1">
+        <button type="button" onClick={() => updateHour(1)} className={arrowClass} aria-label="Increase hour">↑</button>
+        <span className={valueClass} aria-label={`Hour ${hour}`}>{String(hour).padStart(2, '0')}</span>
+        <button type="button" onClick={() => updateHour(-1)} className={arrowClass} aria-label="Decrease hour">↓</button>
+        <span className="text-[10px] uppercase tracking-wider text-vow-muted">Hour</span>
+      </div>
+      <span className="pb-8 text-lg text-vow-muted" aria-hidden="true">:</span>
+      <div className="flex flex-col items-center gap-1">
+        <button type="button" onClick={() => updateMinute(5)} className={arrowClass} aria-label="Increase minutes by five">↑</button>
+        <span className={valueClass} aria-label={`Minute ${minute}`}>{String(minute).padStart(2, '0')}</span>
+        <button type="button" onClick={() => updateMinute(-5)} className={arrowClass} aria-label="Decrease minutes by five">↓</button>
+        <span className="text-[10px] uppercase tracking-wider text-vow-muted">Min</span>
       </div>
     </div>
   );
