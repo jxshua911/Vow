@@ -38,9 +38,9 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
       </div>
       <span className="pb-8 text-lg text-vow-muted" aria-hidden="true">:</span>
       <div className="flex flex-col items-center gap-1">
-        <button type="button" onClick={() => updateMinute(1)} className={arrowClass} aria-label="Increase minute>↑</button>
+        <button type="button" onClick={() => updateMinute(1)} className={arrowClass} aria-label="Increase minute">↑</button>
         <span className={valueClass} aria-label={`Minute ${minute}`}>{String(minute).padStart(2, '0')}</span>
-        <button type="button" onClick={() => updateMinute(-1)} className={arrowClass} aria-label="Decrease minute>↓</button>
+        <button type="button" onClick={() => updateMinute(-1)} className={arrowClass} aria-label="Decrease minute">↓</button>
         <span className="text-[10px] uppercase tracking-wider text-vow-muted">Min</span>
       </div>
     </div>
