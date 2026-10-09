@@ -39,6 +39,12 @@
   .vow-btn-soft:hover { background: rgb(var(--vow-border)); border-color: rgb(var(--vow-muted)); }
   .vow-btn-soft:active { transform: translateY(1px); }
   .vow-card { background: rgb(var(--vow-bg)); border: 1px solid rgb(var(--vow-border)); }
+  .vow-switch { position: relative; display: inline-flex; width: 46px; height: 26px; flex: 0 0 auto; align-items: center; padding: 3px; border: 1px solid rgb(var(--vow-muted)); border-radius: 999px; background: rgb(var(--vow-surface)); transition: background-color 150ms ease, border-color 150ms ease; }
+  .vow-switch:focus-visible { outline: 2px solid rgb(var(--vow-ink)); outline-offset: 2px; }
+  .vow-switch:disabled { opacity: .5; cursor: not-allowed; }
+  .vow-switch-thumb { display: block; width: 18px; height: 18px; border-radius: 50%; background: rgb(var(--vow-muted)); transform: translateX(0); transition: transform 150ms ease, background-color 150ms ease; }
+  .vow-switch-checked { border-color: rgb(var(--vow-ink)); background: rgb(var(--vow-ink)); }
+  .vow-switch-checked .vow-switch-thumb { background: rgb(var(--vow-bg)); transform: translateX(20px); }
   .vow-divider { border-color: rgb(var(--vow-border)); }
 
   .vow-splash-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; background: rgb(var(--vow-bg)); pointer-events: auto; opacity: 1; transition: opacity 280ms cubic-bezier(.4,0,.2,1), background-color 180ms ease; }

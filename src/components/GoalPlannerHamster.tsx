@@ -4,6 +4,7 @@ import { checkContentSafety } from '@/lib/contentSafety';
 import { analyseGoalForEvidence, type ArmadilloResult } from '@/lib/armadillo';
 import { inferHamsterMode, buildHamsterContext, HAMSTER_WORKFLOWS, type HamsterMode } from '@/lib/hamster';
 import { specialistFor } from '@/lib/domainRouter';
+import { buildInitialExecutionItems } from '@/lib/planExecution';
 import { PageHeader } from './AppShell';
 
 type DraftGoal={id:string;title?:string|null;outcome?:string|null;why_it_matters?:string|null;duration?:string|null;plan_json?:unknown};
@@ -94,8 +95,17 @@ export function GoalPlanner({userId,onCreated,onCancel,draftGoal}:{userId:string
   if(!plan||!draftId||busy)return; setBusy(true);setError('');
   try{
    const context={planning:{mode:plan.mode,workflow:HAMSTER_WORKFLOWS[plan.mode],specialist,plan},analysis:armadillo||{},personalisation:{questions,answers,completed:answers.length>0&&answers.every(Boolean),duration}};
-   const {error:e}=await supabase.from('goals').update({title:goal,outcome:plan.completion_definition||goal,why_it_matters:why.trim()||null,status:'active',plan_json:plan,goal_context_json:context,plan_version:2,plan_generated_at:new Date().toISOString(),planning_horizon_weeks:null,planning_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,deadline:null,duration}).eq('id',draftId).eq('user_id',userId);
-   if(e)throw e; await supabase.from('milestones').delete().eq('goal_id',draftId); if(plan.milestones?.length)await supabase.from('milestones').insert(plan.milestones.map((m,i)=>({goal_id:draftId,title:m.title,description:m.description,sort_order:i,status:i===0?'in_progress':'pending',deadline:null}))); onCreated();
+   const [{data:settings,error:settingsError},{data:occupiedRows,error:occupiedError}]=await Promise.all([
+    supabase.from('user_settings').select('preferred_session_times').eq('user_id',userId).maybeSingle(),
+    supabase.from('sessions').select('scheduled_at,duration_minutes').eq('user_id',userId).eq('status','scheduled'),
+   ]);
+   if(settingsError)throw settingsError;
+   if(occupiedError)throw occupiedError;
+   const executionItems=buildInitialExecutionItems(plan.steps,settings?.preferred_session_times,(occupiedRows||[]).map((row)=>({scheduledAt:row.scheduled_at,durationMinutes:row.duration_minutes})));
+   if(!executionItems.length)throw new Error('VOW could not find an actionable first step.');
+   const deadline=plan.deadline&&/^\d{4}-\d{2}-\d{2}$/.test(plan.deadline)?plan.deadline:null;
+   const {error:e}=await supabase.rpc('lock_in_goal_plan',{p_goal_id:draftId,p_user_id:userId,p_title:goal,p_outcome:plan.completion_definition||goal,p_why_it_matters:why.trim()||null,p_plan:plan,p_goal_context:context,p_plan_version:2,p_plan_generated_at:new Date().toISOString(),p_planning_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,p_deadline:deadline,p_duration:duration,p_milestones:plan.milestones?.map((m,i)=>({title:m.title,description:m.description,sort_order:i}))||[],p_execution_items:executionItems});
+   if(e)throw e; onCreated();
   }catch(e){setError(e instanceof Error?e.message:'Could not lock this VOW.');}finally{setBusy(false);}
  }
  if(plan){const planWorkflow=HAMSTER_WORKFLOWS[plan.mode]||HAMSTER_WORKFLOWS.adaptive;return <div><PageHeader title="Your VOW" subtitle={`Personalised planning · ${plan.domain}`} /><div className="max-w-3xl space-y-5"><section className="border border-vow-border p-5"><p className="vow-label mb-2">How this goal works</p><p className="text-lg font-medium text-vow-ink">{plan.overview}</p><p className="text-sm text-vow-muted mt-3">{plan.completion_definition}</p></section><section className="border border-vow-border p-5"><p className="vow-label mb-3">Execution</p><div className="space-y-4">{plan.steps.map((s)=><div key={`${s.order}-${s.title}`} className="border-l-2 border-vow-ink pl-4"><p className="text-sm font-medium text-vow-ink">{s.order}. {s.title}</p><p className="text-xs text-vow-muted mt-1">{s.purpose}</p><p className="text-xs text-vow-muted mt-1">Target: {s.target} · Evidence: {s.evidence}{s.estimated_minutes?` · ~${s.estimated_minutes} min`:''}</p></div>)}</div></section><section className="border border-vow-border p-5"><p className="vow-label mb-3">Planning</p><p className="text-sm text-vow-ink">{planWorkflow.name}: {planWorkflow.purpose}</p><p className="text-sm text-vow-muted mt-2">Horizon: {plan.horizon} · Cadence: {plan.cadence} · Deadline: {plan.deadline}</p><p className="text-sm text-vow-muted mt-2">{plan.next_action}</p></section>{plan.adaptation_rules?.length>0&&<section className="border border-vow-border p-5"><p className="vow-label mb-3">What changes the plan</p>{plan.adaptation_rules.map(rule=><p key={rule} className="text-sm text-vow-muted py-1">{rule}</p>)}</section>}{error&&<p className="text-sm text-vow-ink border-l-2 border-vow-ink pl-3">{error}</p>}<div className="flex gap-3"><button className="vow-btn-ghost" onClick={()=>setPlan(null)}>Adjust</button><button className="vow-btn-primary flex-1" onClick={lock} disabled={busy}>{busy?'Saving...':'Lock in VOW'}</button></div></div></div>}

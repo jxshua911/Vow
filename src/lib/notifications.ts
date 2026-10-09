@@ -14,6 +14,7 @@ const CHANNELS: Record<NotificationChannel, string> = {
   silent: 'vow-reminders-silent-v4',
 };
 const DEFAULT_PREFERENCES: NotificationPreferences = { sound: true, vibration: true };
+const ENABLED_KEY = 'vow:notifications-enabled';
 const VOW_NOTIFICATION_ICON = 'ic_vow_monochrome';
 const NOTIFICATION_GROUP = 'vow-reminders';
 
@@ -26,6 +27,14 @@ export function getNotificationPreferences(): NotificationPreferences {
     }
   } catch { /* fall through to defaults */ }
   return DEFAULT_PREFERENCES;
+}
+
+export function getNotificationsEnabled(): boolean {
+  try { return localStorage.getItem(ENABLED_KEY) !== 'false'; } catch { return true; }
+}
+
+export function setNotificationsEnabled(enabled: boolean): void {
+  try { localStorage.setItem(ENABLED_KEY, String(enabled)); } catch { /* ignore */ }
 }
 
 export async function setNotificationPreferences(preferences: NotificationPreferences): Promise<void> {
@@ -73,7 +82,7 @@ function groupNotificationId(key: string): number { let hash = 0; for (let i = 0
 function notificationGroupKey(at: Date): string { return `${NOTIFICATION_GROUP}-${at.getFullYear()}-${at.getMonth()}-${at.getDate()}-${at.getHours()}-${at.getMinutes()}`; }
 
 export async function syncUpcomingSessionNotifications(sessions: Session[]): Promise<void> {
-  if (!Capacitor.isNativePlatform() || await getNotificationPermission() !== 'granted') return;
+  if (!getNotificationsEnabled() || !Capacitor.isNativePlatform() || await getNotificationPermission() !== 'granted') return;
   const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now());
   const groups = new Map<string, Session[]>();
   for (const session of upcoming) {

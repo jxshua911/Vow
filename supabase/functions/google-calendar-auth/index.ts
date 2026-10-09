@@ -6,7 +6,9 @@ const WEB_REDIRECT = "https://vow.bolt.host/calendar/oauth/callback";
 const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
+// VOW creates and lists events only; the narrower scope avoids unrelated
+// calendar settings and ACL access.
+const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 const IDENTITY_SCOPES = "openid email profile";
 function json(data: unknown, status = 200) { return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }); }
 function redirectUrl(base: string, params: Record<string, string>) { const url = new URL(base); for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value); return url.toString(); }

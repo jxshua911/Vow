@@ -4,11 +4,13 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import { PageHeader } from './AppShell';
-import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications } from '@/lib/notifications';
+import { getNotificationPermission, requestNotificationPermission, syncUpcomingSessionNotifications, getNotificationsEnabled, setNotificationsEnabled } from '@/lib/notifications';
+import { MonochromeSwitch } from './MonochromeSwitch';
 import { ConnectPage } from './Connect';
 import { SecurityCenterPage } from './SecurityCenter';
+import { SupportPage } from './Support';
 
-type ProfileSubpage = 'main' | 'connect' | 'shared' | 'customise' | 'security';
+type ProfileSubpage = 'main' | 'connect' | 'shared' | 'customise' | 'security' | 'support';
 type IconStyle = { id: string; label: string; background: string; foreground: string };
 type VowIconPlugin = { setVariant(options: { variant: string }): Promise<{ variant: string }> };
 const VowIcon = registerPlugin<VowIconPlugin>('VowIcon');
@@ -48,8 +50,10 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [selectedStyle, setSelectedStyle] = useState('white-black');
   const [iconMessage, setIconMessage] = useState('');
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [notificationsEnabledByUser, setNotificationsEnabledByUser] = useState(true);
 
   useEffect(() => { getNotificationPermission().then(setNotificationStatus).catch(() => setNotificationStatus('unsupported')); }, []);
+  useEffect(() => { setNotificationsEnabledByUser(getNotificationsEnabled()); }, []);
   useEffect(() => { setName(displayName); }, [displayName]);
   useEffect(() => {
     const userId = session?.user.id;
@@ -60,12 +64,17 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   async function handleEnableNotifications() {
     setRequesting(true);
     try {
+      setNotificationsEnabled(true); setNotificationsEnabledByUser(true);
       const status = await requestNotificationPermission(); setNotificationStatus(status);
       if (status === 'granted' && session) {
         const { data, error } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).eq('status', 'scheduled').gte('scheduled_at', new Date().toISOString()).order('scheduled_at', { ascending: true });
         if (error) throw error; if (data) await syncUpcomingSessionNotifications(data);
       }
     } catch { setNotificationStatus('denied'); } finally { setRequesting(false); }
+  }
+  function handleNotificationsToggle(enabled: boolean) {
+    setNotificationsEnabled(enabled); setNotificationsEnabledByUser(enabled);
+    if (!enabled) setNotificationStatus('denied');
   }
   async function handleIconChange(style: IconStyle) {
     setSelectedStyle(style.id); setIconMessage('');
@@ -83,11 +92,12 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     setNameMessage(error ? error.message : 'Name saved.'); setSavingName(false); if (!error) setEditingName(false);
   }
   async function handleSignOut() { setConfirmSignOut(false); await supabase.auth.signOut(); }
-  const notificationsEnabled = notificationStatus === 'granted';
+  const notificationsEnabled = notificationStatus === 'granted' && notificationsEnabledByUser;
   if (subpage === 'connect') return <ConnectPage onBack={() => setSubpage('main')} />;
   if (subpage === 'shared') return <SharedInformationPage session={session} displayName={displayName} onBack={() => setSubpage('main')} />;
   if (subpage === 'customise') return <CustomisePage selectedStyle={selectedStyle} message={iconMessage} onIconChange={handleIconChange} onShuffle={shuffleIcon} onBack={() => setSubpage('main')} />;
   if (subpage === 'security') return <div><button onClick={() => setSubpage('main')} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors">← Back to profile</button><SecurityCenterPage /></div>;
+  if (subpage === 'support') return <SupportPage onBack={() => setSubpage('main')} />;
   return <div>
     <PageHeader title={`Welcome back, ${displayName || 'there'}`} subtitle="Your account and preferences." />
     <div className="border border-vow-border divide-y divide-vow-border">
@@ -95,9 +105,10 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       <button onClick={() => setSubpage('customise')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Customise</p><p className="text-xs text-vow-muted mt-1">Build a VOW icon with the restored greater-than mark and a colour treatment you choose.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       <button onClick={() => setSubpage('shared')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Account information</p><p className="text-xs text-vow-muted mt-1">See the account details and calendar connections currently available to VOW.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       <button onClick={() => setSubpage('security')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Security & Privacy</p><p className="text-xs text-vow-muted mt-1">Review account security, privacy controls and data protection information.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
+      <button onClick={() => setSubpage('support')} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Support</p><p className="text-xs text-vow-muted mt-1">Send a request or email support@vowglobal.online directly.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
       <button onClick={onLegal} className="w-full text-left p-5 hover:bg-vow-surface/40 transition-colors"><p className="text-sm text-vow-ink">Terms & Policies</p><p className="text-xs text-vow-muted mt-1">Privacy, connected services, security and service terms.</p></button>
       <div className="p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-vow-ink">Appearance</p><p className="text-xs text-vow-muted mt-1">Switch VOW between light and dark mode.</p></div><button type="button" onClick={toggleTheme} className="vow-btn-soft shrink-0">{theme === 'light' ? 'Dark mode' : 'Light mode'}</button></div><p className="text-[10px] text-vow-muted mt-2 capitalize">Current mode: {theme}</p></div>
-      <div className="p-5"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">Turn on reminders for your scheduled VOW sessions. VOW reminders use sound and vibration.</p>{notificationStatus === 'denied' && <p className="text-xs text-vow-muted mt-2">Notifications are blocked. Enable them in your device settings, then return to VOW.</p>}{notificationStatus === 'unsupported' && <p className="text-xs text-vow-muted mt-2">Notifications are not available on this device.</p>}</div>{!notificationsEnabled && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft shrink-0 disabled:opacity-50">{requesting ? 'Enabling…' : 'Enable notifications'}</button>}</div>{notificationsEnabled && <p className="text-xs text-vow-muted mt-4 border-t border-vow-border pt-4">Sound and vibration are enabled for VOW reminders.</p>}</div>
+      <div className="p-5"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">Choose whether VOW schedules reminders. Android permission is separate and is never overwritten.</p>{notificationStatus === 'denied' && <p className="text-xs text-vow-muted mt-2">Android notifications are blocked or reminders are switched off. Enable them in device settings, then return to VOW.</p>}{notificationStatus === 'unsupported' && <p className="text-xs text-vow-muted mt-2">Notifications are not available on this device.</p>}</div><MonochromeSwitch checked={notificationsEnabledByUser} onChange={handleNotificationsToggle} label="Enable VOW notifications" disabled={notificationStatus === 'unsupported' || requesting} /></div>{!notificationsEnabled && notificationsEnabledByUser && notificationStatus !== 'unsupported' && <button onClick={handleEnableNotifications} disabled={requesting} className="vow-btn-soft mt-4 disabled:opacity-50">{requesting ? 'Enabling…' : 'Allow notifications on this device'}</button>}{notificationsEnabled && <p className="text-xs text-vow-muted mt-4 border-t border-vow-border pt-4">VOW reminders are enabled and Android permission is granted.</p>}</div>
       <div className="p-5"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm text-vow-ink">My name</p><p className="text-xs text-vow-muted mt-1 truncate">{name || 'Not provided'}</p></div><button onClick={() => { setEditingName(true); setNameMessage(''); }} className="vow-btn-soft shrink-0">Change name</button></div>{editingName && <div className="mt-4 border-t border-vow-border pt-4"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus className="vow-input" placeholder="What should VOW call you?" /><div className="flex gap-2 mt-2"><button onClick={handleSaveName} disabled={savingName || !name.trim()} className="vow-btn-primary disabled:opacity-50">{savingName ? 'Saving…' : 'Save name'}</button><button onClick={() => { setEditingName(false); setName(displayName); }} className="vow-btn-ghost">Cancel</button></div>{nameMessage && <p className="text-xs text-vow-muted mt-2">{nameMessage}</p>}</div>}</div>
       <div className="p-5"><p className="text-sm text-vow-ink">Account email</p><p className="text-xs text-vow-muted mt-1 break-words">{session?.user?.email || 'Not provided'}</p></div>
       <button onClick={() => setConfirmSignOut(true)} className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-vow-surface/40 transition-colors"><div><p className="text-sm text-vow-ink">Sign out</p><p className="text-xs text-vow-muted mt-1">Sign out of this VOW account.</p></div><span className="text-lg leading-none text-vow-muted">›</span></button>
