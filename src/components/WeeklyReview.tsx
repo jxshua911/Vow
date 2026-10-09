@@ -354,7 +354,7 @@ export function ReviewPage() {
       <PageHeader title="Weekly Review" subtitle={`${formatDate(toDateString(start))} — ${formatDate(toDateString(end))}`} />
       <ReviewContent review={review!} />
       <div className="border-t border-vow-border pt-8 mt-10">
-        <h3 className="vow-label mb-4">Confirm next week's commitments</h3>
+        <h3 className="vow-label mb-2">Confirm next week's commitments</h3><p className="text-sm text-vow-muted mb-4 leading-relaxed">This turns the review into a practical schedule: how often you plan to work on each goal, with sessions added and reminders synced when enabled.</p>
         {reviewEntitlement && <div className="mb-6"><UpgradePrompt result={reviewEntitlement} title="Your free advanced review has been used" compact /></div>}
         {actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4">{actionError}</p>}
         <div className="space-y-px border border-vow-border mb-6">
@@ -365,7 +365,7 @@ export function ReviewPage() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg">Confirming finalizes next week's commitments and schedules the sessions. After confirmation, this week's plan is locked; changes can be made at the next weekly review.</p>
+        <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg">Confirming records how many sessions you intend to complete for each goal and schedules them for next week. It gives VOW a plan to track against; it does not prevent you from adjusting your schedule later.</p>
         <div className="flex flex-col sm:flex-row gap-3">
           <button onClick={generateReview} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate'}</button>
           <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1">{confirming ? 'Finalizing review…' : 'Finalize Review'}</button>
@@ -389,7 +389,7 @@ function ReviewContent({ review }: { review: Review }) {
 }
 
 function ConfirmedReviewView({ review, pastReviews, onRegenerate, generating, actionError }: { review: Review; pastReviews: Review[]; onRegenerate: () => void; generating: boolean; actionError: string | null }) {
-  return <div><PageHeader title="Weekly Review" subtitle={`${formatDate(review.week_start)} — ${formatDate(review.week_end)}`} /><div className="border-l-2 border-vow-success pl-4 mb-10"><p className="text-sm text-vow-ink font-medium">Review confirmed</p><p className="text-xs text-vow-muted mt-0.5">Next week's commitments are locked in and sessions are scheduled.</p></div><ReviewContent review={review} /><div className="border-t border-vow-border pt-6 mt-8"><p className="text-xs text-vow-muted mb-4">Want another look before changing anything else?</p>{actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4" role="alert">{actionError}</p>}<button onClick={onRegenerate} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate review'}</button></div>{pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}</div>;
+  return <div><PageHeader title="Weekly Review" subtitle={`${formatDate(review.week_start)} — ${formatDate(review.week_end)}`} /><div className="border-l-2 border-vow-success pl-4 mb-10"><p className="text-sm text-vow-ink font-medium">Next week is planned</p><p className="text-xs text-vow-muted mt-0.5">Your intended sessions were saved and scheduled. You can still adjust your plan if circumstances change.</p></div><ReviewContent review={review} /><div className="border-t border-vow-border pt-6 mt-8"><p className="text-xs text-vow-muted mb-4">Want another look before changing anything else?</p>{actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4" role="alert">{actionError}</p>}<button onClick={onRegenerate} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate review'}</button></div>{pastReviews.length > 1 && <PastReviewsList reviews={pastReviews.slice(1)} />}</div>;
 }
 
 function PastReviewsList({ reviews }: { reviews: Review[] }) {
