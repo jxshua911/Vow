@@ -13,7 +13,7 @@ import { userFacingError } from '@/lib/userFacingError';
 import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadillo';
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
-import { listNativeCalendarEvents } from '@/lib/nativeCalendar';
+import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
 
 type Clarification = {
   questions: string[];
@@ -595,7 +595,7 @@ export function GoalPlanner({
       // calendar sync; do not trigger a surprise permission prompt during planning.
       if (!ignoreCalendarConflicts && Capacitor.isNativePlatform() && localStorage.getItem('vow:native-calendar-sync') === 'true') {
         const rangeEnd = addDays(start, (selectedDurationWeeks || 1) * 7);
-        let events;
+        let events: NativeCalendarEvent[];
         try {
           events = await listNativeCalendarEvents(start, rangeEnd);
         } catch (calendarError) {
