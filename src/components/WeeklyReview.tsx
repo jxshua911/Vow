@@ -176,7 +176,11 @@ export function ReviewPage() {
         patterns: patterns as unknown as Record<string, unknown>[],
         recommendations: recommendations as unknown as Record<string, unknown>[],
         coaching_text: coachingText,
-        proposed_commitments: proposedCommitments as unknown as Record<string, unknown>[],
+        // Regenerating coaching for a confirmed review must not silently alter the
+        // commitments already recorded and scheduled for the coming week.
+        proposed_commitments: (existingReview?.status === 'confirmed'
+          ? existingReview.proposed_commitments
+          : proposedCommitments) as unknown as Record<string, unknown>[],
         status: existingReview?.status || 'draft',
         confirmed_at: existingReview?.confirmed_at ?? null,
       };
