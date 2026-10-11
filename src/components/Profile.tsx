@@ -11,6 +11,7 @@ import {
   clearCloudPushRegistration,
   isRemotePushConfigured,
   requestNotificationPermission,
+  requestExactAlarmPermission,
   getNotificationPreferences,
   setupCloudPushNotifications,
   setNotificationPreferences,
@@ -78,10 +79,15 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
           : 'Allow notifications in your device settings to receive session reminders.');
         return;
       }
-      // Reflect the explicit opt-in immediately; reminder reconciliation may take longer.
+      // Exact-alarm access improves timing, but declining it must not disable
+      // reminders entirely: schedule inexact notifications as a fallback.
+      const exactAlarmGranted = await requestExactAlarmPermission();
       setNotificationsEnabled(true);
       const preferences = await setNotificationPreferences({ enabled: true });
       setNotificationsEnabled(preferences.enabled);
+      if (exactAlarmGranted === false) {
+        setNotificationError('Session reminders are enabled, but Android may deliver them later than scheduled. Allow Alarms & reminders for VOW in Android settings for more precise timing.');
+      }
       if (Capacitor.getPlatform() === 'android' && isRemotePushConfigured()) {
         try {
           await setupCloudPushNotifications();
@@ -93,9 +99,11 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       console.error('[VOW] Enabling session reminders failed:', error);
       // Permission may be granted even when reminder sync fails; keep UI aligned with saved preference.
       setNotificationsEnabled(getNotificationPreferences().enabled);
-      setNotificationError(getNotificationPreferences().enabled
-        ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
-        : 'Could not enable session reminders. Please try again.');
+      setNotificationError(error instanceof Error && error.message === 'EXACT_ALARM_PERMISSION_DENIED'
+        ? 'Allow Alarms & reminders for VOW in Android settings, then try again.'
+        : getNotificationPreferences().enabled
+          ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
+          : 'Could not enable session reminders. Please try again.');
     } finally {
       setUpdatingNotifications(false);
     }
@@ -186,9 +194,9 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
                   aria-label="Session reminders"
                   disabled={updatingNotifications}
                   onClick={() => void (notificationsEnabled ? handleDisableNotifications() : handleEnableNotifications())}
-                  className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${notificationsEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}
+                  className={`relative h-7 w-12 shrink-0 rounded-full border border-vow-border p-1 transition-colors disabled:opacity-50 ${notificationsEnabled ? 'bg-vow-ink' : 'bg-vow-surface'}`}
                 >
-                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <span className={`absolute left-1 top-1 h-5 w-5 rounded-full shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-5 bg-vow-bg' : 'translate-x-0 bg-vow-muted'}`} />
                 </button>
               </div>
               {updatingNotifications && <p className="text-xs text-vow-muted mt-2" role="status">Updating session reminders…</p>}

@@ -102,15 +102,35 @@ export async function getNotificationPermission(): Promise<NotificationPermissio
 export async function requestNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
   if (!Capacitor.isNativePlatform()) return 'unsupported';
 
-  const current = await LocalNotifications.checkPermissions();
-  if (current.display === 'granted') {
-    await setupNotifications();
-    return current.display;
+  let permission = await LocalNotifications.checkPermissions();
+  if (permission.display !== 'granted') {
+    permission = await LocalNotifications.requestPermissions();
   }
+  if (permission.display !== 'granted') return permission.display;
 
-  const result = await LocalNotifications.requestPermissions();
-  if (result.display === 'granted') await setupNotifications();
-  return result.display;
+  await setupNotifications();
+
+  return permission.display;
+}
+
+/**
+ * Request precise Android reminder timing only after the user explicitly
+ * enables session reminders. If access is declined, VOW can still schedule
+ * inexact local notifications instead of disabling reminders altogether.
+ */
+export async function requestExactAlarmPermission(): Promise<boolean | null> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
+
+  try {
+    let setting = await LocalNotifications.checkExactNotificationSetting();
+    if (setting.exact_alarm === 'granted') return true;
+
+    setting = await LocalNotifications.changeExactNotificationSetting();
+    return setting.exact_alarm === 'granted';
+  } catch (error) {
+    console.warn('[VOW] Exact-alarm access is unavailable; reminders will use the OS fallback:', error);
+    return false;
+  }
 }
 
 export async function scheduleReminder(id: number, title: string, body: string, at: Date, sessionId?: string): Promise<void> {
@@ -125,7 +145,11 @@ export async function scheduleReminder(id: number, title: string, body: string, 
   // essential when a session is moved or its notification settings change.
   await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => undefined);
 
-  await LocalNotifications.schedule({
+  const exactAlarmGranted = Capacitor.getPlatform() === 'android'
+    ? (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'
+    : undefined;
+
+  const result = await LocalNotifications.schedule({
     notifications: [{
       id,
       title,
@@ -133,9 +157,13 @@ export async function scheduleReminder(id: number, title: string, body: string, 
       channelId: channelId(preferences),
       sound: preferences.sound ? 'default' : undefined,
       extra: { vow: true, ...(sessionId ? { sessionId } : {}) },
+      ...(exactAlarmGranted === undefined ? {} : { isExactNotification: exactAlarmGranted }),
       schedule: { at, allowWhileIdle: true },
     }],
   });
+  if (result.warning) {
+    console.warn('[VOW] A reminder was scheduled without exact-alarm access:', result.warning);
+  }
 }
 
 export async function cancelReminder(id: number): Promise<void> {
