@@ -21,7 +21,7 @@ const freeBenefits = [
   '1 active goal',
   'Personalised plan with milestones',
   'Scheduled sessions and progress tracking',
-  '10 planning actions/month',
+  '3 planning actions/month',
   '1 adaptive replan/month',
   '1 advanced weekly review/month',
 ];

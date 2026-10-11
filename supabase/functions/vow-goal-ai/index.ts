@@ -945,15 +945,10 @@ Deno.serve(async (req) => {
         });
       } catch (error) {
         console.error(
-          "[VOW AI] Entitlement reservation unavailable; continuing in degraded mode:",
+          "[VOW AI] Entitlement reservation unavailable; failing closed:",
           error instanceof Error ? error.message : String(error)
         );
-        entitlement = {
-          allowed: true,
-          reservation_id: null,
-          feature,
-          degraded: true,
-        };
+        throw new Error("ENTITLEMENT_RESERVATION_FAILED");
       }
     }
     if (entitlement.allowed !== true)

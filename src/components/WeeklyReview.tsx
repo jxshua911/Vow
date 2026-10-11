@@ -8,7 +8,7 @@ import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
 import { ArrowRight } from '@/lib/ui-icons';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
-import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
+import { FREE_PLANNING_ACTION_LIMIT, getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
 
 export function ReviewPage() {
@@ -75,14 +75,14 @@ export function ReviewPage() {
         if (
           entitlement &&
           entitlement.plan !== 'premium' &&
-          entitlement.planning_used >= (entitlement.planning_limit ?? 10)
+          entitlement.planning_used >= (entitlement.planning_limit ?? FREE_PLANNING_ACTION_LIMIT)
         ) {
           setReviewEntitlement({
             allowed: false,
             reason: 'usage_limit',
             feature: 'planning_action',
             used: entitlement.planning_used,
-            limit: entitlement.planning_limit ?? 10,
+            limit: entitlement.planning_limit ?? FREE_PLANNING_ACTION_LIMIT,
           });
           return;
         }
