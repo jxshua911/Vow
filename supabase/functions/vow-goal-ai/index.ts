@@ -416,7 +416,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: \`Bearer \${key}\`,
+          Authorization: `Bearer ${key}`,
           "Groq-Model-Version": "latest",
         },
         signal: controller.signal,
@@ -481,7 +481,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
 
     console.error("Groq provider error", { status: response.status, body: raw.slice(0, 1200) });
     if (response.status === 429) throw new Error("GROQ_429");
-    throw new Error(\`GROQ_PROVIDER_ERROR_\${response.status}\`);
+    throw new Error(`GROQ_PROVIDER_ERROR_${response.status}`);
   }
 }
 
@@ -586,7 +586,7 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: \`Bearer \${key}\`,
+          Authorization: `Bearer ${key}`,
         },
         signal: controller.signal,
         body: JSON.stringify({
@@ -611,7 +611,7 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
         continue;
       }
       console.error("[VOW AI] Mistral provider error", { status: response.status, body: raw.slice(0, 1200) });
-      throw new Error(response.status === 429 ? "MISTRAL_429" : \`MISTRAL_PROVIDER_ERROR_\${response.status}\`);
+      throw new Error(response.status === 429 ? "MISTRAL_429" : `MISTRAL_PROVIDER_ERROR_${response.status}`);
     }
 
     const payload = JSON.parse(raw);
