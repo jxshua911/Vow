@@ -108,7 +108,7 @@ export function UpgradePage() {
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
           <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? '$40' : '$4.99'}</div>
           <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
-          {isYearly && <p className="text-xs font-medium text-vow-ink mb-5">Save 30% — about $20 per year compared with monthly billing.</p>}
+          {isYearly && <div className="mb-5 inline-flex items-center gap-2 border border-vow-border bg-vow-surface px-3 py-2 rounded-md"><span className="text-xs font-semibold uppercase tracking-wider text-vow-ink">Best value</span><span className="h-4 w-px bg-vow-border" /><span className="text-sm font-medium text-vow-ink">Save $19.88 per year</span></div>}
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
       </div>
