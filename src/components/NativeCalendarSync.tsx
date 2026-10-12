@@ -22,10 +22,10 @@ export function NativeCalendarSync() {
   const dismissAfterSuccess = useCallback((text: string) => {
     setMessage(text);
     setHiding(true);
-    window.setTimeout(() => {
-      setDismissed(true);
-      if (userId) localStorage.setItem(DISMISSED_KEY_PREFIX + userId, 'true');
-    }, 520);
+    // Hide immediately after a successful sync; do not leave a collapsed
+    // onboarding panel taking up space or waiting on an animation callback.
+    setDismissed(true);
+    if (userId) localStorage.setItem(DISMISSED_KEY_PREFIX + userId, 'true');
   }, [userId]);
 
   useEffect(() => {
