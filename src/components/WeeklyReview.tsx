@@ -369,7 +369,6 @@ export function ReviewPage() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-vow-muted mb-6 leading-relaxed max-w-lg">Confirming records how many sessions you intend to complete for each goal and schedules them for next week. It gives VOW a plan to track against; it does not prevent you from adjusting your schedule later.</p>
         <div className="flex flex-col sm:flex-row gap-3">
           <button onClick={generateReview} disabled={generating} className="vow-btn-ghost">{generating ? 'Analyzing your week...' : 'Regenerate'}</button>
           <button onClick={confirmReview} disabled={confirming} className="vow-btn-primary flex-1">{confirming ? 'Finalizing review…' : 'Finalize Review'}</button>
