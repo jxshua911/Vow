@@ -415,8 +415,20 @@ export function GoalPlanner({
       setError('Please describe your goal in at least a few characters.');
       return;
     }
-    if (rawInput.trim().length > 5000 || why.trim().length > 5000) {
-      setError('Please keep your goal and context under 5,000 characters each.');
+    if (rawInput.trim().length > 300) {
+      setError('Please keep your goal under 300 characters.');
+      return;
+    }
+    if (why.trim().length > 5000) {
+      setError('Please keep your context under 5,000 characters.');
+      return;
+    }
+    if (selectedDurationWeeks < 1 || selectedDurationWeeks > 52) {
+      setError('Please choose a duration between 1 and 52 weeks.');
+      return;
+    }
+    if (availableDays.length < 1 || availableDays.length > 7 || missingSessionTimes.length > 0) {
+      setError('Choose at least one day and time for your plan.');
       return;
     }
     setPlanning(true);
@@ -490,8 +502,20 @@ export function GoalPlanner({
     setPlanning(true);
     setError('');
     try {
-      if (rawInput.trim().length > 5000 || why.trim().length > 5000) {
-        setError('Please keep your goal and context under 5,000 characters each.');
+      if (rawInput.trim().length > 300) {
+        setError('Please keep your goal under 300 characters.');
+        return;
+      }
+      if (why.trim().length > 5000) {
+        setError('Please keep your context under 5,000 characters.');
+        return;
+      }
+      if (selectedDurationWeeks < 1 || selectedDurationWeeks > 52) {
+        setError('Please choose a duration between 1 and 52 weeks.');
+        return;
+      }
+      if (availableDays.length < 1 || availableDays.length > 7 || missingSessionTimes.length > 0) {
+        setError('Choose at least one day and time for your plan.');
         return;
       }
       const safety = await checkContentSafety(rawInput);

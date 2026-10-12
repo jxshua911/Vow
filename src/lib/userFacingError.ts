@@ -11,6 +11,13 @@ const errorMap: Record<string, string> = {
   AI_GLOBAL_DAILY_BUDGET: 'AI planning is temporarily paused while VOW manages its daily capacity. Please try again later.',
   AI_GLOBAL_MONTHLY_BUDGET: 'AI planning is temporarily paused while VOW manages its monthly capacity. Please try again later.',
   AI_GUARDRAIL_CHECK_FAILED: 'VOW could not verify AI availability. Nothing was changed; please try again.',
+  ENTITLEMENT_RESERVATION_FAILED: 'VOW could not verify your planning allowance. Nothing was charged; please try again.',
+  ENTITLEMENT_FINALIZE_FAILED: 'VOW could not finish recording this plan. Please try again.',
+  GOAL_CATEGORY_UNCLEAR: 'VOW needs a little more detail about this goal. Please try again with more context.',
+  GENERIC_SESSION_TASK: 'VOW could not create a specific enough plan. Please try again.',
+  INSUFFICIENT_MILESTONES: 'VOW could not create enough milestones for this plan. Please try again.',
+  INSUFFICIENT_WEEKLY_SESSIONS: 'VOW could not create enough sessions for this plan. Please try again.',
+  REPETITIVE_SCHEDULE: 'VOW could not create a varied enough schedule. Please try again.',
   SUBSCRIPTION_RECORD_WRITE_FAILED: 'Your purchase was verified, but VOW could not finish updating Premium. Please try again.',
 };
 
@@ -23,5 +30,6 @@ export function userFacingError(error: unknown, fallback = 'Something went wrong
   if (/invalid login credentials/i.test(raw)) return 'That email or password is incorrect.';
   if (/email.*not confirmed/i.test(raw)) return 'Please confirm your email address before signing in.';
   if (/user already registered/i.test(raw)) return 'An account with this email already exists. Try signing in instead.';
+  if (/not available on your current plan|usage_limit|quota_exceeded/i.test(raw)) return `You have used your ${3} free planning actions this month. Premium unlocks unlimited planning.`;
   return fallback;
 }
