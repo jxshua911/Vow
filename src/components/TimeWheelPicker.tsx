@@ -25,7 +25,7 @@ function wrap(value: number, max: number) {
 export function TimeWheelPicker({ value, onChange, label = 'Session time' }: TimeWheelPickerProps) {
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
-  const repeatRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
+  const repeatRef = useRef<number | null>(null);
   valueRef.current = value;
   onChangeRef.current = onChange;
 
