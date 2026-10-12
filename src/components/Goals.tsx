@@ -95,7 +95,20 @@ function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBac
       status: 'scheduled',
       updated_at: new Date().toISOString(),
     }).eq('id', sess.id);
-    if (!error) await syncUpcomingSessionNotifications([{ ...sess, scheduled_at: newDate.toISOString(), status: 'scheduled', moved_count: sess.moved_count + 1 } as Session]);
+    if (!error) {
+      if (session) {
+        const { error: historyError } = await supabase.from('vow_session_moves').insert({
+          user_id: session.user.id,
+          session_id: sess.id,
+          from_date: sess.scheduled_at,
+          to_date: newDate.toISOString(),
+        });
+        if (historyError) {
+          console.error('[VOW] Session moved but move history could not be recorded:', historyError);
+        }
+      }
+      await syncUpcomingSessionNotifications([{ ...sess, scheduled_at: newDate.toISOString(), status: 'scheduled', moved_count: sess.moved_count + 1 } as Session]);
+    }
     await load();
   }
   async function toggleMilestoneStatus(ms: Milestone) { const newStatus = ms.status === 'completed' ? 'pending' : 'completed'; await supabase.from('milestones').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', ms.id); load(); }
