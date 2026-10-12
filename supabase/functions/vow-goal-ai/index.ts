@@ -739,7 +739,35 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
   const focus = Array.isArray(b?.weekly_focus) ? b.weekly_focus : [];
   const weekly = Array.isArray(b?.weekly_session_templates) ? b.weekly_session_templates : [];
   if (milestones.length < 2) return "INSUFFICIENT_MILESTONES";
-  if (focus.length < w) return "INSUFFICIENT_WEEKLY_FOCUS";
+
+  // Some provider responses omit one or more weekly_focus entries even when
+  // they contain a complete, concrete week-by-week session plan. Derive the
+  // missing focus from that week's actual sessions (or its nearest milestone)
+  // instead of rejecting an otherwise usable plan.
+  if (focus.length < w) {
+    const sortedMilestones = [...milestones].sort(
+      (a: any, b: any) => Number(a?.week || 1) - Number(b?.week || 1)
+    );
+    b.weekly_focus = Array.from({ length: w }, (_, index) => {
+      const existing = str(focus[index], 350);
+      if (existing) return existing;
+      const weekNumber = index + 1;
+      const weekPlan = weekly.find((item: any) => Number(item?.week) === weekNumber);
+      const tasks = Array.isArray(weekPlan?.sessions)
+        ? weekPlan.sessions.map((item: any) => str(item?.task, 160)).filter(Boolean)
+        : [];
+      if (tasks.length) return `Week ${weekNumber}: ${tasks.join("; ")}`.slice(0, 350);
+      const milestone = sortedMilestones.reduce((closest: any, item: any) => {
+        if (!closest) return item;
+        return Math.abs(Number(item?.week || 1) - weekNumber) <
+          Math.abs(Number(closest?.week || 1) - weekNumber) ? item : closest;
+      }, null);
+      if (milestone) {
+        return `Week ${weekNumber}: ${str(milestone.title, 160)} — ${str(milestone.description, 180)}`.slice(0, 350);
+      }
+      return `Week ${weekNumber}: make measurable progress toward ${str(b?.outcome, 250) || str(goalContext, 250)}`.slice(0, 350);
+    });
+  }
   if (w <= 16 && weekly.length < w) return "INSUFFICIENT_WEEKLY_SESSIONS";
 
   const planned = schedule(b, w, ds, str(b?.start_date) || new Date().toISOString().slice(0, 10));
