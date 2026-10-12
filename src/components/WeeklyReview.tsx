@@ -137,7 +137,7 @@ export function ReviewPage() {
 
       const primaryGoal = goals.find((g) => g.status === 'active') || goals[0];
       const whyItMatters = primaryGoal?.why_it_matters || null;
-      const coachingText = allSessions.length === 0 ? "No sessions were completed this week. Once you start your commitments, your review will show what worked and what to adjust." : buildCoachingText(weekSessions, patterns, settings, whyItMatters);
+      const coachingText = allSessions.length === 0 ? "" : buildCoachingText(weekSessions, patterns, settings, whyItMatters);
 
       const recommendations = patterns.map((p) => ({
         title: p.description,
@@ -358,7 +358,7 @@ export function ReviewPage() {
       <PageHeader title="Weekly Review" subtitle={`${formatDate(toDateString(start))} — ${formatDate(toDateString(end))}`} />
       <ReviewContent review={review!} />
       <div className="border-t border-vow-border pt-8 mt-10">
-        <h3 className="vow-label mb-2">Confirm next week's commitments</h3><p className="text-sm text-vow-muted mb-4 leading-relaxed">This turns the review into a practical schedule: how often you plan to work on each goal, with sessions added and reminders synced when enabled.</p>
+        <h3 className="vow-label mb-4">Confirm next week's commitments</h3>
         {reviewEntitlement && <div className="mb-6"><UpgradePrompt result={reviewEntitlement} title="Your free advanced review has been used" compact /></div>}
         {actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4">{actionError}</p>}
         <div className="space-y-px border border-vow-border mb-6">
@@ -385,7 +385,7 @@ function ReviewContent({ review }: { review: Review }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border border border-vow-border"><MetricCell label="Committed" value={review.committed_count} /><MetricCell label="Completed" value={review.completed_count} /><MetricCell label="Missed" value={review.missed_count} /><MetricCell label="Moved" value={review.moved_count} /></div>
       {review.committed_count > 0 ? <div className="flex items-center gap-8"><div className="relative w-20 h-20 flex-shrink-0"><svg className="w-20 h-20 -rotate-90" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="#E2E2DF" strokeWidth="2" /><circle cx="50" cy="50" r="44" fill="none" stroke="#111111" strokeWidth="2" strokeLinecap="square" strokeDasharray={`${(review.completion_pct / 100) * 276.46} 276.46`} className="transition-all duration-1000" /></svg><div className="absolute inset-0 flex items-center justify-center"><span className="text-lg vow-heading text-vow-ink">{Math.round(review.completion_pct)}%</span></div></div><div><p className="vow-label mb-1">Completion rate</p><p className="text-sm text-vow-ink">You completed {review.completed_count} of {review.committed_count} sessions.</p></div></div> : <div className="bg-vow-surface/45 border border-vow-border p-5"><p className="vow-label mb-2">First week</p><p className="text-sm text-vow-ink">This is your first review. Complete your commitments this week and VOW will use your actual progress to shape what comes next.</p></div>}
       <div className="grid md:grid-cols-2 gap-px bg-vow-border border border-vow-border">{review.biggest_win && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest win</p><p className="text-sm text-vow-ink">{review.biggest_win}</p></div>}{review.biggest_setback && <div className="bg-vow-bg p-5"><p className="vow-label mb-2">Biggest setback</p><p className="text-sm text-vow-ink">{review.biggest_setback}</p></div>}</div>
-      <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Your coach</p><div className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{review.coaching_text}</div></div>
+      {review.coaching_text?.trim() && !review.coaching_text.startsWith("No sessions were completed this week.") && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Your coach</p><div className="text-sm text-vow-ink whitespace-pre-wrap leading-relaxed">{review.coaching_text}</div></div>}
       {commitments.length > 0 && <div className="border-t border-vow-border pt-8"><p className="vow-label mb-4">Proposed next week</p><div className="space-y-px border border-vow-border">{commitments.map((c, i) => <div key={i} className="bg-vow-bg px-4 py-3 flex items-center justify-between"><div className="min-w-0 flex-1"><div className="text-sm text-vow-ink truncate">{c.goal_title}</div>{c.notes && <div className="text-xs text-vow-muted mt-0.5">{c.notes}</div>}</div><div className="text-sm text-vow-ink font-medium flex-shrink-0 ml-3">{c.sessions_per_week}x/week</div></div>)}</div></div>}
     </div>
   );
