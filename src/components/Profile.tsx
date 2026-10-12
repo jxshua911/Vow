@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -11,7 +12,7 @@ import {
   clearCloudPushRegistration,
   isRemotePushConfigured,
   requestNotificationPermission,
-  requestExactAlarmPermission,
+  getNotificationPermission,
   getNotificationPreferences,
   setupCloudPushNotifications,
   setNotificationPreferences,
@@ -34,6 +35,34 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [signOutError, setSignOutError] = useState('');
 
   useEffect(() => { setName(displayName); }, [displayName]);
+
+  const refreshNotificationState = useCallback(async () => {
+    const preferences = getNotificationPreferences();
+    if (!Capacitor.isNativePlatform()) {
+      setNotificationsEnabled(preferences.enabled);
+      return;
+    }
+    try {
+      const permission = await getNotificationPermission();
+      // The operating system is authoritative: if permission has been revoked
+      // in Android settings, the in-app switch must not remain visually on.
+      setNotificationsEnabled(preferences.enabled && permission === 'granted');
+    } catch (error) {
+      console.warn('[VOW] Could not refresh notification permission state:', error);
+      setNotificationsEnabled(preferences.enabled);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshNotificationState();
+    const onFocus = () => { void refreshNotificationState(); };
+    window.addEventListener('focus', onFocus);
+    const resumeListener = CapacitorApp.addListener('resume', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      resumeListener.then((handle) => handle.remove());
+    };
+  }, [refreshNotificationState]);
 
   useEffect(() => {
     let active = true;
@@ -79,15 +108,11 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
           : 'Allow notifications in your device settings to receive session reminders.');
         return;
       }
-      // Exact-alarm access improves timing, but declining it must not disable
-      // reminders entirely: schedule inexact notifications as a fallback.
-      const exactAlarmGranted = await requestExactAlarmPermission();
-      setNotificationsEnabled(true);
+      // Do not send users into Android's separate Alarms & reminders
+      // settings page just to enable ordinary session notifications.
       const preferences = await setNotificationPreferences({ enabled: true });
-      setNotificationsEnabled(preferences.enabled);
-      if (exactAlarmGranted === false) {
-        setNotificationError('Session reminders are enabled, but Android may deliver them later than scheduled. Allow Alarms & reminders for VOW in Android settings for more precise timing.');
-      }
+      setNotificationsEnabled(preferences.enabled && permission === 'granted');
+      await refreshNotificationState();
       if (Capacitor.getPlatform() === 'android' && isRemotePushConfigured()) {
         try {
           await setupCloudPushNotifications();
@@ -97,13 +122,10 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       }
     } catch (error) {
       console.error('[VOW] Enabling session reminders failed:', error);
-      // Permission may be granted even when reminder sync fails; keep UI aligned with saved preference.
-      setNotificationsEnabled(getNotificationPreferences().enabled);
-      setNotificationError(error instanceof Error && error.message === 'EXACT_ALARM_PERMISSION_DENIED'
-        ? 'Allow Alarms & reminders for VOW in Android settings, then try again.'
-        : getNotificationPreferences().enabled
-          ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
-          : 'Could not enable session reminders. Please try again.');
+      void refreshNotificationState();
+      setNotificationError(getNotificationPreferences().enabled
+        ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
+        : 'Could not enable session reminders. Please try again.');
     } finally {
       setUpdatingNotifications(false);
     }
@@ -115,6 +137,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     try {
       const preferences = await setNotificationPreferences({ enabled: false });
       setNotificationsEnabled(preferences.enabled);
+      await refreshNotificationState();
     } catch (error) {
       console.error('[VOW] Disabling session reminders failed:', error);
       setNotificationError('Could not update reminder settings. Please try again.');
