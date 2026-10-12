@@ -269,6 +269,16 @@ export function GoalPlanner({
   const [resourceError, setResourceError] = useState('');
   const [calendarConflicts, setCalendarConflicts] = useState<string[]>([]);
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
+
+  useEffect(() => {
+    const handleHardwareBack = (event: Event) => {
+      event.preventDefault();
+      onCancel();
+    };
+    window.addEventListener('vow:hardware-back', handleHardwareBack);
+    return () => window.removeEventListener('vow:hardware-back', handleHardwareBack);
+  }, [onCancel]);
+
   const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
   const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
   const missingSessionTimes = availableDays.filter((day) => !sessionTimes[day]);
