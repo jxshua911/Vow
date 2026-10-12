@@ -74,6 +74,9 @@ function AppContent() {
   useEffect(() => { viewHistoryRef.current = viewHistory; }, [viewHistory]);
   useEffect(() => {
     const listener = CapacitorApp.addListener('backButton', () => {
+      // Give nested planner/detail screens first chance to consume Android back.
+      const backEvent = new CustomEvent('vow:hardware-back', { cancelable: true });
+      if (!window.dispatchEvent(backEvent)) return;
       if (viewHistoryRef.current.length > 1) goBack();
       else CapacitorApp.exitApp();
     });
