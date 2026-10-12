@@ -112,8 +112,18 @@ export function ReviewPage() {
         supabase.from('journal_entries').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
         supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle(),
       ]);
+      const moveHistoryRes = await supabase
+        .from('vow_session_moves')
+        .select('moved_at')
+        .eq('user_id', session.user.id)
+        .gte('moved_at', start.toISOString())
+        .lte('moved_at', end.toISOString());
+
       const queryError = sessionsRes.error || goalsRes.error || journalRes.error || settingsRes.error;
       if (queryError) throw queryError;
+      if (moveHistoryRes.error) {
+        console.warn('[VOW] Move history is unavailable; using legacy move totals until the move-history migration is applied:', moveHistoryRes.error.message);
+      }
 
       const allSessions = (sessionsRes.data || []) as Session[];
       const goals = (goalsRes.data || []) as Goal[];
@@ -128,7 +138,9 @@ export function ReviewPage() {
       const committed = weekSessions.length;
       const completed = weekSessions.filter((s) => s.status === 'completed').length;
       const missed = weekSessions.filter((s) => s.status === 'skipped').length;
-      const moved = weekSessions.reduce((total, s) => total + Math.max(0, Number(s.moved_count) || 0), 0);
+      const moved = moveHistoryRes.error
+        ? weekSessions.reduce((total, s) => total + Math.max(0, Number(s.moved_count) || 0), 0)
+        : (moveHistoryRes.data || []).length;
       const completionPct = committed > 0 ? Math.round((completed / committed) * 100) : 0;
 
       const patterns = detectPatterns(allSessions, journal);
