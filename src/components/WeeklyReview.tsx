@@ -128,7 +128,7 @@ export function ReviewPage() {
       const committed = weekSessions.length;
       const completed = weekSessions.filter((s) => s.status === 'completed').length;
       const missed = weekSessions.filter((s) => s.status === 'skipped').length;
-      const moved = weekSessions.filter((s) => s.status === 'moved').length;
+      const moved = weekSessions.reduce((total, s) => total + Math.max(0, Number(s.moved_count) || 0), 0);
       const completionPct = committed > 0 ? Math.round((completed / committed) * 100) : 0;
 
       const patterns = detectPatterns(allSessions, journal);
