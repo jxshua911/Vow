@@ -253,7 +253,7 @@ export function GoalPlanner({
 
   const draftStorageKey = 'vow-goal-planner-draft:' + userId;
   const [why, setWhy] = useState(initialWhy);
-  const [durationWeeks, setDurationWeeks] = useState<number | null>(null);
+  const [durationWeeks, setDurationWeeks] = useState<number | null>(8);
   const [customDurationValue, setCustomDurationValue] = useState('');
   const [customDurationUnit, setCustomDurationUnit] = useState<DurationUnit>('months');
   const [availableDays, setAvailableDays] = useState<string[]>([]);
@@ -293,7 +293,8 @@ export function GoalPlanner({
       };
       if (typeof draft.rawInput === 'string') setRawInput(draft.rawInput);
       if (typeof draft.why === 'string') setWhy(draft.why);
-      if (typeof draft.durationWeeks === 'number' || draft.durationWeeks === null) setDurationWeeks(draft.durationWeeks);
+      if (typeof draft.durationWeeks === 'number') setDurationWeeks(draft.durationWeeks);
+      else if (draft.durationWeeks === null && typeof draft.customDurationValue === 'string' && draft.customDurationValue.trim()) setDurationWeeks(null);
       if (typeof draft.customDurationValue === 'string') setCustomDurationValue(draft.customDurationValue);
       if (draft.customDurationUnit) setCustomDurationUnit(draft.customDurationUnit);
       if (Array.isArray(draft.availableDays)) setAvailableDays(draft.availableDays);
