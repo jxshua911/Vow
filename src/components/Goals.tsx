@@ -23,6 +23,17 @@ export function GoalsPage() {
   }, [session]);
   useEffect(() => { loadGoals(); }, [loadGoals]);
 
+  useEffect(() => {
+    if (!selectedGoalId) return;
+    const handleHardwareBack = (event: Event) => {
+      event.preventDefault();
+      setSelectedGoalId(null);
+      void loadGoals();
+    };
+    window.addEventListener('vow:hardware-back', handleHardwareBack);
+    return () => window.removeEventListener('vow:hardware-back', handleHardwareBack);
+  }, [selectedGoalId, loadGoals]);
+
   if (selectedGoalId) return <GoalDetail goalId={selectedGoalId} onBack={() => { setSelectedGoalId(null); loadGoals(); }} onContinueDraft={() => { setSelectedGoalId(null); setShowCreate(true); }} />;
   if (showCreate) return <GoalPlanner userId={session?.user.id || ''} onCreated={() => { setShowCreate(false); loadGoals(); }} onCancel={() => setShowCreate(false)} />;
   if (!session) return <div><PageHeader title="Goals" /><div className="text-vow-muted text-sm">Please sign in to view your goals.</div></div>;
