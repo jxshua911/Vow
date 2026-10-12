@@ -117,6 +117,17 @@ function days(x: any, w: number) {
     : [];
   return a.length ? a.slice(0, 7) : DAYS.slice(0, Math.max(1, Math.min(4, w)));
 }
+// Models often abbreviate weekday names ("Mon", "tues", "Friday "). Map any
+// recognisable form to the canonical DAY value so explicit per-day sessions
+// are never silently dropped from the user's selected days.
+function canonDayName(x: any): string | null {
+  const s = String(x ?? "").trim().toLowerCase();
+  if (!s) return null;
+  const exact = DAYS.find((d) => d.toLowerCase() === s);
+  if (exact) return exact;
+  const prefix = s.slice(0, 3);
+  return DAYS.find((d) => d.toLowerCase().startsWith(prefix)) || null;
+}
 function clarificationFallback(goal: string, category: string, selectedDays: string[], hasDeadline: boolean) {
   const normalizedCategory = category.toLowerCase();
   const lowerGoal = goal.toLowerCase();
@@ -387,61 +398,90 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY_MISSING");
 
-  const c = new AbortController();
-  const timer = setTimeout(() => c.abort(), 35000);
-  try {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  // Bounded recovery: at most one rate-limit retry, one JSON-mode downgrade and
+  // one targeted repair for unparseable/truncated output. Each attempt gets its
+  // own timeout so a retry never inherits an exhausted deadline.
+  const conversation = [...messages];
+  let rateRetries = 0;
+  let repairRetries = 0;
+  let jsonMode = true;
+
+  for (;;) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 35000);
+    let response: Response;
+    let raw: string;
+    try {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
+          Authorization: \`Bearer \${key}\`,
           "Groq-Model-Version": "latest",
         },
-        signal: c.signal,
+        signal: controller.signal,
         body: JSON.stringify({
           model: "openai/gpt-oss-20b",
-          messages,
+          messages: conversation,
           max_completion_tokens: MAX[kind],
           temperature: 0.2,
           reasoning_effort: "low",
-          response_format: { type: "json_object" },
+          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
           // Keep the primary Groq request on the documented JSON mode for GPT-OSS.
           // VOW knowledge is already supplied in the prompt; no provider-side browser tool is required here.
         }),
       });
-
-      const raw = await r.text();
-      if (r.ok) {
-        const payload = JSON.parse(raw);
-        const message = payload?.choices?.[0]?.message;
-        const content = message?.content;
-        if (typeof content !== "string" || !content.trim()) throw new Error("GROQ_EMPTY_RESPONSE");
-        return parse(content);
-      }
-
-      if (r.status === 429 && attempt === 0) {
-        const delay = retryDelayMs(r, attempt);
-        console.warn("Groq rate limited; retrying once", { delay_ms: delay });
-        await sleep(delay);
-        continue;
-      }
-
-      if (r.status === 400 && attempt === 0) {
-        console.warn("Groq JSON-mode request rejected; retrying without response_format", {
-          body: raw.slice(0, 1200),
-        });
-        continue;
-      }
-
-      console.error("Groq provider error", { status: r.status, body: raw.slice(0, 1200) });
-      if (r.status === 429) throw new Error("GROQ_429");
-      throw new Error(`GROQ_PROVIDER_ERROR_${r.status}`);
+      raw = await response.text();
+    } finally {
+      clearTimeout(timer);
     }
 
-    throw new Error("GROQ_429");
-  } finally {
-    clearTimeout(timer);
+    if (response.ok) {
+      const payload = JSON.parse(raw);
+      const message = payload?.choices?.[0]?.message;
+      const content = message?.content;
+      if (typeof content !== "string" || !content.trim()) throw new Error("GROQ_EMPTY_RESPONSE");
+      try {
+        return parse(content);
+      } catch (parseError) {
+        if (repairRetries === 0) {
+          repairRetries = 1;
+          console.warn("Groq returned unparseable or truncated JSON; requesting a complete compact resend once", {
+            error: parseError instanceof Error ? parseError.message : String(parseError),
+          });
+          conversation.push(
+            { role: "assistant", content },
+            {
+              role: "user",
+              content:
+                "Your previous reply was not a complete, valid JSON object. Resend the COMPLETE JSON object only: compact, no markdown fences, no truncation, all required fields present.",
+            }
+          );
+          continue;
+        }
+        throw parseError instanceof Error ? parseError : new Error("INVALID_AI_JSON");
+      }
+    }
+
+    if (response.status === 429 && rateRetries === 0) {
+      rateRetries = 1;
+      const delay = retryDelayMs(response, 0);
+      console.warn("Groq rate limited; retrying once", { delay_ms: delay });
+      await sleep(delay);
+      continue;
+    }
+
+    if (response.status === 400 && jsonMode) {
+      jsonMode = false;
+      console.warn("Groq JSON-mode request rejected; retrying without response_format", {
+        body: raw.slice(0, 1200),
+      });
+      continue;
+    }
+
+    console.error("Groq provider error", { status: response.status, body: raw.slice(0, 1200) });
+    if (response.status === 429) throw new Error("GROQ_429");
+    throw new Error(\`GROQ_PROVIDER_ERROR_\${response.status}\`);
   }
 }
 
@@ -528,35 +568,75 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
   const key = Deno.env.get("MISTRAL_API_KEY");
   if (!key) throw new Error("MISTRAL_API_KEY_MISSING");
   const model = Deno.env.get("MISTRAL_MODEL") || "mistral-small-latest";
-  const c = new AbortController();
-  const timer = setTimeout(() => c.abort(), 35000);
-  try {
-    const r = await fetch("https://api.mistral.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      signal: c.signal,
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: MAX[kind],
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-      }),
-    });
-    const raw = await r.text();
-    if (!r.ok) {
-      console.error("[VOW AI] Mistral provider error", { status: r.status, body: raw.slice(0, 1200) });
-      throw new Error(r.status === 429 ? "MISTRAL_429" : `MISTRAL_PROVIDER_ERROR_${r.status}`);
+
+  // Bounded recovery mirroring the Groq path: one rate-limit retry and one
+  // targeted repair for unparseable/truncated output, each attempt with its
+  // own timeout.
+  const conversation = [...messages];
+  let rateRetries = 0;
+  let repairRetries = 0;
+
+  for (;;) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 35000);
+    let response: Response;
+    let raw: string;
+    try {
+      response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: \`Bearer \${key}\`,
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model,
+          messages: conversation,
+          max_tokens: MAX[kind],
+          temperature: 0.2,
+          response_format: { type: "json_object" },
+        }),
+      });
+      raw = await response.text();
+    } finally {
+      clearTimeout(timer);
     }
+
+    if (!response.ok) {
+      if (response.status === 429 && rateRetries === 0) {
+        rateRetries = 1;
+        const delay = retryDelayMs(response, 0);
+        console.warn("[VOW AI] Mistral rate limited; retrying once", { delay_ms: delay });
+        await sleep(delay);
+        continue;
+      }
+      console.error("[VOW AI] Mistral provider error", { status: response.status, body: raw.slice(0, 1200) });
+      throw new Error(response.status === 429 ? "MISTRAL_429" : \`MISTRAL_PROVIDER_ERROR_\${response.status}\`);
+    }
+
     const payload = JSON.parse(raw);
     const content = payload?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) throw new Error("MISTRAL_EMPTY_RESPONSE");
-    return parse(content);
-  } finally {
-    clearTimeout(timer);
+    try {
+      return parse(content);
+    } catch (parseError) {
+      if (repairRetries === 0) {
+        repairRetries = 1;
+        console.warn("[VOW AI] Mistral returned unparseable or truncated JSON; requesting a complete compact resend once", {
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+        });
+        conversation.push(
+          { role: "assistant", content },
+          {
+            role: "user",
+            content:
+              "Your previous reply was not a complete, valid JSON object. Resend the COMPLETE JSON object only: compact, no markdown fences, no truncation, all required fields present.",
+          }
+        );
+        continue;
+      }
+      throw parseError instanceof Error ? parseError : new Error("INVALID_AI_JSON");
+    }
   }
 }
 
@@ -795,8 +875,11 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
     const task = str(item.task, 350);
     const taskTokens = meaningfulTokens(task);
     const overlapsContext = [...taskTokens].some((token) => contextTokens.has(token));
-    const hasMeasure = /\b\d+(?:[.,]\d+)?\s*(?:%|minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\b/i.test(task);
-    const hasConcreteVerb = /\b(analy[sz]e|build|calculate|complete|create|draft|edit|film|identify|measure|mix|outline|perform|record|solve|write|draw|bake|knead|shape|letter|paint|run|cycle|swim|lift|code|debug|test|revise|compare|read|summari[sz]e|translate|memorise|memorize|recite|drill|trace|copy|compose|schedule|plan|track|time|score|review)\b/i.test(task);
+    // Sets x reps notation ("4x30s", "5x4", "6x2") is a genuine measure even
+    // though no unit word follows the numbers.
+    const hasMeasure = /\b\d+(?:[.,]\d+)?\s*(?:%|minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\b/i.test(task) ||
+      /\b\d+\s*[x×]\s*\d+/i.test(task);
+    const hasConcreteVerb = /\b(analy[sz]e|build|calculate|complete|create|draft|edit|film|identify|measure|mix|outline|perform|record|solve|write|draw|bake|knead|shape|letter|paint|run|cycle|swim|lift|code|debug|test|revise|compare|read|summari[sz]e|translate|memorise|memorize|recite|drill|trace|copy|compose|schedule|plan|track|time|score|review|hold|holds|land|lands|landing|attempt|attempts|stretch|stretches|rehearse|spar|shadowbox|warm|cool)\b/i.test(task);
     if (!overlapsContext && !hasMeasure) weakSpecificity++;
     else if (!hasConcreteVerb && !hasMeasure) weakSpecificity++;
   }
@@ -810,15 +893,18 @@ function schedule(b: any, w: number, ds: string[], startDate: string) {
         .map((week: any) => ({
           week: Math.max(1, Math.min(w, Math.round(Number(week?.week) || 1))),
           sessions: Array.isArray(week?.sessions)
-            ? week.sessions.filter((x: any) =>
-                ds.some((d) => d.toLowerCase() === String(x?.day || "").toLowerCase())
-              ).slice(0, ds.length)
+            ? week.sessions
+                .map((x: any) => ({ ...x, day: canonDayName(x?.day) }))
+                .filter((x: any) => x.day && ds.includes(x.day))
+                .slice(0, ds.length)
             : [],
         }))
         .filter((week: any) => week.sessions.length)
     : [];
 
-  const rawTemplates = Array.isArray(b?.session_templates) ? b.session_templates : [];
+  const rawTemplates = Array.isArray(b?.session_templates)
+    ? b.session_templates.map((t: any) => ({ ...t, day: canonDayName(t?.day) }))
+    : [];
   const templates = rawTemplates.length ? rawTemplates : ds.map((day, idx) => ({
     day,
     task: str(b?.weekly_focus?.[0], 350) || `Core session ${idx + 1} for ${str(b?.outcome, 100) || "your goal"}`,
@@ -843,12 +929,10 @@ function schedule(b: any, w: number, ds: string[], startDate: string) {
       const d = new Date(start);
       d.setDate(d.getDate() + (week - 1) * 7 + DAYS.indexOf(day));
 
-      const explicit = explicitWeek?.sessions?.find(
-        (x: any) => String(x?.day || "").toLowerCase() === day.toLowerCase()
-      );
+      const explicit = explicitWeek?.sessions?.find((x: any) => x.day === day);
       const template =
         explicit ||
-        templates.find((x: any) => DAYS.includes(x?.day) && x.day.toLowerCase() === day.toLowerCase()) ||
+        templates.find((x: any) => x.day === day) ||
         templates[(week - 1) % templates.length];
 
       const f = str(focus[Math.min(week - 1, focus.length - 1)], 350);
