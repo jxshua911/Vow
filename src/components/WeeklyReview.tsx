@@ -121,9 +121,7 @@ export function ReviewPage() {
 
       const queryError = sessionsRes.error || goalsRes.error || journalRes.error || settingsRes.error;
       if (queryError) throw queryError;
-      if (moveHistoryRes.error) {
-        console.warn('[VOW] Move history is unavailable; using legacy move totals until the move-history migration is applied:', moveHistoryRes.error.message);
-      }
+      if (moveHistoryRes.error) throw moveHistoryRes.error;
 
       const allSessions = (sessionsRes.data || []) as Session[];
       const goals = (goalsRes.data || []) as Goal[];
@@ -138,9 +136,7 @@ export function ReviewPage() {
       const committed = weekSessions.length;
       const completed = weekSessions.filter((s) => s.status === 'completed').length;
       const missed = weekSessions.filter((s) => s.status === 'skipped').length;
-      const moved = moveHistoryRes.error
-        ? weekSessions.reduce((total, s) => total + Math.max(0, Number(s.moved_count) || 0), 0)
-        : (moveHistoryRes.data || []).length;
+      const moved = (moveHistoryRes.data || []).length;
       const completionPct = committed > 0 ? Math.round((completed / committed) * 100) : 0;
 
       const patterns = detectPatterns(allSessions, journal);
