@@ -7,7 +7,7 @@ type TimeWheelPickerProps = {
 };
 
 function parseTime(value: string) {
-  const match = /^(\\d{1,2}):(\\d{2})$/.exec(value);
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
   return {
     hour: match ? Math.min(23, Math.max(0, Number(match[1]))) : 9,
     minute: match ? Math.min(59, Math.max(0, Number(match[2]))) : 0,
@@ -25,7 +25,7 @@ function wrap(value: number, max: number) {
 export function TimeWheelPicker({ value, onChange, label = 'Session time' }: TimeWheelPickerProps) {
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
-  const repeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const repeatRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   valueRef.current = value;
   onChangeRef.current = onChange;
 
