@@ -56,7 +56,16 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
   }, [category, query, showAll, connected, googleCalendarConnected]);
 
   async function connectIntegration(id: string) {
-    if (!session || connecting) return;
+    if (connecting) return;
+    const integration = INTEGRATIONS.find((item) => item.id === id);
+    if (!integration) return;
+    if (integration.status === 'setup-required') {
+      if (integration.websiteUrl) {
+        try { await Browser.open({ url: integration.websiteUrl }); } catch { window.open(integration.websiteUrl, '_blank', 'noopener,noreferrer'); }
+      }
+      return;
+    }
+    if (!session) return;
     if (id === 'google-calendar') {
       if (!googleCalendarAvailable) return;
       setConnecting(id);
@@ -81,17 +90,18 @@ export function ConnectPage({ onBack }: { onBack?: () => void }) {
 
   return <div>
     {onBack && <button onClick={onBack} className="text-sm text-vow-muted hover:text-vow-ink mb-6 flex items-center gap-1 transition-colors"><ArrowLeft className="w-4 h-4" />Back to profile</button>}
-    <PageHeader title="Connect" subtitle="Connect the services that can give VOW reliable evidence for your routines and commitments." />
-    <section className="mb-8 border border-vow-border p-5 md:p-6"><h2 className="text-sm font-medium text-vow-ink mb-1">One place for your evidence</h2><p className="text-sm text-vow-muted leading-relaxed">VOW starts with a small set of immediately useful connections instead of overwhelming you with a catalogue. Connected and first-hand sources are prioritised; broader discovery is available when you want it.</p></section>
+    <PageHeader title="Connect" subtitle="Discover useful apps and choose the tools that support your commitments." />
+    <section className="mb-8 border border-vow-border p-5 md:p-6"><h2 className="text-sm font-medium text-vow-ink mb-1">Apps VOW recommends</h2><p className="text-sm text-vow-muted leading-relaxed">VOW recommends tools that may help with your goals. These suggestions open the app’s own website; they do not imply an active VOW connector. Google Calendar is currently the external calendar connection.</p></section>
     <div className="mb-5"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search connections" aria-label="Search connections" className="w-full border border-vow-border bg-transparent px-4 py-3 text-sm text-vow-ink outline-none focus:border-vow-ink" /></div>
     <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">{categories.map((item) => <button key={item.id} onClick={() => setCategory(item.id)} className={`whitespace-nowrap px-3 py-2 text-xs border transition-colors ${category === item.id ? 'border-vow-ink text-vow-ink' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>{item.label}</button>)}</div>
     <div className="space-y-2">{integrations.map((integration) => {
-      const isConnected = integration.id === 'google-calendar' ? googleCalendarConnected : connected[integration.id] === 'connected';
-      const unavailable = integration.status === 'setup-required' || (integration.id === 'google-calendar' && !googleCalendarAvailable);
+      const isConnected = integration.id === 'google-calendar' ? googleCalendarConnected : integration.status === 'available' && connected[integration.id] === 'connected';
+      const suggested = integration.status === 'setup-required';
+      const unavailable = integration.id === 'google-calendar' && !googleCalendarAvailable;
       return <div key={integration.id} className="border border-vow-border p-4 md:p-5 flex items-center gap-4">
         <div className="w-11 h-11 border border-vow-border flex items-center justify-center shrink-0 bg-white p-2"><img src={integration.iconUrl} alt="" className="w-full h-full object-contain" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} /></div>
-        <div className="min-w-0 flex-1"><div className="flex items-center gap-2 flex-wrap"><h3 className="text-sm font-medium text-vow-ink">{integration.name}</h3>{isConnected && <span className="text-[10px] text-vow-ink">Connected</span>}{unavailable && !isConnected && <span className="text-[10px] text-vow-muted">Unavailable</span>}</div><p className="text-xs text-vow-muted mt-1 leading-relaxed">{integration.description}</p><p className="text-[10px] text-vow-muted mt-2">Evidence: {integration.evidence.join(' · ')}</p></div>
-        <button disabled={isConnected || unavailable || connecting === integration.id} onClick={() => connectIntegration(integration.id)} className={`shrink-0 px-3 py-2 text-xs border transition-colors ${isConnected ? 'border-vow-border text-vow-muted' : unavailable ? 'border-vow-border text-vow-muted opacity-50 cursor-not-allowed' : 'border-vow-ink text-vow-ink hover:bg-vow-border/40 disabled:opacity-50'}`}>{isConnected ? 'Connected' : unavailable ? 'Unavailable' : connecting === integration.id ? 'Connecting…' : 'Connect'}</button>
+        <div className="min-w-0 flex-1"><div className="flex items-center gap-2 flex-wrap"><h3 className="text-sm font-medium text-vow-ink">{integration.name}</h3>{isConnected && !suggested && <span className="text-[10px] text-vow-ink">Connected</span>}{suggested && <span className="text-[10px] text-vow-muted">Suggested app</span>}{unavailable && !isConnected && <span className="text-[10px] text-vow-muted">Calendar connection unavailable</span>}</div><p className="text-xs text-vow-muted mt-1 leading-relaxed">{integration.description}</p><p className="text-[10px] text-vow-muted mt-2">Evidence: {integration.evidence.join(' · ')}</p></div>
+        <button disabled={(!suggested && isConnected) || unavailable || connecting === integration.id || (suggested && !integration.websiteUrl)} onClick={() => connectIntegration(integration.id)} className={`shrink-0 px-3 py-2 text-xs border transition-colors ${isConnected ? 'border-vow-border text-vow-muted' : unavailable ? 'border-vow-border text-vow-muted opacity-50 cursor-not-allowed' : 'border-vow-ink text-vow-ink hover:bg-vow-border/40 disabled:opacity-50'}`}>{suggested ? (integration.websiteUrl ? 'View app' : 'Suggested') : isConnected ? 'Connected' : unavailable ? 'Unavailable' : connecting === integration.id ? 'Connecting…' : 'Connect'}</button>
       </div>;
     })}</div>
     {isLimited && <div className="mt-6 flex flex-col items-center gap-2 border-t border-vow-border pt-6"><p className="text-xs text-vow-muted">Showing the connections most relevant to a first VOW setup.</p><button onClick={revealAll} className="border border-vow-ink px-4 py-2 text-xs text-vow-ink">Explore all connections</button></div>}
