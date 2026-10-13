@@ -8,7 +8,7 @@ import { buildCoachingText, biggestWin, biggestSetback } from '@/lib/coaching';
 import { PageHeader } from './AppShell';
 import { ArrowRight } from '@/lib/ui-icons';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
-import { FREE_PLANNING_ACTION_LIMIT, getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
+import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
 
 export function ReviewPage() {
@@ -72,20 +72,6 @@ export function ReviewPage() {
     try {
       {
         const entitlement = await getEntitlementSnapshot();
-        if (
-          entitlement &&
-          entitlement.plan !== 'premium' &&
-          entitlement.planning_used >= (entitlement.planning_limit ?? FREE_PLANNING_ACTION_LIMIT)
-        ) {
-          setReviewEntitlement({
-            allowed: false,
-            reason: 'usage_limit',
-            feature: 'planning_action',
-            used: entitlement.planning_used,
-            limit: entitlement.planning_limit ?? FREE_PLANNING_ACTION_LIMIT,
-          });
-          return;
-        }
         if (
           !existingReview &&
           entitlement &&
@@ -352,7 +338,7 @@ export function ReviewPage() {
         <div className="border-t border-vow-border pt-12 text-center">
           <p className="vow-heading text-2xl text-vow-ink mb-3">No review generated yet</p>
           <p className="text-vow-muted text-sm mb-8 max-w-md mx-auto leading-relaxed">Generate your weekly accountability review. It reads your sessions, journal, and commitment history to give you honest, evidence-based feedback and propose next week's commitments.</p>
-          {reviewEntitlement && <div className="mb-6 text-left"><UpgradePrompt result={reviewEntitlement} title="Your free advanced review has been used" compact /></div>}
+          {reviewEntitlement && <div className="mb-6 text-left"><UpgradePrompt result={reviewEntitlement} title="Your free weekly review has been used" compact /></div>}
           <button onClick={generateReview} disabled={generating} className="vow-btn-primary">{generating ? 'Analyzing your week...' : 'Generate weekly review'}</button>
           {actionError && <p className="text-sm text-vow-ink leading-relaxed mt-6 border-l-2 border-vow-ink pl-3 max-w-md mx-auto">{actionError}</p>}
         </div>
@@ -367,7 +353,7 @@ export function ReviewPage() {
       <ReviewContent review={review!} />
       <div className="border-t border-vow-border pt-8 mt-10">
         <h3 className="vow-label mb-4">Confirm next week's commitments</h3>
-        {reviewEntitlement && <div className="mb-6"><UpgradePrompt result={reviewEntitlement} title="Your free advanced review has been used" compact /></div>}
+        {reviewEntitlement && <div className="mb-6"><UpgradePrompt result={reviewEntitlement} title="Your free weekly review has been used" compact /></div>}
         {actionError && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4">{actionError}</p>}
         <div className="space-y-px border border-vow-border mb-6">
           {(review!.proposed_commitments as unknown as ProposedCommitment[]).map((c, i) => (
