@@ -330,9 +330,12 @@ export function GoalPlanner({
           }
         }
 
+        // A new goal must always start clean. Local drafts are restored only
+        // when the user explicitly opens a saved draft from the Goals screen.
+        if (!resumeDraftId) savedDraft = null;
         const savedMatchesRequestedDraft = resumeDraftId
           ? savedDraft?.draftGoalId === resumeDraftId
-          : !savedDraft?.draftGoalId;
+          : false;
         if (savedDraft && savedMatchesRequestedDraft && !initialGoal && !initialWhy) {
           if (typeof savedDraft.rawInput === 'string') setRawInput(savedDraft.rawInput);
           if (typeof savedDraft.why === 'string') setWhy(savedDraft.why);
@@ -514,6 +517,8 @@ export function GoalPlanner({
       .single();
     if (e || !data) throw e || new Error('Could not start this goal.');
     setDraftGoalId(data.id);
+    // Do not let the pre-draft form snapshot repopulate a future New Goal flow.
+    if (typeof window !== 'undefined') window.localStorage.removeItem(draftStorageKey);
     return data.id;
   }
 
