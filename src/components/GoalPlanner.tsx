@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { addDays, toDateString } from '@/lib/dates';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
-import { consumeEntitlement, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
+import { consumeEntitlement, FREE_PLANNING_ACTION_LIMIT, getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
 import { checkContentSafety } from '@/lib/contentSafety';
 import type { Session } from '@/types/database';
@@ -313,7 +313,9 @@ export function GoalPlanner({
           try {
             let saved = window.localStorage.getItem(draftStorageKey);
             let cameFromLegacyKey = false;
-            if (!saved) {
+            // The legacy key may contain a previous goal from an older app build.
+            // Only consult it when explicitly reopening that same saved draft.
+            if (!saved && resumeDraftId) {
               saved = window.localStorage.getItem(legacyDraftStorageKey);
               cameFromLegacyKey = Boolean(saved);
             }
@@ -524,6 +526,28 @@ export function GoalPlanner({
     return true;
   }
 
+  // Check the planning allowance before spending time on AI clarification or
+  // generation. The server remains authoritative when the plan is generated.
+  async function checkPlanningEntitlement(): Promise<boolean> {
+    const snapshot = await getEntitlementSnapshot();
+    if (!snapshot || snapshot.plan === 'premium') return true;
+    const limit = Math.min(
+      snapshot.planning_limit ?? FREE_PLANNING_ACTION_LIMIT,
+      FREE_PLANNING_ACTION_LIMIT,
+    );
+    if (snapshot.planning_used >= limit) {
+      setUpgrade({
+        allowed: false,
+        reason: 'usage_limit',
+        feature: 'planning_action',
+        used: snapshot.planning_used,
+        limit,
+      });
+      return false;
+    }
+    return true;
+  }
+
   async function loadReferences(goalId: string) {
     const { data, error: loadError } = await supabase
       .from('goal_resources')
@@ -561,6 +585,7 @@ export function GoalPlanner({
     setError('');
     setUpgrade(null);
     try {
+      if (!(await checkPlanningEntitlement())) return;
       const safety = await checkContentSafety(rawInput);
       if (safety.status !== 'safe') {
         setError(safety.message || 'VOW cannot plan that request.');
@@ -628,6 +653,7 @@ export function GoalPlanner({
     setPlanning(true);
     setError('');
     try {
+      setUpgrade(null);
       if (rawInput.trim().length > 300) {
         setError('Please keep your goal under 300 characters.');
         return;
@@ -653,18 +679,20 @@ export function GoalPlanner({
         }
         return;
       }
-      const goalId = await ensureDraft(domain);
       const clean = answers.map((answer) => String(answer ?? '').trim());
       const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
       const isUnanswered = (a: string) => !a || unknown.test(a);
       const unresolved = clean.filter(isUnanswered).length;
       console.log('[VOW] Clarification answers:', { answers, clean, unresolved });
-      if (unresolved === clean.length) {
-        setError(
-          'VOW needs one decision before it can build a responsible plan. Please answer at least one follow-up question.'
-        );
+      if (clean.some((answer) => !answer)) {
+        setError('Please answer each follow-up question. If you are unsure, say so and VOW will account for that uncertainty.');
         return;
       }
+      if (unresolved === clean.length) {
+        setError('VOW needs at least one useful detail before it can build a responsible plan. Please replace “not sure” with what you know, or add context.');
+        return;
+      }
+      const goalId = await ensureDraft(domain);
       const { error: de } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
       if (de) throw de;
       const { error: ie } = await supabase.from('goal_clarification_answers').insert(
@@ -949,11 +977,16 @@ export function GoalPlanner({
     return (
       <div>
         <PageHeader
-          title="New goal"
-          subtitle="VOW keeps the first goal free. Premium lets you run multiple active goals at once."
+          title={upgrade.feature === 'planning_action' ? 'Planning limit reached' : 'New goal'}
+          subtitle={upgrade.feature === 'planning_action'
+            ? 'Your free planning actions are used for this month. You can still review saved plans and goals.'
+            : 'VOW keeps the first goal free. Premium lets you run multiple active goals at once.'}
         />
         <div className="max-w-xl">
-          <UpgradePrompt result={upgrade} title="Your next goal is ready for Premium" />
+          <UpgradePrompt
+            result={upgrade}
+            title={upgrade.feature === 'planning_action' ? 'Keep planning with Premium' : 'Your next goal is ready for Premium'}
+          />
           <button onClick={onCancel} className="vow-btn-ghost mt-4">
             Back to goals
           </button>
