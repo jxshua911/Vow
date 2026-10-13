@@ -23,7 +23,7 @@ const freeBenefits = [
   'Scheduled sessions and progress tracking',
   '3 planning actions/month',
   '1 adaptive replan/month',
-  '1 advanced weekly review/month',
+  '1 weekly review/month',
 ];
 
 export function UpgradePage() {
