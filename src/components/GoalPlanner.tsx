@@ -253,7 +253,8 @@ export function GoalPlanner({
   const [rawInput, setRawInput] = useState(initialGoal);
   const [goalPlaceholder] = useState(() => GOAL_PLACEHOLDERS[Math.floor(Math.random() * GOAL_PLACEHOLDERS.length)]);
 
-  const draftStorageKey = 'vow-goal-planner-draft:' + userId;
+  const draftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId ? ':' + resumeDraftId : ':new');
+  const legacyDraftStorageKey = 'vow-goal-planner-draft:' + userId;
   const [why, setWhy] = useState(initialWhy);
   const [durationWeeks, setDurationWeeks] = useState<number | null>(8);
   const [customDurationValue, setCustomDurationValue] = useState('');
@@ -307,8 +308,18 @@ export function GoalPlanner({
 
         if (typeof window !== 'undefined') {
           try {
-            const saved = window.localStorage.getItem(draftStorageKey);
-            if (saved) savedDraft = JSON.parse(saved);
+            let saved = window.localStorage.getItem(draftStorageKey);
+            let cameFromLegacyKey = false;
+            if (!saved) {
+              saved = window.localStorage.getItem(legacyDraftStorageKey);
+              cameFromLegacyKey = Boolean(saved);
+            }
+            if (saved) {
+              const parsed = JSON.parse(saved) as typeof savedDraft;
+              const legacyMatchesThisFlow = !cameFromLegacyKey
+                || (resumeDraftId ? parsed?.draftGoalId === resumeDraftId : !parsed?.draftGoalId);
+              if (legacyMatchesThisFlow) savedDraft = parsed;
+            }
           } catch (storageError) {
             console.warn('[VOW] Could not read saved goal planner draft:', storageError);
           }
@@ -387,7 +398,7 @@ export function GoalPlanner({
 
     void hydrateDraft();
     return () => { cancelled = true; };
-  }, [draftStorageKey, initialGoal, initialWhy, resumeDraftId, userId]);
+  }, [draftStorageKey, legacyDraftStorageKey, initialGoal, initialWhy, resumeDraftId, userId]);
 
   useEffect(() => {
     if (!draftReady || typeof window === 'undefined') return;
