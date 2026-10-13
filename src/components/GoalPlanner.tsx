@@ -670,6 +670,7 @@ export function GoalPlanner({
         setError('Choose at least one day and time for your plan.');
         return;
       }
+      if (!(await checkPlanningEntitlement())) return;
       const safety = await checkContentSafety(rawInput);
       if (safety.status !== 'safe') {
         setError(safety.message || 'VOW cannot plan that request.');
