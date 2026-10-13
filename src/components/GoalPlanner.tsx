@@ -24,6 +24,19 @@ type Clarification = {
   classification_confidence?: unknown;
 };
 type GoalDomain = { category: GoalCategory; goal_type: string };
+type SavedPlannerDraft = {
+  rawInput?: string;
+  why?: string;
+  durationWeeks?: number | null;
+  customDurationValue?: string;
+  customDurationUnit?: DurationUnit;
+  availableDays?: string[];
+  sessionTimes?: Record<string, string>;
+  clarification?: Clarification | null;
+  answers?: string[];
+  domain?: GoalDomain | null;
+  draftGoalId?: string | null;
+};
 type PlanItem = {
   week: number;
   day: string;
@@ -195,7 +208,7 @@ function normalizePlan(
     if (!url || references.some((reference) => reference.url === url)) continue;
     references.push({
       url,
-      title: `Suggested app: ${integration.name} — ${integration.status === 'available' ? 'available in VOW' : 'VOW connection not available yet'}`,
+      title: `Suggested app: ${integration.name}`,
       resource_type: 'link',
     });
   }
@@ -293,19 +306,7 @@ export function GoalPlanner({
 
     async function hydrateDraft() {
       try {
-        let savedDraft: {
-          rawInput?: string;
-          why?: string;
-          durationWeeks?: number | null;
-          customDurationValue?: string;
-          customDurationUnit?: DurationUnit;
-          availableDays?: string[];
-          sessionTimes?: Record<string, string>;
-          clarification?: Clarification | null;
-          answers?: string[];
-          domain?: GoalDomain | null;
-          draftGoalId?: string | null;
-        } | null = null;
+        let savedDraft: SavedPlannerDraft | null = null;
 
         if (typeof window !== 'undefined') {
           try {
@@ -316,7 +317,7 @@ export function GoalPlanner({
               cameFromLegacyKey = Boolean(saved);
             }
             if (saved) {
-              const parsed = JSON.parse(saved) as typeof savedDraft;
+              const parsed = JSON.parse(saved) as SavedPlannerDraft | null;
               const legacyMatchesThisFlow = !cameFromLegacyKey
                 || (resumeDraftId ? parsed?.draftGoalId === resumeDraftId : !parsed?.draftGoalId);
               if (legacyMatchesThisFlow) savedDraft = parsed;
@@ -959,7 +960,7 @@ export function GoalPlanner({
           {plan.references?.some(reference => !isYoutubeUrl(reference.url)) ? (
             <section className="border border-vow-border p-5">
               <p className="vow-label mb-1">Other resources for this goal</p>
-              <p className="mb-4 text-xs leading-5 text-vow-muted">Trusted websites and goal-matched app suggestions. App connection status is noted.</p>
+              <p className="mb-4 text-xs leading-5 text-vow-muted">Trusted websites and apps VOW recommends for this goal. Open an app's website to learn more.</p>
               {plan.references.filter(reference => !isYoutubeUrl(reference.url)).map(reference => (
                 <button
                   type="button"
@@ -1023,9 +1024,9 @@ export function GoalPlanner({
         <div className="max-w-xl space-y-6">
           <div className="border border-vow-border p-4 space-y-1">
             <p className="text-xs text-vow-muted uppercase tracking-wider">
-              {domain?.category ?? 'General'} · {domain?.goal_type ?? 'Goal'}
+              {domain?.goal_type ?? 'Goal'}
             </p>
-            <p className="text-sm text-vow-ink">VOW is tailoring the next questions around this type of goal.</p>
+            <p className="text-sm text-vow-ink">VOW is preparing questions around your goal.</p>
           </div>
           <section className="border border-vow-border p-4" aria-live="polite">
             <p className="vow-label mb-1">Recommended YouTube videos</p>
@@ -1091,7 +1092,7 @@ export function GoalPlanner({
         {rawInput.trim().length >= 3 && (
           <div className="border border-vow-border p-4 space-y-1">
             <p className="text-xs text-vow-muted uppercase tracking-wider">
-              Detected · {domain?.category ?? 'General'} — {domain?.goal_type ?? 'Goal'}
+              Goal type · {domain?.goal_type ?? 'General'}
             </p>
             <p className="text-sm text-vow-ink">VOW is shaping the plan around this goal type and your available time.</p>
           </div>
