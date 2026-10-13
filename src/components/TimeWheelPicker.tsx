@@ -71,14 +71,14 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
   });
 
   return (
-    <div className="inline-flex items-end gap-2" aria-label={label}>
+    <div className="inline-flex items-end gap-3" aria-label={label}>
       <div className="flex flex-col items-center gap-1">
         <button type="button" {...holdProps('hour', 1)} className={arrowClass} aria-label="Increase hour">↑</button>
         <span className={valueClass} aria-label={`Hour ${parseTime(value).hour}`}>{String(parseTime(value).hour).padStart(2, '0')}</span>
         <button type="button" {...holdProps('hour', -1)} className={arrowClass} aria-label="Decrease hour">↓</button>
         <span className="text-[10px] uppercase tracking-wider text-vow-muted">Hour</span>
       </div>
-      <span className="pb-8 text-lg text-vow-muted" aria-hidden="true">:</span>
+      <span className="self-center font-mono text-xl font-semibold leading-none text-vow-ink" aria-hidden="true">:</span>
       <div className="flex flex-col items-center gap-1">
         <button type="button" {...holdProps('minute', 1)} className={arrowClass} aria-label="Increase minute">↑</button>
         <span className={valueClass} aria-label={`Minute ${parseTime(value).minute}`}>{String(parseTime(value).minute).padStart(2, '0')}</span>
