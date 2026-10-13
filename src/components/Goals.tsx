@@ -15,6 +15,7 @@ export function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const loadGoals = useCallback(async () => {
     if (!session) return;
@@ -34,8 +35,13 @@ export function GoalsPage() {
     return () => window.removeEventListener('vow:hardware-back', handleHardwareBack);
   }, [selectedGoalId, loadGoals]);
 
-  if (selectedGoalId) return <GoalDetail goalId={selectedGoalId} onBack={() => { setSelectedGoalId(null); loadGoals(); }} onContinueDraft={() => { setSelectedGoalId(null); setShowCreate(true); }} />;
-  if (showCreate) return <GoalPlanner userId={session?.user.id || ''} onCreated={() => { setShowCreate(false); loadGoals(); }} onCancel={() => setShowCreate(false)} />;
+  if (selectedGoalId) return <GoalDetail goalId={selectedGoalId} onBack={() => { setSelectedGoalId(null); loadGoals(); }} onContinueDraft={() => { setResumeDraftId(selectedGoalId); setSelectedGoalId(null); setShowCreate(true); }} />;
+  if (showCreate) return <GoalPlanner
+    userId={session?.user.id || ''}
+    resumeDraftId={resumeDraftId}
+    onCreated={() => { setShowCreate(false); setResumeDraftId(null); loadGoals(); }}
+    onCancel={() => { setShowCreate(false); setResumeDraftId(null); }}
+  />;
   if (!session) return <div><PageHeader title="Goals" /><div className="text-vow-muted text-sm">Please sign in to view your goals.</div></div>;
 
   const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
