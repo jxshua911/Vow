@@ -15,8 +15,21 @@ export function NativeCalendarSync() {
   const [enabled, setEnabled] = useState(() => localStorage.getItem(ENABLE_KEY) === 'true');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [dismissed, setDismissed] = useState(() => Boolean(userId && localStorage.getItem(DISMISSED_KEY_PREFIX + userId) === 'true'));
+  const [dismissed, setDismissed] = useState(false);
+  const [dismissedUserId, setDismissedUserId] = useState<string | null>(null);
   const [hiding, setHiding] = useState(false);
+
+  // Auth can resolve after the component mounts. Rehydrate dismissal only
+  // once the current user's ID is known, and re-check if the account changes.
+  useEffect(() => {
+    if (!userId) {
+      setDismissed(false);
+      setDismissedUserId(null);
+      return;
+    }
+    setDismissed(localStorage.getItem(DISMISSED_KEY_PREFIX + userId) === 'true');
+    setDismissedUserId(userId);
+  }, [userId]);
   const skipNextEffectSync = useRef(false);
 
   const dismissAfterSuccess = useCallback((text: string) => {
@@ -59,7 +72,7 @@ export function NativeCalendarSync() {
     return () => { cancelled = true; };
   }, [enabled, userId, accountEmail, dismissed, dismissAfterSuccess]);
 
-  if (!Capacitor.isNativePlatform() || !session || dismissed) return null;
+  if (!Capacitor.isNativePlatform() || !session || !userId || dismissedUserId !== userId || dismissed) return null;
 
   async function toggle() {
     if (busy || !userId) return;
