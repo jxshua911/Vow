@@ -254,7 +254,6 @@ export function GoalPlanner({
   const [goalPlaceholder] = useState(() => GOAL_PLACEHOLDERS[Math.floor(Math.random() * GOAL_PLACEHOLDERS.length)]);
 
   const draftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId ? ':' + resumeDraftId : ':new');
-  const activeDraftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId || draftGoalId ? ':' + (resumeDraftId || draftGoalId) : ':new');
   const legacyDraftStorageKey = 'vow-goal-planner-draft:' + userId;
   const [why, setWhy] = useState(initialWhy);
   const [durationWeeks, setDurationWeeks] = useState<number | null>(8);
@@ -267,6 +266,7 @@ export function GoalPlanner({
   const [answers, setAnswers] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [draftGoalId, setDraftGoalId] = useState<string | null>(resumeDraftId || null);
+  const activeDraftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId || draftGoalId ? ':' + (resumeDraftId || draftGoalId) : ':new');
   const [draftReady, setDraftReady] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [saving, setSaving] = useState(false);
