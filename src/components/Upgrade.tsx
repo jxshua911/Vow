@@ -104,11 +104,11 @@ export function UpgradePage() {
           <p className="text-xs text-vow-muted mb-5">Start planning</p>
           <div className="space-y-2.5">{freeBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
-        <div className="border border-vow-ink rounded-xl p-5">
+        <div className="relative border border-vow-ink rounded-xl p-5 pt-16">
+          {isYearly && <div className="absolute top-2 right-2 z-10 max-w-[148px] rounded-md border-2 border-white bg-black px-3 py-2 text-center shadow-sm"><span className="block text-[10px] font-bold uppercase tracking-wider leading-tight text-white">Best value</span><span className="block mt-1 text-[11px] leading-tight text-gray-300">Save $19.88 per year</span></div>}
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
           <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? '$40' : '$4.99'}</div>
           <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
-          {isYearly && <div className="mb-5 inline-flex items-center gap-2 border border-vow-border bg-vow-surface px-3 py-2 rounded-md"><span className="text-xs font-semibold uppercase tracking-wider text-vow-ink">Best value</span><span className="h-4 w-px bg-vow-border" /><span className="text-sm font-medium text-vow-ink">Save $19.88 per year</span></div>}
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
       </div>
