@@ -254,6 +254,7 @@ export function GoalPlanner({
   const [goalPlaceholder] = useState(() => GOAL_PLACEHOLDERS[Math.floor(Math.random() * GOAL_PLACEHOLDERS.length)]);
 
   const draftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId ? ':' + resumeDraftId : ':new');
+  const activeDraftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId || draftGoalId ? ':' + (resumeDraftId || draftGoalId) : ':new');
   const legacyDraftStorageKey = 'vow-goal-planner-draft:' + userId;
   const [why, setWhy] = useState(initialWhy);
   const [durationWeeks, setDurationWeeks] = useState<number | null>(8);
@@ -325,7 +326,9 @@ export function GoalPlanner({
           }
         }
 
-        const savedMatchesRequestedDraft = !resumeDraftId || savedDraft?.draftGoalId === resumeDraftId;
+        const savedMatchesRequestedDraft = resumeDraftId
+          ? savedDraft?.draftGoalId === resumeDraftId
+          : !savedDraft?.draftGoalId;
         if (savedDraft && savedMatchesRequestedDraft && !initialGoal && !initialWhy) {
           if (typeof savedDraft.rawInput === 'string') setRawInput(savedDraft.rawInput);
           if (typeof savedDraft.why === 'string') setWhy(savedDraft.why);
@@ -403,7 +406,7 @@ export function GoalPlanner({
   useEffect(() => {
     if (!draftReady || typeof window === 'undefined') return;
     try {
-      window.localStorage.setItem(draftStorageKey, JSON.stringify({
+      window.localStorage.setItem(activeDraftStorageKey, JSON.stringify({
         rawInput,
         why,
         durationWeeks,
@@ -421,7 +424,7 @@ export function GoalPlanner({
     }
   }, [
     draftReady,
-    draftStorageKey,
+    activeDraftStorageKey,
     rawInput,
     why,
     durationWeeks,
@@ -849,7 +852,19 @@ export function GoalPlanner({
         console.warn('[VOW] Google Calendar sync could not be completed.');
       }
 
-      if (typeof window !== 'undefined') window.localStorage.removeItem(draftStorageKey);
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(activeDraftStorageKey);
+        window.localStorage.removeItem(draftStorageKey);
+        const legacySaved = window.localStorage.getItem(legacyDraftStorageKey);
+        if (legacySaved) {
+          try {
+            const legacyDraft = JSON.parse(legacySaved) as { draftGoalId?: string | null };
+            if (legacyDraft.draftGoalId === draftGoalId) window.localStorage.removeItem(legacyDraftStorageKey);
+          } catch {
+            // Leave unrecognised legacy storage untouched.
+          }
+        }
+      }
       onCreated();
     } catch (err) {
       console.error('[VOW] Goal creation failed:', err);
