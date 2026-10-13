@@ -287,31 +287,65 @@ async function recordQualityAlert(req: Request, uid: string, goalId: string | nu
 
 async function searchKnowledge(query: string) {
   if (!query.trim()) return [];
+  const q = query.trim().slice(0, 1000);
   try {
-    const { data, error } = await db().rpc("match_vow_knowledge_keyword", {
-      query_text: query.trim().slice(0, 1000),
-      domain_filter: null,
-      match_count: 12,
-    });
-    if (error) {
-      console.warn("knowledge search", error.message);
-      return [];
+    const clientDb = db();
+    const [knowledgeResult, conceptResult] = await Promise.all([
+      clientDb.rpc("match_vow_knowledge_keyword", {
+        query_text: q,
+        domain_filter: null,
+        match_count: 12,
+      }),
+      clientDb.rpc("match_vow_goal_concepts", {
+        query_text: q,
+        domain_filter: null,
+        match_count: 12,
+      }),
+    ]);
+
+    if (knowledgeResult.error) {
+      console.warn("knowledge search", knowledgeResult.error.message);
     }
-    return (data || [])
-      .slice(0, 12)
-      .map((x: any) => ({
-        domain: str(x.domain, 80),
-        topic: str(x.topic, 120),
-        title: str(x.title, 180),
-        content: str(x.content, 700),
-        principles: Array.isArray(x.principles) ? x.principles.slice(0, 6) : [],
-        recommended_actions: Array.isArray(x.recommended_actions)
-          ? x.recommended_actions.slice(0, 6)
-          : [],
-        metrics: Array.isArray(x.metrics) ? x.metrics.slice(0, 6) : [],
-        cautions: Array.isArray(x.cautions) ? x.cautions.slice(0, 6) : [],
-        source_url: str(x.source_url, 500),
-      }));
+    if (conceptResult.error) {
+      console.warn("goal concept search", conceptResult.error.message);
+    }
+
+    const original = (knowledgeResult.data || []).slice(0, 12).map((x: any) => ({
+      domain: str(x.domain, 80),
+      topic: str(x.topic, 120),
+      title: str(x.title, 180),
+      content: str(x.content, 700),
+      principles: Array.isArray(x.principles) ? x.principles.slice(0, 6) : [],
+      recommended_actions: Array.isArray(x.recommended_actions)
+        ? x.recommended_actions.slice(0, 6)
+        : [],
+      metrics: Array.isArray(x.metrics) ? x.metrics.slice(0, 6) : [],
+      cautions: Array.isArray(x.cautions) ? x.cautions.slice(0, 6) : [],
+      source_url: str(x.source_url, 500),
+    }));
+    const concepts = (conceptResult.data || []).slice(0, 12).map((x: any) => ({
+      domain: str(x.domain, 80),
+      topic: str(x.topic, 120),
+      title: str(x.concept_name, 180),
+      content: str(x.description, 700),
+      principles: [],
+      recommended_actions: [],
+      metrics: [],
+      cautions: [],
+      source_url: "",
+      aliases: Array.isArray(x.aliases) ? x.aliases.slice(0, 8) : [],
+      concept_type: str(x.concept_type, 80),
+    }));
+
+    const seen = new Set<string>();
+    return [...original, ...concepts]
+      .filter((x: any) => {
+        const key = (x.domain + "|" + x.topic + "|" + x.title).toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 18);
   } catch (e) {
     console.warn("knowledge search failed", e);
     return [];
