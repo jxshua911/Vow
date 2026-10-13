@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Milestone, Session, GoalStatus } from '@/types/database';
-import { addDays, formatTime, formatDate, formatRelative } from '@/lib/dates';
+import { formatTime, formatDate, formatRelative } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
 import { GoalPlanner } from './GoalPlanner';
 import { cancelReminder, notificationId, syncUpcomingSessionNotifications } from '@/lib/notifications';
@@ -66,6 +66,9 @@ function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBac
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddSession, setShowAddSession] = useState(false);
+  const [editingSession, setEditingSession] = useState<Session | null>(null);
+  const [editScheduledAt, setEditScheduledAt] = useState('');
+  const [editDurationMinutes, setEditDurationMinutes] = useState('');
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [expandedMilestone, setExpandedMilestone] = useState<string | null>(null);
   const [unansweredQuestions, setUnansweredQuestions] = useState<string[]>([]);
@@ -92,29 +95,54 @@ function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBac
     if (!error && status !== 'scheduled') await cancelReminder(notificationId(sessId));
     await load();
   }
-  async function moveSession(sess: Session) {
-    const newDate = addDays(new Date(sess.scheduled_at), 1);
-    await cancelReminder(notificationId(sess.id));
+  function openSessionEditor(sess: Session) {
+    const localDate = new Date(sess.scheduled_at);
+    const localValue = new Date(localDate.getTime() - localDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    setEditingSession(sess);
+    setEditScheduledAt(localValue);
+    setEditDurationMinutes(String(sess.duration_minutes));
+  }
+  async function saveSessionChanges() {
+    if (!editingSession || !session) return;
+    const nextDate = new Date(editScheduledAt);
+    const nextDuration = Number(editDurationMinutes);
+    if (!Number.isFinite(nextDate.getTime()) || !Number.isInteger(nextDuration) || nextDuration < 5 || nextDuration > 1440) {
+      alert('Choose a valid date and time, and a duration between 5 minutes and 24 hours.');
+      return;
+    }
+    const previousDate = editingSession.scheduled_at;
+    const nextIso = nextDate.toISOString();
+    const dateChanged = new Date(previousDate).getTime() !== nextDate.getTime();
     const { error } = await supabase.from('sessions').update({
-      scheduled_at: newDate.toISOString(),
-      moved_count: sess.moved_count + 1,
+      scheduled_at: nextIso,
+      duration_minutes: nextDuration,
+      moved_count: editingSession.moved_count + (dateChanged ? 1 : 0),
       status: 'scheduled',
       updated_at: new Date().toISOString(),
-    }).eq('id', sess.id);
-    if (!error) {
-      if (session) {
-        const { error: historyError } = await supabase.from('vow_session_moves').insert({
-          user_id: session.user.id,
-          session_id: sess.id,
-          from_date: sess.scheduled_at,
-          to_date: newDate.toISOString(),
-        });
-        if (historyError) {
-          console.error('[VOW] Session moved but move history could not be recorded:', historyError);
-        }
-      }
-      await syncUpcomingSessionNotifications([{ ...sess, scheduled_at: newDate.toISOString(), status: 'scheduled', moved_count: sess.moved_count + 1 } as Session]);
+    }).eq('id', editingSession.id).eq('user_id', session.user.id);
+    if (error) {
+      console.error('[VOW] Could not adjust session:', error);
+      alert('Could not save this schedule change. Please try again.');
+      return;
     }
+    if (dateChanged) {
+      const { error: historyError } = await supabase.from('vow_session_moves').insert({
+        user_id: session.user.id,
+        session_id: editingSession.id,
+        from_date: previousDate,
+        to_date: nextIso,
+      });
+      if (historyError) console.error('[VOW] Schedule adjusted but move history could not be recorded:', historyError);
+    }
+    await cancelReminder(notificationId(editingSession.id));
+    await syncUpcomingSessionNotifications([{
+      ...editingSession,
+      scheduled_at: nextIso,
+      duration_minutes: nextDuration,
+      moved_count: editingSession.moved_count + (dateChanged ? 1 : 0),
+      status: 'scheduled',
+    } as Session]);
+    setEditingSession(null);
     await load();
   }
   async function toggleMilestoneStatus(ms: Milestone) { const newStatus = ms.status === 'completed' ? 'pending' : 'completed'; await supabase.from('milestones').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', ms.id); load(); }
@@ -165,9 +193,10 @@ function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBac
     <GoalResources goalId={goalId} />
     <GoalReferenceList goalId={goalId} />
     <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Milestones</h2><button onClick={() => setExpandedMilestone(expandedMilestone ? null : milestones[0]?.id || null)} className="vow-btn-soft text-xs">{expandedMilestone ? 'Collapse' : 'Expand'}</button></div><div className="border-t border-vow-border">{milestones.map((ms) => { const Icon = ms.status === 'completed' ? CheckCircle2 : Circle; return <div key={ms.id} className="border-b border-vow-border py-4"><button className="w-full text-left flex items-start gap-3" onClick={() => setExpandedMilestone(expandedMilestone === ms.id ? null : ms.id)}><Icon className="w-4 h-4 mt-0.5" /><div className="flex-1"><p className="text-sm text-vow-ink">{ms.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(ms.deadline)}</p>{expandedMilestone === ms.id && <p className="text-xs text-vow-muted mt-2">{ms.description}</p>}</div><ChevronDown className={`w-4 h-4 transition-transform ${expandedMilestone === ms.id ? 'rotate-180' : ''}`} /></button><button onClick={() => toggleMilestoneStatus(ms)} className="vow-btn-soft text-xs ml-7 mt-2">{ms.status === 'completed' ? 'Mark pending' : 'Mark completed'}</button></div>; })}</div></div>
-    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions & routine</h2><button onClick={() => setShowAddSession(!showAddSession)} className="vow-btn-ghost"><Plus className="w-4 h-4" />Add session</button></div><div className="border-t border-vow-border">{sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; return <div key={sess.id} className="border-b border-vow-border py-4 flex items-center gap-4"><Icon className="w-4 h-4 text-vow-muted" /><div className="flex-1"><p className="text-sm text-vow-ink">{sess.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(sess.scheduled_at)} · {formatTime(sess.scheduled_at)} · {sess.duration_minutes} min</p></div>{sess.status === 'scheduled' && <div className="flex gap-2"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-soft text-xs">Complete</button><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => moveSession(sess)} className="vow-btn-soft text-xs">Move</button></div>}</div>; })}</div></div>
+    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions & routine</h2><button onClick={() => setShowAddSession(!showAddSession)} className="vow-btn-ghost"><Plus className="w-4 h-4" />Add session</button></div><div className="border-t border-vow-border">{sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; return <div key={sess.id} className="border-b border-vow-border py-4 flex items-center gap-4"><Icon className="w-4 h-4 text-vow-muted" /><div className="flex-1"><p className="text-sm text-vow-ink">{sess.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(sess.scheduled_at)} · {formatTime(sess.scheduled_at)} · {sess.duration_minutes} min</p></div>{sess.status === 'scheduled' && <div className="flex gap-2"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-soft text-xs">Complete</button><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => openSessionEditor(sess)} className="vow-btn-soft text-xs">Adjust time</button></div>}</div>; })}</div></div>
     {showAddSession && <div className="border border-vow-border p-5 mb-8"><p className="text-sm text-vow-ink mb-2">Add session</p><p className="text-xs text-vow-muted">New commitments are generated through the goal routine so the calendar stays coherent. Manual session creation can be added from the planner.</p><button onClick={() => setShowAddSession(false)} className="vow-btn-ghost mt-4">Close</button></div>}
     <div className="border-t border-vow-border pt-6 mt-10 flex flex-wrap gap-3"><button onClick={completeGoal} className="vow-btn-primary"><Check className="w-4 h-4" />Complete goal</button><button onClick={() => setShowPauseModal(true)} className="vow-btn-ghost"><Pause className="w-4 h-4" />Pause</button><button onClick={abandonGoal} className="vow-btn-ghost">Abandon</button><button onClick={deleteGoal} className="vow-btn-ghost text-red-600">Delete</button></div>
+    {editingSession && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Adjust this session</h2><p className="text-sm text-vow-muted mb-4">{editingSession.title}. Change the date, time or amount of time you can give it. Completed sessions and goal progress stay intact.</p><label className="vow-label block mb-2" htmlFor="session-schedule-time">Date and time</label><input id="session-schedule-time" type="datetime-local" value={editScheduledAt} onChange={(event) => setEditScheduledAt(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-4" /><label className="vow-label block mb-2" htmlFor="session-duration">Duration (minutes)</label><input id="session-duration" type="number" min="5" max="1440" step="5" value={editDurationMinutes} onChange={(event) => setEditDurationMinutes(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-5" /><div className="flex gap-3"><button onClick={() => setEditingSession(null)} className="vow-btn-ghost">Cancel</button><button onClick={saveSessionChanges} className="vow-btn-primary flex-1">Save changes</button></div></div></div>}
     {showPauseModal && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Pause goal</h2><p className="text-sm text-vow-muted mb-4">Why are you pausing?</p><div className="space-y-2">{['Schedule changed','Need to adjust the plan','Taking a short break'].map((reason) => <button key={reason} onClick={() => handlePause(reason)} className="w-full text-left border border-vow-border px-4 py-3 text-sm hover:bg-vow-surface">{reason}</button>)}</div><button onClick={() => setShowPauseModal(false)} className="vow-btn-ghost mt-4">Cancel</button></div></div>}
   </div>;
 }
