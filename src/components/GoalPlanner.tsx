@@ -35,6 +35,7 @@ type SavedPlannerDraft = {
   clarification?: Clarification | null;
   answers?: string[];
   domain?: GoalDomain | null;
+  plan?: Plan | null;
   draftGoalId?: string | null;
 };
 type PlanItem = {
@@ -342,6 +343,9 @@ export function GoalPlanner({
           if (savedDraft.clarification) setClarification(savedDraft.clarification);
           if (Array.isArray(savedDraft.answers)) setAnswers(savedDraft.answers);
           if (savedDraft.domain) setDomain(savedDraft.domain);
+          if (savedDraft.plan && Array.isArray(savedDraft.plan.schedule) && Array.isArray(savedDraft.plan.milestones)) {
+            setPlan(savedDraft.plan);
+          }
           if (savedDraft.draftGoalId) setDraftGoalId(savedDraft.draftGoalId);
         }
 
@@ -371,6 +375,28 @@ export function GoalPlanner({
             setDomain(category && goalType ? { category, goal_type: goalType } : null);
           }
           setDraftGoalId(goal.id);
+
+          // A generated plan is stored in the draft row so leaving the planner
+          // or reopening the app does not force the user to regenerate it.
+          const storedPlan = goal.plan_json as Partial<Plan> | null;
+          if (storedPlan && Array.isArray(storedPlan.schedule) && Array.isArray(storedPlan.milestones)) {
+            const restoredPlan = storedPlan as Plan;
+            setPlan(restoredPlan);
+            if (Number.isFinite(Number(restoredPlan.duration_weeks)) && Number(restoredPlan.duration_weeks) > 0) {
+              setDurationWeeks(Math.max(1, Math.min(52, Number(restoredPlan.duration_weeks))));
+            }
+            const restoredDays = Array.isArray(restoredPlan.available_days) && restoredPlan.available_days.length
+              ? restoredPlan.available_days.filter((day): day is string => DAYS.includes(day))
+              : [...new Set(restoredPlan.schedule.map((item) => item.day).filter((day): day is string => DAYS.includes(day)))];
+            if (restoredDays.length) setAvailableDays(restoredDays);
+            const restoredTimes: Record<string, string> = {};
+            for (const item of restoredPlan.schedule) {
+              if (restoredDays.includes(item.day) && item.preferred_time && !restoredTimes[item.day]) {
+                restoredTimes[item.day] = item.preferred_time;
+              }
+            }
+            if (Object.keys(restoredTimes).length) setSessionTimes(restoredTimes);
+          }
 
           if (savedMatchesRequestedDraft) {
             const { data: rows, error: rowsError } = await supabase
@@ -418,6 +444,7 @@ export function GoalPlanner({
         clarification,
         answers,
         domain,
+        plan,
         draftGoalId,
       }));
     } catch (storageError) {
@@ -436,6 +463,7 @@ export function GoalPlanner({
     clarification,
     answers,
     domain,
+    plan,
     draftGoalId,
   ]);
 
@@ -684,7 +712,22 @@ export function GoalPlanner({
       const normalized = normalizePlan(next, selectedDurationWeeks, domain, rawInput.trim(), why.trim());
       if (!normalized) throw new Error('VOW AI returned an incomplete plan. Please try again.');
       normalized.schedule = normalized.schedule.map((item) => ({ ...item, preferred_time: sessionTimes[item.day] || item.preferred_time }));
+      // Keep the exact generated plan recoverable before the user confirms it.
+      // The local draft effect provides immediate device recovery; this database
+      // write makes recovery survive route changes, app restarts, and device reloads.
       setPlan(normalized);
+      const { error: draftPlanError } = await supabase
+        .from('goals')
+        .update({
+          plan_json: { ...normalized, goal_title: rawInput.trim() },
+          plan_generated_at: new Date().toISOString(),
+        })
+        .eq('id', goalId)
+        .eq('user_id', userId)
+        .eq('status', 'draft');
+      if (draftPlanError) {
+        console.warn('[VOW] Generated plan could not be persisted to the draft row:', draftPlanError.message);
+      }
     } catch (err) {
       setError(userFacingError(err, 'VOW could not build the plan. Please try again.'));
     } finally {
@@ -792,6 +835,32 @@ export function GoalPlanner({
         };
       });
 
+      // The database still enforces its legacy executable-step guard for all
+      // active goals. Supply a compatibility projection alongside the modern
+      // schedule, without discarding the full generated plan.
+      const compatibilitySteps = filteredItems.map((item) => ({
+        title: item.task,
+        purpose: item.purpose || `Complete the planned ${item.duration_minutes}-minute session.`,
+        target: item.target_metric || `Complete ${item.duration_minutes} minutes of the scheduled task.`,
+        evidence: `Record completion and the result: ${item.target_metric || item.task}`,
+      }));
+      for (const milestone of plan.milestones) {
+        if (compatibilitySteps.length >= 2) break;
+        compatibilitySteps.push({
+          title: milestone.title,
+          purpose: milestone.description || `Progress toward the goal during week ${milestone.week}.`,
+          target: `Complete the week ${milestone.week} milestone.`,
+          evidence: `Record the completed milestone: ${milestone.title}`,
+        });
+      }
+      const lockedPlan = {
+        ...plan,
+        goal_title: rawInput.trim(),
+        horizon: `${selectedDurationWeeks || 1} weeks`,
+        deadline: deadlineFor(start, selectedDurationWeeks || 1),
+        steps: compatibilitySteps,
+      };
+
       const { data: lockedGoalId, error: lockError } = await supabase.rpc('lock_goal_plan', {
         p_goal_id: draftGoalId,
         p_goal: {
@@ -803,7 +872,7 @@ export function GoalPlanner({
           duration: `${selectedDurationWeeks || 1}w`,
           status: 'active',
           weekly_commitment_target: availableDays.length,
-          plan_json: plan,
+          plan_json: lockedPlan,
           plan_version: 1,
           plan_generated_at: new Date().toISOString(),
           planning_horizon_weeks: selectedDurationWeeks || 1,
