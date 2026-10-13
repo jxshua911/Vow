@@ -241,12 +241,14 @@ export function GoalPlanner({
   onCancel,
   initialGoal = '',
   initialWhy = '',
+  resumeDraftId,
 }: {
   userId: string;
   onCreated: () => void;
   onCancel: () => void;
   initialGoal?: string;
   initialWhy?: string;
+  resumeDraftId?: string | null;
 }) {
   const [rawInput, setRawInput] = useState(initialGoal);
   const [goalPlaceholder] = useState(() => GOAL_PLACEHOLDERS[Math.floor(Math.random() * GOAL_PLACEHOLDERS.length)]);
@@ -262,7 +264,8 @@ export function GoalPlanner({
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [draftGoalId, setDraftGoalId] = useState<string | null>(null);
+  const [draftGoalId, setDraftGoalId] = useState<string | null>(resumeDraftId || null);
+  const [draftReady, setDraftReady] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -284,42 +287,110 @@ export function GoalPlanner({
   const missingSessionTimes = availableDays.filter((day) => !sessionTimes[day]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || initialGoal || initialWhy) return;
-    try {
-      const saved = window.localStorage.getItem(draftStorageKey);
-      if (!saved) return;
-      const draft = JSON.parse(saved) as {
-        rawInput?: string;
-        why?: string;
-        durationWeeks?: number | null;
-        customDurationValue?: string;
-        customDurationUnit?: DurationUnit;
-        availableDays?: string[];
-        sessionTimes?: Record<string, string>;
-        clarification?: Clarification | null;
-        answers?: string[];
-        domain?: GoalDomain | null;
-        draftGoalId?: string | null;
-      };
-      if (typeof draft.rawInput === 'string') setRawInput(draft.rawInput);
-      if (typeof draft.why === 'string') setWhy(draft.why);
-      if (typeof draft.durationWeeks === 'number') setDurationWeeks(draft.durationWeeks);
-      else if (draft.durationWeeks === null && typeof draft.customDurationValue === 'string' && draft.customDurationValue.trim()) setDurationWeeks(null);
-      if (typeof draft.customDurationValue === 'string') setCustomDurationValue(draft.customDurationValue);
-      if (draft.customDurationUnit) setCustomDurationUnit(draft.customDurationUnit);
-      if (Array.isArray(draft.availableDays)) setAvailableDays(draft.availableDays);
-      if (draft.sessionTimes) setSessionTimes(draft.sessionTimes);
-      if (draft.clarification) setClarification(draft.clarification);
-      if (Array.isArray(draft.answers)) setAnswers(draft.answers);
-      if (draft.domain) setDomain(draft.domain);
-      if (draft.draftGoalId) setDraftGoalId(draft.draftGoalId);
-    } catch (error) {
-      console.warn('[VOW] Could not restore goal planner draft:', error);
+    let cancelled = false;
+
+    async function hydrateDraft() {
+      try {
+        let savedDraft: {
+          rawInput?: string;
+          why?: string;
+          durationWeeks?: number | null;
+          customDurationValue?: string;
+          customDurationUnit?: DurationUnit;
+          availableDays?: string[];
+          sessionTimes?: Record<string, string>;
+          clarification?: Clarification | null;
+          answers?: string[];
+          domain?: GoalDomain | null;
+          draftGoalId?: string | null;
+        } | null = null;
+
+        if (typeof window !== 'undefined') {
+          try {
+            const saved = window.localStorage.getItem(draftStorageKey);
+            if (saved) savedDraft = JSON.parse(saved);
+          } catch (storageError) {
+            console.warn('[VOW] Could not read saved goal planner draft:', storageError);
+          }
+        }
+
+        const savedMatchesRequestedDraft = !resumeDraftId || savedDraft?.draftGoalId === resumeDraftId;
+        if (savedDraft && savedMatchesRequestedDraft && !initialGoal && !initialWhy) {
+          if (typeof savedDraft.rawInput === 'string') setRawInput(savedDraft.rawInput);
+          if (typeof savedDraft.why === 'string') setWhy(savedDraft.why);
+          if (typeof savedDraft.durationWeeks === 'number') setDurationWeeks(savedDraft.durationWeeks);
+          else if (savedDraft.durationWeeks === null && typeof savedDraft.customDurationValue === 'string' && savedDraft.customDurationValue.trim()) setDurationWeeks(null);
+          if (typeof savedDraft.customDurationValue === 'string') setCustomDurationValue(savedDraft.customDurationValue);
+          if (savedDraft.customDurationUnit) setCustomDurationUnit(savedDraft.customDurationUnit);
+          if (Array.isArray(savedDraft.availableDays)) setAvailableDays(savedDraft.availableDays);
+          if (savedDraft.sessionTimes) setSessionTimes(savedDraft.sessionTimes);
+          if (savedDraft.clarification) setClarification(savedDraft.clarification);
+          if (Array.isArray(savedDraft.answers)) setAnswers(savedDraft.answers);
+          if (savedDraft.domain) setDomain(savedDraft.domain);
+          if (savedDraft.draftGoalId) setDraftGoalId(savedDraft.draftGoalId);
+        }
+
+        if (resumeDraftId) {
+          const { data: goal, error: goalError } = await supabase
+            .from('goals')
+            .select('id,title,outcome,why_it_matters,duration,plan_json')
+            .eq('id', resumeDraftId)
+            .eq('user_id', userId)
+            .eq('status', 'draft')
+            .maybeSingle();
+          if (goalError) throw goalError;
+          if (!goal) throw new Error('This saved draft could not be found. Return to Drafts and try again.');
+
+          if (!savedMatchesRequestedDraft) {
+            setRawInput(String(goal.title || goal.outcome || ''));
+            setWhy(String(goal.why_it_matters || ''));
+            const durationMatch = /^(\d+)w$/i.exec(String(goal.duration || ''));
+            if (durationMatch) setDurationWeeks(Math.max(1, Math.min(52, Number(durationMatch[1]))));
+            setAvailableDays([]);
+            setSessionTimes({});
+            setClarification(null);
+            setAnswers([]);
+            const storedDomain = goal.plan_json as { category?: unknown; goal_type?: unknown } | null;
+            const category = normalizeGoalCategory(storedDomain?.category);
+            const goalType = typeof storedDomain?.goal_type === 'string' ? storedDomain.goal_type.trim() : '';
+            setDomain(category && goalType ? { category, goal_type: goalType } : null);
+          }
+          setDraftGoalId(goal.id);
+
+          if (savedMatchesRequestedDraft) {
+            const { data: rows, error: rowsError } = await supabase
+              .from('goal_clarification_answers')
+              .select('question,answer,question_order')
+              .eq('goal_id', resumeDraftId)
+              .eq('user_id', userId)
+              .order('question_order', { ascending: true });
+            if (rowsError) throw rowsError;
+            if (rows?.length) {
+              setClarification((current) => current || {
+                questions: rows.map((row) => row.question),
+                recommended_duration_weeks: 8,
+                rationale: 'Resuming your saved goal draft.',
+              });
+              setAnswers((current) => current.length === rows.length
+                ? rows.map((row, index) => row.answer ?? current[index] ?? '')
+                : rows.map((row) => row.answer ?? ''));
+            }
+          }
+        }
+      } catch (hydrateError) {
+        console.error('[VOW] Could not restore goal planner draft:', hydrateError);
+        if (!cancelled) setError(userFacingError(hydrateError, 'Could not reopen this draft. Please return to Drafts and try again.'));
+      } finally {
+        if (!cancelled) setDraftReady(true);
+      }
     }
-  }, [draftStorageKey, initialGoal, initialWhy]);
+
+    void hydrateDraft();
+    return () => { cancelled = true; };
+  }, [draftStorageKey, initialGoal, initialWhy, resumeDraftId, userId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!draftReady || typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(draftStorageKey, JSON.stringify({
         rawInput,
@@ -334,10 +405,11 @@ export function GoalPlanner({
         domain,
         draftGoalId,
       }));
-    } catch (error) {
-      console.warn('[VOW] Could not save goal planner draft:', error);
+    } catch (storageError) {
+      console.warn('[VOW] Could not save goal planner draft:', storageError);
     }
   }, [
+    draftReady,
     draftStorageKey,
     rawInput,
     why,
