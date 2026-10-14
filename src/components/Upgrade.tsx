@@ -41,14 +41,33 @@ export function UpgradePage() {
   const selectedProduct = isYearly ? yearlyProduct : monthlyProduct;
 
   useEffect(() => {
-    void getEntitlementSnapshot().then(setUsage);
+    let active = true;
+    const refreshUsage = () => {
+      void getEntitlementSnapshot().then((snapshot) => {
+        if (active) setUsage(snapshot);
+      });
+    };
+    refreshUsage();
+    const onEntitlementChanged = (event: Event) => {
+      const snapshot = (event as CustomEvent<EntitlementSnapshot | null>).detail;
+      if (snapshot) setUsage(snapshot);
+      else refreshUsage();
+    };
+    window.addEventListener('vow:entitlement-changed', onEntitlementChanged);
+    window.addEventListener('focus', refreshUsage);
     void getPremiumProducts().then((result) => {
+      if (!active) return;
       setProducts((result.products || []).map((product) => ({
         identifier: product.identifier,
         price: Number(product.price || 0),
         priceString: product.priceString || '',
       })));
-    }).catch(() => setProducts([]));
+    }).catch(() => { if (active) setProducts([]); });
+    return () => {
+      active = false;
+      window.removeEventListener('vow:entitlement-changed', onEntitlementChanged);
+      window.removeEventListener('focus', refreshUsage);
+    };
   }, []);
 
   async function handleRestore() {
@@ -81,6 +100,40 @@ export function UpgradePage() {
     } catch (err) {
       setManageState(userFacingError(err, 'We could not open Google Play subscription management.'));
     }
+  }
+
+  if (!usage) {
+    return <div>
+      <PageHeader title="VOW Premium" subtitle="Checking your account status…" />
+      <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8" role="status">
+        <p className="text-sm text-vow-muted">Confirming your Premium entitlement…</p>
+      </section>
+    </div>;
+  }
+
+  if (isPremium) {
+    return <div>
+      <PageHeader title="VOW Premium" subtitle="Your full planning experience is ready." />
+      <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-6 animate-in fade-in duration-500">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 shrink-0 rounded-full border border-vow-border flex items-center justify-center text-2xl" aria-hidden="true">✓</div>
+          <div>
+            <p className="vow-label mb-2">Congratulations!</p>
+            <h2 className="vow-heading text-2xl md:text-3xl text-vow-ink mb-3">Welcome to VOW Premium.</h2>
+            <p className="text-sm text-vow-muted leading-relaxed">Your Premium access is active. You’re all set to plan bigger, adapt as life changes, and keep making progress without the free-plan limits.</p>
+            <p className="inline-flex items-center gap-2 mt-4 border border-vow-border rounded-full px-3 py-1.5 text-xs text-vow-ink"><span aria-hidden="true">✦</span> Premium · Active</p>
+          </div>
+        </div>
+      </section>
+      <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-6">
+        <h2 className="vow-heading text-xl text-vow-ink mb-4">Your Premium benefits</h2>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><span aria-hidden="true">✓</span><span>{benefit}</span></div>)}
+        </div>
+      </section>
+      <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'dashboard' }))} className="vow-btn-primary">Go to your dashboard →</button>
+      {restoreState && <p role="status" className="text-xs text-vow-muted mt-3">{restoreState}</p>}
+    </div>;
   }
 
   return <div>
