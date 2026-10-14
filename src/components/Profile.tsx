@@ -242,7 +242,16 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
         </div>
 
         <div className="py-6">
-          <h2 className="vow-label mb-2">Account</h2>
+          <h2 className="vow-label mb-2">My Account</h2>
+          <div className="border border-vow-border rounded-xl p-4 mb-4">
+            <p className="text-xs text-vow-muted">Signed in as</p>
+            <p className="text-sm text-vow-ink mt-1 break-all">{session?.user?.email || 'Account email unavailable'}</p>
+            <div className="flex items-center justify-between gap-3 mt-4">
+              <p className="text-xs text-vow-muted">Current plan</p>
+              {entitlement ? <span className="border border-vow-border rounded-full px-3 py-1 text-xs text-vow-ink">{entitlement.plan === 'premium' ? '✦ Premium · Active' : 'Free'}</span> : <span className="text-xs text-vow-muted">Checking…</span>}
+            </div>
+          </div>
+          <h2 className="vow-label mb-2">Account settings</h2>
           <div className="divide-y divide-vow-border">
             <div className="py-5">
               {!confirmDelete
