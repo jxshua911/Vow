@@ -13,7 +13,6 @@ import { Onboarding } from '@/components/Onboarding';
 import { TermsAcceptance, VOW_TERMS_VERSION } from '@/components/TermsAcceptance';
 import { AppShell, type View } from '@/components/AppShell';
 import { Dashboard } from '@/components/Dashboard';
-import { VOWAIPage } from '@/components/VOWAIPage';
 import { GoalHistoryActions } from '@/components/GoalHistoryActions';
 import { GoalsJournalWorkspace } from '@/components/GoalsJournalWorkspace';
 import { ReviewPage } from '@/components/WeeklyReview';
@@ -361,7 +360,6 @@ function AppContent() {
           {view === 'dashboard' && <Dashboard onNavigate={navigate} />}
           {view === 'calendar' && <><NativeCalendarSync /><CalendarPage /></>}
           {view === 'goals' && <GoalsJournalWorkspace><GoalHistoryActions /></GoalsJournalWorkspace>}
-          {view === 'vow-ai' && <VOWAIPage />}
           {view === 'review' && <><ReviewEntitlementBanner /><ReviewPage /></>}
           {view === 'profile' && <ProfilePage onLegal={() => void openLegalWebsite()} />}
           {view === 'upgrade' && <UpgradePage />}
