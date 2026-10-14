@@ -78,6 +78,12 @@ export function VOWAIPage() {
   useEffect(() => { void loadGoals(); }, [loadGoals]);
 
   const selectedGoal = goals.find((goal) => goal.id === selectedGoalId) || null;
+  const savedPlan = selectedGoal?.plan_json && typeof selectedGoal.plan_json === 'object' ? selectedGoal.plan_json : null;
+  const planSummary = typeof savedPlan?.summary === 'string' ? savedPlan.summary : '';
+  const successMetric = typeof savedPlan?.success_metric === 'string' ? savedPlan.success_metric : '';
+  const savedSchedule = Array.isArray(savedPlan?.schedule)
+    ? (savedPlan.schedule as Array<Record<string, unknown>>).slice(0, 5)
+    : [];
 
   return (
     <div>
@@ -107,6 +113,25 @@ export function VOWAIPage() {
             <p className="text-sm text-vow-ink">{selectedGoal.outcome || selectedGoal.title}</p>
             <p className="text-xs text-vow-muted mt-1">Status: {selectedGoal.status}{selectedGoal.deadline ? ` · Target date: ${selectedGoal.deadline}` : ''}</p>
             {selectedGoal.why_it_matters && <p className="text-xs text-vow-muted mt-3">{selectedGoal.why_it_matters}</p>}
+            {(planSummary || successMetric || savedSchedule.length > 0) && (
+              <div className="mt-4 pt-4 border-t border-vow-border">
+                <p className="vow-label mb-2">Saved plan</p>
+                {planSummary && <p className="text-sm text-vow-ink leading-relaxed">{planSummary}</p>}
+                {successMetric && <p className="text-xs text-vow-muted mt-2">Success measure: {successMetric}</p>}
+                {savedSchedule.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {savedSchedule.map((item, index) => (
+                      <div key={index} className="border-l border-vow-border pl-3 py-1">
+                        <p className="text-sm text-vow-ink">{typeof item.task === 'string' ? item.task : 'Planned action'}</p>
+                        <p className="text-xs text-vow-muted mt-1">
+                          {[typeof item.day === 'string' ? item.day : '', typeof item.preferred_time === 'string' ? item.preferred_time : '', typeof item.duration_minutes === 'number' ? `${item.duration_minutes} min` : ''].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>
