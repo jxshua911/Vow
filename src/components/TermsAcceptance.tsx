@@ -37,6 +37,9 @@ export function TermsAcceptance({ userId, onAccepted }: { userId: string; onAcce
         accepted_at: new Date().toISOString(),
       });
       if (insertError && insertError.code !== '23505') throw insertError;
+      try {
+        localStorage.setItem(`vow:terms-accepted:${userId}:${VOW_TERMS_VERSION}`, 'true');
+      } catch { /* Local cache is a convenience; the server record is authoritative. */ }
       onAccepted();
     } catch (acceptanceError) {
       console.error('[VOW] Terms acceptance could not be recorded:', acceptanceError);
