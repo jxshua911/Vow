@@ -36,8 +36,33 @@ export function GoalsPage() {
     if (!cached.length) setLoading(true);
     const { data, error } = await supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
     if (data && !error) {
-      setGoals(data as Goal[]);
-      try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch { /* Offline cache is best-effort. */ }
+      const freshGoals = data as Goal[];
+      setGoals(freshGoals);
+      try { localStorage.setItem(cacheKey, JSON.stringify(freshGoals)); } catch { /* Offline cache is best-effort. */ }
+      // Warm the local detail cache while connected so a later offline visit can
+      // open each saved goal with its milestones and sessions already available.
+      if (freshGoals.length > 0) {
+        void (async () => {
+          try {
+            const ids = freshGoals.map((goal) => goal.id);
+            const [milestoneResult, sessionResult] = await Promise.all([
+              supabase.from('milestones').select('*').in('goal_id', ids).order('sort_order'),
+              supabase.from('sessions').select('*').eq('user_id', session.user.id).order('scheduled_at', { ascending: true }),
+            ]);
+            const milestones = (milestoneResult.data || []) as Milestone[];
+            const sessions = (sessionResult.data || []) as Session[];
+            for (const goal of freshGoals) {
+              try {
+                localStorage.setItem(`vow:offline-goal-detail:${session.user.id}:${goal.id}`, JSON.stringify(goal));
+                localStorage.setItem(`vow:offline-milestones:${session.user.id}:${goal.id}`, JSON.stringify(milestones.filter((item) => item.goal_id === goal.id)));
+                localStorage.setItem(`vow:offline-sessions:${session.user.id}:${goal.id}`, JSON.stringify(sessions.filter((item) => item.goal_id === goal.id)));
+              } catch { /* Device storage is best-effort. */ }
+            }
+          } catch (cacheError) {
+            console.warn('[VOW] Could not warm offline goal details:', cacheError);
+          }
+        })();
+      }
     } else if (!cached.length) {
       setGoals([]);
     }
