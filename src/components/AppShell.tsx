@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { BrandLogo } from './BrandLogo';
 import { IS_PREMIUM_BUILD } from '@/lib/buildTier';
 
-export type View = 'dashboard' | 'calendar' | 'goals' | 'review' | 'profile' | 'upgrade' | 'legal' | 'support';
+export type View = 'dashboard' | 'calendar' | 'goals' | 'vow-ai' | 'review' | 'profile' | 'upgrade' | 'legal' | 'support';
 
 interface AppShellProps { currentView: View; onNavigate: (view: View) => void; children: ReactNode; }
 
@@ -13,6 +13,7 @@ const navItems: { view: Exclude<View, 'legal'>; label: string; icon: ReactNode }
   { view: 'dashboard', label: 'Dashboard', icon: <svg viewBox="0 0 24 24" fill="none" className="w-[21px] h-[21px]" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/><rect x="14" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/><rect x="4" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/><rect x="14" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/></svg> },
   { view: 'calendar', label: 'Calendar', icon: <svg viewBox="0 0 24 24" fill="none" className="w-[21px] h-[21px]" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M8 3.5V7.5M16 3.5V7.5M4 9.5H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M8 13H8.01M12 13H12.01M16 13H16.01M8 16.5H8.01M12 16.5H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg> },
   { view: 'goals', label: 'Goals', icon: <svg viewBox="0 0 24 24" fill="none" className="w-[21px] h-[21px]" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="1.25" fill="currentColor"/></svg> },
+  { view: 'vow-ai', label: 'VOW AI', icon: <svg viewBox="0 0 24 24" fill="none" className="w-[21px] h-[21px]" aria-hidden="true"><path d="M4 5.5h16v11H9l-5 3v-14Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M8 10h8M8 13.5h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> },
   { view: 'review', label: 'Review', icon: <svg viewBox="0 0 24 24" fill="none" className="w-[21px] h-[21px]" aria-hidden="true"><path d="M19 12A7 7 0 1 1 17 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M17 4.5V7.5H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg> },
   ...(IS_PREMIUM_BUILD ? [] : [{ view: 'upgrade' as const, label: 'Premium', icon: <span aria-hidden="true" className="text-[18px] leading-none">✦</span> }]),
   { view: 'profile', label: 'Profile', icon: <svg viewBox="0 0 24 24" fill="none" className="w-[21px] h-[21px]" aria-hidden="true"><circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M5.5 19C6.4 15.8 8.6 14 12 14C15.4 14 17.6 15.8 18.5 19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> },
