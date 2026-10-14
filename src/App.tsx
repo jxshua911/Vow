@@ -145,11 +145,14 @@ function AppContent() {
       try {
         const { data: accountState, error: accountStateError } = await supabase.rpc('vow_restore_or_purge_account');
         if (accountStateError) {
-          console.error('[VOW] Failed to restore account state:', accountStateError);
-          await supabase.auth.signOut({ scope: 'local' });
-          return;
-        }
-        if (accountState?.status === 'purged') {
+          console.warn('[VOW] Account-state verification is unavailable:', accountStateError.message);
+          // A temporary network outage must not sign a returning user out of their
+          // locally persisted session. The server remains authoritative when online.
+          if (typeof navigator !== 'undefined' && navigator.onLine) {
+            await supabase.auth.signOut({ scope: 'local' });
+            return;
+          }
+        } else if (accountState?.status === 'purged') {
           await supabase.auth.signOut({ scope: 'local' });
           return;
         }
@@ -160,10 +163,35 @@ function AppContent() {
           supabase.from('vow_terms_acceptances').select('id').eq('user_id', session.user.id).eq('terms_version', VOW_TERMS_VERSION).maybeSingle(),
         ]);
         if (cancelled) return;
-        if (settingsResult.error) console.error('[VOW] Failed to load user settings:', settingsResult.error);
-        if (termsResult.error) console.error('[VOW] Failed to load terms acceptance:', termsResult.error);
-        setSettings(settingsResult.data as UserSettings | null);
-        setTermsAccepted(Boolean(termsResult.data));
+        const settingsCacheKey = `vow:offline-settings:${session.user.id}`;
+        const termsCacheKey = `vow:terms-accepted:${session.user.id}:${VOW_TERMS_VERSION}`;
+        let cachedSettings: UserSettings | null = null;
+        let cachedTerms = false;
+        try {
+          const rawSettings = localStorage.getItem(settingsCacheKey);
+          if (rawSettings) cachedSettings = JSON.parse(rawSettings) as UserSettings;
+          cachedTerms = localStorage.getItem(termsCacheKey) === 'true';
+        } catch { /* Storage may be unavailable or contain an invalid cache. */ }
+
+        if (settingsResult.error) console.warn('[VOW] Failed to load user settings:', settingsResult.error.message);
+        if (termsResult.error) console.warn('[VOW] Failed to load terms acceptance:', termsResult.error.message);
+        const resolvedSettings = settingsResult.data as UserSettings | null;
+        if (resolvedSettings) {
+          setSettings(resolvedSettings);
+          try { localStorage.setItem(settingsCacheKey, JSON.stringify(resolvedSettings)); } catch { /* Offline cache is best-effort. */ }
+        } else {
+          setSettings(cachedSettings);
+        }
+        if (termsResult.data) {
+          setTermsAccepted(true);
+          try { localStorage.setItem(termsCacheKey, 'true'); } catch { /* Offline cache is best-effort. */ }
+        } else if (termsResult.error && typeof navigator !== 'undefined' && !navigator.onLine) {
+          // Offline launch: don't turn a transient read failure into a new legal gate.
+          // If this is a returning account, allow offline access and reconcile on reconnect.
+          setTermsAccepted(true);
+        } else {
+          setTermsAccepted(cachedTerms);
+        }
       } catch (err) {
         console.error('[VOW] Failed to load account state:', err);
         if (cancelled) return;
