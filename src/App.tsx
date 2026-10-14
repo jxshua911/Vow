@@ -209,6 +209,31 @@ function AppContent() {
 
   useEffect(() => {
     if (!session) return;
+    const reconcileOfflineState = async () => {
+      const [settingsResult, termsResult] = await Promise.all([
+        supabase.from('user_settings').select('*').eq('user_id', session.user.id).maybeSingle(),
+        supabase.from('vow_terms_acceptances').select('id').eq('user_id', session.user.id).eq('terms_version', VOW_TERMS_VERSION).maybeSingle(),
+      ]);
+      if (settingsResult.data) {
+        setSettings(settingsResult.data as UserSettings);
+        try { localStorage.setItem(`vow:offline-settings:${session.user.id}`, JSON.stringify(settingsResult.data)); } catch { /* best-effort cache */ }
+      }
+      if (!termsResult.error) {
+        const accepted = Boolean(termsResult.data);
+        setTermsAccepted(accepted);
+        try {
+          const key = `vow:terms-accepted:${session.user.id}:${VOW_TERMS_VERSION}`;
+          if (accepted) localStorage.setItem(key, 'true');
+          else localStorage.removeItem(key);
+        } catch { /* best-effort cache */ }
+      }
+    };
+    window.addEventListener('online', reconcileOfflineState);
+    return () => window.removeEventListener('online', reconcileOfflineState);
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!session) return;
     void supabase.rpc('vow_sync_personal_build_entitlement', { p_build_tier: VOW_BUILD_TIER }).then(({ error }) => {
       if (error) console.warn('[VOW] Personal build entitlement sync skipped:', error.message);
     });
