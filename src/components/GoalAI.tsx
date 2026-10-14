@@ -58,7 +58,7 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
       const { data: sessionData } = await supabase.from('sessions').select('*').eq('user_id', session.user.id).gte('scheduled_at', start.toISOString()).lte('scheduled_at', end.toISOString()).order('scheduled_at', { ascending: true });
       upcoming = (sessionData || []) as Session[];
       const context = goal
-        ? { title: goal.title, outcome: goal.outcome, status: goal.status, deadline: goal.deadline, weekly_commitment_target: goal.weekly_commitment_target, why_it_matters: goal.why_it_matters }
+        ? { title: goal.title, outcome: goal.outcome, status: goal.status, deadline: goal.deadline, weekly_commitment_target: goal.weekly_commitment_target, why_it_matters: goal.why_it_matters, saved_plan: goal.plan_json, plan_version: goal.plan_version }
         : { title: 'General planning', outcome: 'No single goal selected' };
       let references: Array<{ url: string; title: string | null; resource_type: string }> = [];
       if (goal) {
