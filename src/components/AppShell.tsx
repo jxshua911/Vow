@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import type { ReactNode } from 'react';
 import { BrandLogo } from './BrandLogo';
 import { IS_PREMIUM_BUILD } from '@/lib/buildTier';
@@ -18,14 +20,37 @@ const navItems: { view: Exclude<View, 'legal'>; label: string; icon: ReactNode }
 
 export function AppShell({ currentView, onNavigate, children }: AppShellProps) {
   const { session } = useAuth();
+  const [isPremium, setIsPremium] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void getEntitlementSnapshot().then((snapshot) => {
+        if (active) setIsPremium(snapshot?.plan === 'premium');
+      });
+    };
+    refresh();
+    const onEntitlementChanged = (event: Event) => {
+      const snapshot = (event as CustomEvent<EntitlementSnapshot | null>).detail;
+      if (snapshot) setIsPremium(snapshot.plan === 'premium');
+      else refresh();
+    };
+    window.addEventListener('vow:entitlement-changed', onEntitlementChanged);
+    window.addEventListener('focus', refresh);
+    return () => {
+      active = false;
+      window.removeEventListener('vow:entitlement-changed', onEntitlementChanged);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [session?.user.id]);
+  const visibleNavItems = navItems.filter((item) => !(item.view === 'upgrade' && isPremium));
   return <div className="min-h-screen bg-vow-bg">
     <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-56 border-r border-vow-border bg-vow-bg">
       <div className="px-6 py-7 border-b border-vow-border"><BrandLogo className="w-28 h-auto" /></div>
-      <nav className="flex-1 px-3 py-6 space-y-px overflow-y-auto">{navItems.map((item) => <button key={item.view} onClick={() => onNavigate(item.view)} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${currentView === item.view ? 'text-vow-ink font-medium bg-vow-border/40' : 'text-vow-muted hover:text-vow-ink'}`}><span className={`flex items-center justify-center transition-opacity ${currentView === item.view ? 'opacity-100' : 'opacity-70'}`}>{item.icon}</span>{item.label}</button>)}</nav>
+      <nav className="flex-1 px-3 py-6 space-y-px overflow-y-auto">{visibleNavItems.map((item) => <button key={item.view} onClick={() => onNavigate(item.view)} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${currentView === item.view ? 'text-vow-ink font-medium bg-vow-border/40' : 'text-vow-muted hover:text-vow-ink'}`}><span className={`flex items-center justify-center transition-opacity ${currentView === item.view ? 'opacity-100' : 'opacity-70'}`}>{item.icon}</span>{item.label}</button>)}</nav>
       <div className="border-t border-vow-border px-3 py-4"><div className="px-3 py-1.5 text-xs text-vow-muted truncate">{session?.user?.email}</div></div>
     </aside>
     <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-vow-bg border-b border-vow-border px-6 flex items-center" style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}><BrandLogo className="w-20 h-auto" /></header>
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-vow-bg border-t border-vow-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}><div className={`grid ${IS_PREMIUM_BUILD ? 'grid-cols-5' : 'grid-cols-6'} min-h-16`}>{navItems.map((item) => { const active = currentView === item.view; return <button key={item.view} onClick={() => onNavigate(item.view)} className={`flex flex-col items-center justify-center gap-1 px-1 transition-colors ${active ? 'text-vow-ink' : 'text-vow-muted hover:text-vow-ink'}`} aria-label={item.label}><span className={`flex items-center justify-center transition-transform ${active ? 'scale-105' : ''}`}>{item.icon}</span><span className={`text-[9px] tracking-wide ${active ? 'font-medium' : ''}`}>{item.label}</span></button>; })}</div></nav>
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-vow-bg border-t border-vow-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}><div className="grid min-h-16" style={{ gridTemplateColumns: `repeat(${visibleNavItems.length}, minmax(0, 1fr))` }}>{visibleNavItems.map((item) => { const active = currentView === item.view; return <button key={item.view} onClick={() => onNavigate(item.view)} className={`flex flex-col items-center justify-center gap-1 px-1 transition-colors ${active ? 'text-vow-ink' : 'text-vow-muted hover:text-vow-ink'}`} aria-label={item.label}><span className={`flex items-center justify-center transition-transform ${active ? 'scale-105' : ''}`}>{item.icon}</span><span className={`text-[9px] tracking-wide ${active ? 'font-medium' : ''}`}>{item.label}</span></button>; })}</div></nav>
     <main className="md:ml-56 min-h-screen" style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))', paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}><div className="px-6 md:px-12 py-8 md:py-12 max-w-4xl">{children}</div></main>
   </div>;
 }
