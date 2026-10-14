@@ -18,9 +18,29 @@ export function GoalsPage() {
   const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const loadGoals = useCallback(async () => {
-    if (!session) return;
-    const { data } = await supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
-    setGoals(data || []); setLoading(false);
+    if (!session) { setLoading(false); return; }
+    const cacheKey = `vow:offline-goals:${session.user.id}`;
+    let cached: Goal[] = [];
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) cached = parsed as Goal[];
+    } catch { /* Ignore an unavailable or invalid cache. */ }
+    if (cached.length) { setGoals(cached); setLoading(false); }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setGoals(cached);
+      setLoading(false);
+      return;
+    }
+    if (!cached.length) setLoading(true);
+    const { data, error } = await supabase.from('goals').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    if (data && !error) {
+      setGoals(data as Goal[]);
+      try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch { /* Offline cache is best-effort. */ }
+    } else if (!cached.length) {
+      setGoals([]);
+    }
+    setLoading(false);
   }, [session]);
   useEffect(() => { loadGoals(); }, [loadGoals]);
 
@@ -73,20 +93,68 @@ function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBac
   const [expandedMilestone, setExpandedMilestone] = useState<string | null>(null);
   const [unansweredQuestions, setUnansweredQuestions] = useState<string[]>([]);
   const load = useCallback(async () => {
+    const userId = session?.user.id;
+    const goalKey = userId ? `vow:offline-goal-detail:${userId}:${goalId}` : '';
+    const milestonesKey = userId ? `vow:offline-milestones:${userId}:${goalId}` : '';
+    const sessionsKey = userId ? `vow:offline-sessions:${userId}:${goalId}` : '';
+    let cachedGoal: Goal | null = null;
+    let cachedMilestones: Milestone[] = [];
+    let cachedSessions: Session[] = [];
+    try {
+      if (goalKey) {
+        const raw = localStorage.getItem(goalKey);
+        if (raw) cachedGoal = JSON.parse(raw) as Goal;
+      }
+      if (!cachedGoal && userId) {
+        const rawGoals = localStorage.getItem(`vow:offline-goals:${userId}`);
+        const parsedGoals: unknown = rawGoals ? JSON.parse(rawGoals) : [];
+        if (Array.isArray(parsedGoals)) cachedGoal = (parsedGoals as Goal[]).find((item) => item.id === goalId) || null;
+      }
+      if (milestonesKey) {
+        const raw = localStorage.getItem(milestonesKey);
+        if (raw) { const parsed: unknown = JSON.parse(raw); if (Array.isArray(parsed)) cachedMilestones = parsed as Milestone[]; }
+      }
+      if (sessionsKey) {
+        const raw = localStorage.getItem(sessionsKey);
+        if (raw) { const parsed: unknown = JSON.parse(raw); if (Array.isArray(parsed)) cachedSessions = parsed as Session[]; }
+      }
+    } catch { /* Continue with any cache values successfully read. */ }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setGoal(cachedGoal);
+      setMilestones(cachedMilestones);
+      setSessions(cachedSessions);
+      setUnansweredQuestions([]);
+      setLoading(false);
+      return;
+    }
+
     const [goalRes, msRes, sessRes] = await Promise.all([
       supabase.from('goals').select('*').eq('id', goalId).maybeSingle(),
       supabase.from('milestones').select('*').eq('goal_id', goalId).order('sort_order'),
       supabase.from('sessions').select('*').eq('goal_id', goalId).order('scheduled_at', { ascending: true }),
     ]);
-    setGoal(goalRes.data as Goal | null); setMilestones(msRes.data || []); setSessions(sessRes.data || []);
-    if (goalRes.data?.status === 'draft') {
+    const resolvedGoal = (goalRes.data as Goal | null) || cachedGoal;
+    const resolvedMilestones = (msRes.data as Milestone[] | null) || cachedMilestones;
+    const resolvedSessions = (sessRes.data as Session[] | null) || cachedSessions;
+    setGoal(resolvedGoal);
+    setMilestones(resolvedMilestones);
+    setSessions(resolvedSessions);
+    if (userId) {
+      try {
+        if (resolvedGoal) localStorage.setItem(goalKey, JSON.stringify(resolvedGoal));
+        localStorage.setItem(milestonesKey, JSON.stringify(resolvedMilestones));
+        localStorage.setItem(sessionsKey, JSON.stringify(resolvedSessions));
+      } catch { /* Offline cache is best-effort. */ }
+    }
+    if (resolvedGoal?.status === 'draft' && !goalRes.error) {
       const { data: clarificationRows } = await supabase.from('goal_clarification_answers').select('question,answer,question_order').eq('goal_id', goalId).order('question_order', { ascending: true });
       setUnansweredQuestions(((clarificationRows || []) as Array<{ question: string; answer: string | null }>).filter((row) => !row.answer?.trim()).map((row) => row.question));
     } else {
       setUnansweredQuestions([]);
     }
     setLoading(false);
-  }, [goalId]);
+  }, [goalId, session?.user.id]);
   useEffect(() => { load(); }, [load]);
   async function updateSessionStatus(sessId: string, status: Session['status']) {
     const updates: Partial<Session> = { status, updated_at: new Date().toISOString() };
