@@ -32,6 +32,10 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
   async function ask(prompt = message) {
     const question = prompt.trim();
     if (!question || loading) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setError('VOW AI needs an internet connection to consult on your plan. Your saved goals remain available offline.');
+      return;
+    }
     setMessage(question);
     setLoading(true);
     setError('');
