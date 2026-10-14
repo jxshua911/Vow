@@ -17,6 +17,7 @@ export function GoalsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
   const loadGoals = useCallback(async () => {
     if (!session) { setLoading(false); return; }
     const cacheKey = `vow:offline-goals:${session.user.id}`;
@@ -42,7 +43,14 @@ export function GoalsPage() {
     }
     setLoading(false);
   }, [session]);
-  useEffect(() => { loadGoals(); }, [loadGoals]);
+  useEffect(() => {
+    const handleOnline = () => { setOnline(true); void loadGoals(); };
+    const handleOffline = () => setOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
+  }, [loadGoals]);
+  useEffect(() => { void loadGoals(); }, [loadGoals]);
 
   useEffect(() => {
     if (!selectedGoalId) return;
@@ -55,8 +63,9 @@ export function GoalsPage() {
     return () => window.removeEventListener('vow:hardware-back', handleHardwareBack);
   }, [selectedGoalId, loadGoals]);
 
-  if (selectedGoalId) return <GoalDetail goalId={selectedGoalId} onBack={() => { setSelectedGoalId(null); loadGoals(); }} onContinueDraft={() => { setResumeDraftId(selectedGoalId); setSelectedGoalId(null); setShowCreate(true); }} />;
-  if (showCreate) return <GoalPlanner
+  if (selectedGoalId) return <GoalDetail goalId={selectedGoalId} readOnly={!online} onBack={() => { setSelectedGoalId(null); loadGoals(); }} onContinueDraft={() => { if (!online) return; setResumeDraftId(selectedGoalId); setSelectedGoalId(null); setShowCreate(true); }} />;
+  if (showCreate && !online) return <div><PageHeader title="Goals" /><p className="text-sm text-vow-muted mb-4">Plan creation needs an internet connection. Your saved goals and plans remain available offline.</p><button onClick={() => setShowCreate(false)} className="vow-btn-ghost">Back to saved goals</button></div>;
+  if (showCreate && online) return <GoalPlanner
     userId={session?.user.id || ''}
     resumeDraftId={resumeDraftId}
     onCreated={() => { setShowCreate(false); setResumeDraftId(null); loadGoals(); }}
@@ -69,7 +78,8 @@ export function GoalsPage() {
   const completedGoals = goals.filter((g) => g.status === 'completed' || g.status === 'abandoned');
   const goalCtaLabel = goals.length > 0 ? 'New Goal' : 'Create Goal';
   return <div>
-    <PageHeader title="Goals" subtitle="Lock in commitments. Track honestly. Adjust when the plan is wrong." action={<NewButton onClick={() => setShowCreate(true)} label={goalCtaLabel} />} />
+    <PageHeader title="Goals" subtitle="Lock in commitments. Track honestly. Adjust when the plan is wrong." action={online ? <NewButton onClick={() => setShowCreate(true)} label={goalCtaLabel} /> : undefined} />
+    {!online && <p className="text-xs text-vow-muted border-l-2 border-vow-border pl-3 mb-6">Offline mode · saved goals and sessions are read-only. Reconnect to create plans or change progress.</p>}
     {loading ? <div className="text-vow-muted text-sm">Loading...</div> : goals.length === 0 ? <div className="border border-vow-border p-16 text-center"><p className="vow-heading text-xl text-vow-ink mb-2">No goals yet</p><p className="text-vow-muted text-sm">Create your first commitment and let VOW map the work into your calendar.</p></div> : <div className="space-y-12">{activeGoals.length > 0 && <GoalSection title="Active" goals={activeGoals} onSelect={setSelectedGoalId} />}{draftGoals.length > 0 && <GoalSection title="Drafts" goals={draftGoals} onSelect={setSelectedGoalId} />}{completedGoals.length > 0 && <GoalSection title="Completed & Abandoned" goals={completedGoals} onSelect={setSelectedGoalId} />}</div>}
   </div>;
 }
@@ -79,7 +89,7 @@ function GoalSection({ title, goals, onSelect }: { title: string; goals: Goal[];
   return <div><h2 className="vow-label mb-4">{title}</h2><div className="border-t border-vow-border">{goals.map((g) => <button key={g.id} onClick={() => onSelect(g.id)} className="w-full text-left border-b border-vow-border py-5 group flex items-start justify-between gap-4 hover:bg-vow-surface/30 transition-colors"><div className="flex-1 min-w-0"><div className={`text-base font-medium mb-1 ${statusColors[g.status]}`}>{g.outcome}</div>{g.why_it_matters && <div className="text-xs text-vow-muted italic mb-2">"{g.why_it_matters}"</div>}<div className="flex items-center gap-4 text-xs text-vow-muted"><span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{g.deadline ? formatRelative(g.deadline) : 'No deadline'}</span><span className="flex items-center gap-1"><Clock className="w-3 h-3" />{g.weekly_commitment_target}x/week</span></div></div><ArrowLeft className="w-4 h-4 text-vow-border rotate-180 mt-1 group-hover:text-vow-ink transition-colors" /></button>)}</div></div>;
 }
 
-function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBack: () => void; onContinueDraft: () => void }) {
+function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: string; onBack: () => void; onContinueDraft: () => void; readOnly: boolean }) {
   const { session } = useAuth();
   const [goal, setGoal] = useState<Goal | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -120,6 +130,10 @@ function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBac
       }
     } catch { /* Continue with any cache values successfully read. */ }
 
+    if (cachedGoal || cachedMilestones.length || cachedSessions.length) {
+      setGoal(cachedGoal); setMilestones(cachedMilestones); setSessions(cachedSessions);
+      setLoading(false);
+    }
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       setGoal(cachedGoal);
       setMilestones(cachedMilestones);
@@ -256,15 +270,15 @@ function GoalDetail({ goalId, onBack, onContinueDraft }: { goalId: string; onBac
           <ul className="space-y-2 mb-4">{unansweredQuestions.map((question, index) => <li key={index} className="text-sm text-vow-ink border-l border-vow-border pl-3">{question}</li>)}</ul>
         </>
       ) : <p className="text-xs text-vow-muted mb-4">Continue where you left off to finish this goal.</p>}
-      <button type="button" onClick={onContinueDraft} className="vow-btn-primary">Continue answering</button>
+      {readOnly ? <p className="text-xs text-vow-muted">Reconnect to continue answering and build this plan.</p> : <button type="button" onClick={onContinueDraft} className="vow-btn-primary">Continue answering</button>}
     </section>}
     <GoalResources goalId={goalId} />
     <GoalReferenceList goalId={goalId} />
-    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Milestones</h2><button onClick={() => setExpandedMilestone(expandedMilestone ? null : milestones[0]?.id || null)} className="vow-btn-soft text-xs">{expandedMilestone ? 'Collapse' : 'Expand'}</button></div><div className="border-t border-vow-border">{milestones.map((ms) => { const Icon = ms.status === 'completed' ? CheckCircle2 : Circle; return <div key={ms.id} className="border-b border-vow-border py-4"><button className="w-full text-left flex items-start gap-3" onClick={() => setExpandedMilestone(expandedMilestone === ms.id ? null : ms.id)}><Icon className="w-4 h-4 mt-0.5" /><div className="flex-1"><p className="text-sm text-vow-ink">{ms.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(ms.deadline)}</p>{expandedMilestone === ms.id && <p className="text-xs text-vow-muted mt-2">{ms.description}</p>}</div><ChevronDown className={`w-4 h-4 transition-transform ${expandedMilestone === ms.id ? 'rotate-180' : ''}`} /></button><button onClick={() => toggleMilestoneStatus(ms)} className="vow-btn-soft text-xs ml-7 mt-2">{ms.status === 'completed' ? 'Mark pending' : 'Mark completed'}</button></div>; })}</div></div>
-    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions & routine</h2><button onClick={() => setShowAddSession(!showAddSession)} className="vow-btn-ghost"><Plus className="w-4 h-4" />Add session</button></div><div className="border-t border-vow-border">{sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; return <div key={sess.id} className="border-b border-vow-border py-4 flex items-center gap-4"><Icon className="w-4 h-4 text-vow-muted" /><div className="flex-1"><p className="text-sm text-vow-ink">{sess.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(sess.scheduled_at)} · {formatTime(sess.scheduled_at)} · {sess.duration_minutes} min</p></div>{sess.status === 'scheduled' && <div className="flex gap-2"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-soft text-xs">Complete</button><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => openSessionEditor(sess)} className="vow-btn-soft text-xs">Adjust time</button></div>}</div>; })}</div></div>
+    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Milestones</h2><button onClick={() => setExpandedMilestone(expandedMilestone ? null : milestones[0]?.id || null)} className="vow-btn-soft text-xs">{expandedMilestone ? 'Collapse' : 'Expand'}</button></div><div className="border-t border-vow-border">{milestones.map((ms) => { const Icon = ms.status === 'completed' ? CheckCircle2 : Circle; return <div key={ms.id} className="border-b border-vow-border py-4"><button className="w-full text-left flex items-start gap-3" onClick={() => setExpandedMilestone(expandedMilestone === ms.id ? null : ms.id)}><Icon className="w-4 h-4 mt-0.5" /><div className="flex-1"><p className="text-sm text-vow-ink">{ms.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(ms.deadline)}</p>{expandedMilestone === ms.id && <p className="text-xs text-vow-muted mt-2">{ms.description}</p>}</div><ChevronDown className={`w-4 h-4 transition-transform ${expandedMilestone === ms.id ? 'rotate-180' : ''}`} /></button>{!readOnly && <button onClick={() => toggleMilestoneStatus(ms)} className="vow-btn-soft text-xs ml-7 mt-2">{ms.status === 'completed' ? 'Mark pending' : 'Mark completed'}</button>}</div>; })}</div></div>
+    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions & routine</h2>{!readOnly && <button onClick={() => setShowAddSession(!showAddSession)} className="vow-btn-ghost"><Plus className="w-4 h-4" />Add session</button>}</div><div className="border-t border-vow-border">{sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; return <div key={sess.id} className="border-b border-vow-border py-4 flex items-center gap-4"><Icon className="w-4 h-4 text-vow-muted" /><div className="flex-1"><p className="text-sm text-vow-ink">{sess.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(sess.scheduled_at)} · {formatTime(sess.scheduled_at)} · {sess.duration_minutes} min</p></div>{!readOnly && sess.status === 'scheduled' && <div className="flex gap-2"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-soft text-xs">Complete</button><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => openSessionEditor(sess)} className="vow-btn-soft text-xs">Adjust time</button></div>}</div>; })}</div></div>
     {showAddSession && <div className="border border-vow-border p-5 mb-8"><p className="text-sm text-vow-ink mb-2">Add session</p><p className="text-xs text-vow-muted">New commitments are generated through the goal routine so the calendar stays coherent. Manual session creation can be added from the planner.</p><button onClick={() => setShowAddSession(false)} className="vow-btn-ghost mt-4">Close</button></div>}
-    <div className="border-t border-vow-border pt-6 mt-10 flex flex-wrap gap-3"><button onClick={completeGoal} className="vow-btn-primary"><Check className="w-4 h-4" />Complete goal</button><button onClick={() => setShowPauseModal(true)} className="vow-btn-ghost"><Pause className="w-4 h-4" />Pause</button><button onClick={abandonGoal} className="vow-btn-ghost">Abandon</button><button onClick={deleteGoal} className="vow-btn-ghost text-red-600">Delete</button></div>
-    {editingSession && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Adjust this session</h2><p className="text-sm text-vow-muted mb-4">{editingSession.title}. Change the date, time or amount of time you can give it. Completed sessions and goal progress stay intact.</p><label className="vow-label block mb-2" htmlFor="session-schedule-time">Date and time</label><input id="session-schedule-time" type="datetime-local" value={editScheduledAt} onChange={(event) => setEditScheduledAt(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-4" /><label className="vow-label block mb-2" htmlFor="session-duration">Duration (minutes)</label><input id="session-duration" type="number" min="5" max="1440" step="5" value={editDurationMinutes} onChange={(event) => setEditDurationMinutes(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-5" /><div className="flex gap-3"><button onClick={() => setEditingSession(null)} className="vow-btn-ghost">Cancel</button><button onClick={saveSessionChanges} className="vow-btn-primary flex-1">Save changes</button></div></div></div>}
-    {showPauseModal && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Pause goal</h2><p className="text-sm text-vow-muted mb-4">Why are you pausing?</p><div className="space-y-2">{['Schedule changed','Need to adjust the plan','Taking a short break'].map((reason) => <button key={reason} onClick={() => handlePause(reason)} className="w-full text-left border border-vow-border px-4 py-3 text-sm hover:bg-vow-surface">{reason}</button>)}</div><button onClick={() => setShowPauseModal(false)} className="vow-btn-ghost mt-4">Cancel</button></div></div>}
+    {!readOnly && <div className="border-t border-vow-border pt-6 mt-10 flex flex-wrap gap-3"><button onClick={completeGoal} className="vow-btn-primary"><Check className="w-4 h-4" />Complete goal</button><button onClick={() => setShowPauseModal(true)} className="vow-btn-ghost"><Pause className="w-4 h-4" />Pause</button><button onClick={abandonGoal} className="vow-btn-ghost">Abandon</button><button onClick={deleteGoal} className="vow-btn-ghost text-red-600">Delete</button></div>}
+    {!readOnly && editingSession && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Adjust this session</h2><p className="text-sm text-vow-muted mb-4">{editingSession.title}. Change the date, time or amount of time you can give it. Completed sessions and goal progress stay intact.</p><label className="vow-label block mb-2" htmlFor="session-schedule-time">Date and time</label><input id="session-schedule-time" type="datetime-local" value={editScheduledAt} onChange={(event) => setEditScheduledAt(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-4" /><label className="vow-label block mb-2" htmlFor="session-duration">Duration (minutes)</label><input id="session-duration" type="number" min="5" max="1440" step="5" value={editDurationMinutes} onChange={(event) => setEditDurationMinutes(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-5" /><div className="flex gap-3"><button onClick={() => setEditingSession(null)} className="vow-btn-ghost">Cancel</button><button onClick={saveSessionChanges} className="vow-btn-primary flex-1">Save changes</button></div></div></div>}
+    {!readOnly && showPauseModal && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Pause goal</h2><p className="text-sm text-vow-muted mb-4">Why are you pausing?</p><div className="space-y-2">{['Schedule changed','Need to adjust the plan','Taking a short break'].map((reason) => <button key={reason} onClick={() => handlePause(reason)} className="w-full text-left border border-vow-border px-4 py-3 text-sm hover:bg-vow-surface">{reason}</button>)}</div><button onClick={() => setShowPauseModal(false)} className="vow-btn-ghost mt-4">Cancel</button></div></div>}
   </div>;
 }
