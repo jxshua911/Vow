@@ -247,6 +247,7 @@ export async function syncUpcomingSessionNotifications(sessions: Session[]): Pro
 
   const now = Date.now();
   const upcoming = sessions.filter((session) => {
+    if (!session.scheduled_at) return false;
     const at = new Date(session.scheduled_at).getTime();
     return session.status === 'scheduled' && Number.isFinite(at) && at > now;
   });
