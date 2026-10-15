@@ -18,31 +18,50 @@ async function isPasswordCompromised(password: string): Promise<boolean> {
 }
 export function AuthPage() {
   const [mode, setMode] = useState<AuthMode>('signup'); const [method, setMethod] = useState<AuthMethod>('options');
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false); const [suspended, setSuspended] = useState(false);
+
+  function handleAuthError(err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err ?? '');
+    if (/user.?banned|banned.?until|account.{0,20}(suspend|ban)|temporarily banned|suspended/i.test(detail)) {
+      setSuspended(true);
+      setError(null);
+      setMessage('');
+    } else {
+      setError(userFacingError(err, 'Sign-in failed. Please try again.'));
+    }
+    setLoading(false);
+  }
 
   useEffect(() => {
     const onOAuthError = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
-      setLoading(false);
-      setError(userFacingError(new Error(typeof detail === 'string' ? detail : 'Google sign-in failed. Please try again.'), 'Google sign-in failed. Please try again.'));
+      handleAuthError(new Error(typeof detail === 'string' ? detail : 'Google sign-in failed. Please try again.'));
     };
+    const params = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const callbackError = params.get('error_description') || params.get('error') || hashParams.get('error_description') || hashParams.get('error');
+    if (callbackError) handleAuthError(new Error(callbackError.replace(/\+/g, ' ')));
     window.addEventListener('vow:oauth-error', onOAuthError);
     return () => window.removeEventListener('vow:oauth-error', onOAuthError);
   }, []);
 
   function switchMode(next: AuthMode) { setMode(next); setError(null); setMessage(''); }
-  async function handleSubmit(event: React.FormEvent) { event.preventDefault(); setError(null); setMessage(''); setLoading(true); try {
+  async function handleSubmit(event: React.FormEvent) { event.preventDefault(); setError(null); setMessage(''); setSuspended(false); setLoading(true); try {
     if (mode === 'signup') { if (password.length < 12) throw new Error('Use a password with at least 12 characters.'); if (password.length > 128) throw new Error('Use a password with 128 characters or fewer.'); if (await isPasswordCompromised(password)) throw new Error('That password has appeared in a known data breach. Please choose a different password.'); const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password }); if (signUpError) throw signUpError; if (!data.session) setMessage('Check your email to confirm your account, then sign in.'); }
     else { const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password }); if (signInError) throw signInError; }
-  } catch (err) { setError(userFacingError(err, 'Something went wrong. Please try again.')); } finally { setLoading(false); } }
-  async function handleGoogle() { setError(null); setMessage(''); setLoading(true); try {
+  } catch (err) { handleAuthError(err); } finally { setLoading(false); } }
+  async function handleGoogle() { setError(null); setMessage(''); setSuspended(false); setLoading(true); try {
     const redirectTo = Capacitor.isNativePlatform() ? NATIVE_OAUTH_REDIRECT : window.location.origin;
     const { data, error: oauthError } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, skipBrowserRedirect: Capacitor.isNativePlatform() } });
-    if (oauthError) throw oauthError; if (Capacitor.isNativePlatform() && data?.url) { const finished = await Browser.addListener('browserFinished', () => setLoading(false)); await Browser.open({ url: data.url }); window.setTimeout(() => { void finished.remove(); }, 120000); }
-  } catch (err) { setError(userFacingError(err, 'Google sign-in failed. Please try again.')); setLoading(false); } }
+    if (oauthError) throw oauthError; if (Capacitor.isNativePlatform() && data?.url) { const finished = await Browser.addListener('browserFinished', () => setLoading(false)); await Browser.open({ url: data.url }); window.setTimeout(() => { void finished.remove(); setLoading(false); }, 120000); }
+  } catch (err) { handleAuthError(err); } }
   return <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12"><div className="w-full max-w-sm">
     <div className="text-center mb-10"><BrandLogo className="mx-auto w-28 h-auto mb-6" /><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
-    {method === 'options' ? <div className="space-y-4">
+    {suspended ? <div className="border border-vow-border bg-vow-surface p-5 space-y-3" role="alert" aria-live="polite">
+      <h1 className="text-lg font-semibold text-vow-ink">Account temporarily suspended</h1>
+      <p className="text-sm text-vow-muted">Sign-in is currently unavailable for this account. If you believe this is a mistake, please contact VOW support for a review.</p>
+      <button type="button" onClick={() => { setSuspended(false); setLoading(false); setError(null); setMethod('options'); }} className="w-full border border-vow-border py-3 text-sm font-medium text-vow-ink">Back to sign in</button>
+    </div> : method === 'options' ? <div className="space-y-4">
       <button type="button" onClick={handleGoogle} disabled={loading} className="w-full flex items-center justify-center gap-3 border border-vow-border bg-vow-surface py-3.5 text-sm font-medium text-vow-ink hover:bg-vow-border transition-colors disabled:opacity-40"><GoogleIcon className="w-5 h-5" /> Continue with Google</button>
       <div className="flex items-center gap-4"><div className="h-px flex-1 bg-vow-border" /><span className="text-xs text-vow-muted">or</span><div className="h-px flex-1 bg-vow-border" /></div>
       <button type="button" onClick={() => { setError(null); setMessage(''); setMethod('email'); }} className="w-full flex items-center justify-center gap-3 border border-vow-border bg-vow-surface py-3.5 text-sm font-medium text-vow-ink hover:bg-vow-border transition-opacity"><Mail className="w-5 h-5 shrink-0" /> Continue with Email</button>
