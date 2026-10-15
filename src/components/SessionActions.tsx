@@ -182,7 +182,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       setError('VOW could not save this step’s schedule. Please try again.');
       return;
     }
-    if (nextDate) await scheduleReminder(notificationId(action.id), `VOW · ${action.title.slice(0, 48)}`, `Action for ${currentSession.title}`, nextDate, action.id, 'action');
+    if (nextDate) await scheduleReminder(notificationId(action.id), `VOW · ${action.title.slice(0, 48)}`, `Action for ${currentSession.title}`, nextDate, currentSession.id, 'action');
     else await cancelReminder(notificationId(action.id));
     setActions((existing) => existing.map((item) => item.id === action.id ? { ...item, scheduled_at: nextDate?.toISOString() || null } : item));
   }
