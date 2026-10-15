@@ -41,6 +41,10 @@ Deno.serve(async (request) => {
   const { data: { user }, error: authError } = await userClient.auth.getUser();
   if (authError || !user) return json({ error: 'Request could not be processed.' }, 401);
   const body = await request.json().catch(() => ({}));
+  const requestId = clean(body.request_id, 36);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+    return json({ persisted: false, error: 'Please retry your support request.' }, 422);
+  }
   const message = clean(body.message, 10000);
   if (!message) return json({ error: 'Please enter a message before submitting.' }, 422);
   const name = clean(body.name, 120) || 'Not provided';
@@ -57,10 +61,31 @@ Deno.serve(async (request) => {
   }
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: submission, error: insertError } = await admin.from('support_submissions').insert({ user_id: user.id, name, email, issue, message, delivery_status: 'pending' }).select('id, created_at').single();
-  if (insertError || !submission) {
+  let submission: { id: string; created_at: string; delivery_status: string; delivery_id: string | null; user_id: string; name: string; email: string; issue: string; message: string } | null = null;
+  const inserted = await admin.from('support_submissions').insert({ client_request_id: requestId, user_id: user.id, name, email, issue, message, delivery_status: 'pending' }).select('id, created_at, delivery_status, delivery_id, user_id, name, email, issue, message').single();
+  if (!inserted.error && inserted.data) {
+    submission = inserted.data;
+  } else if (inserted.error?.code === '23505') {
+    const existing = await admin.from('support_submissions').select('id, created_at, delivery_status, delivery_id, user_id, name, email, issue, message').eq('client_request_id', requestId).maybeSingle();
+    if (existing.error || !existing.data) {
+      console.error('[VOW Support] Idempotent submission lookup failed.');
+      return json({ persisted: false, error: 'We couldn\\'t check your existing request. Please try again.' }, 500);
+    }
+    const prior = existing.data;
+    if (prior.user_id !== user.id || prior.name !== name || prior.email !== email || prior.issue !== issue || prior.message !== message) {
+      return json({ persisted: false, error: 'This submission key belongs to a different support request. Please refresh the form and try again.' }, 409);
+    }
+    if (prior.delivery_id && ['accepted', 'delivered', 'delivery_delayed'].includes(prior.delivery_status)) {
+      return json({ persisted: true, accepted: true, delivery_status: prior.delivery_status, duplicate: true });
+    }
+    submission = prior;
+  } else {
     console.error('[VOW Support] Support submission insert failed; no email was sent.');
-    return json({ persisted: false, error: "We couldn't submit your request. Please try again." }, 500);
+    return json({ persisted: false, error: 'We couldn\\'t submit your request. Please try again.' }, 500);
+  }
+  if (!submission) {
+    console.error('[VOW Support] Support submission was not available after insert.');
+    return json({ persisted: false, error: 'We couldn\\'t submit your request. Please try again.' }, 500);
   }
   const recordDelivery = async (values: Record<string, unknown>) => {
     const { error } = await admin.from('support_submissions').update(values).eq('id', submission.id);
