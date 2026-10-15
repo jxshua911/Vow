@@ -20,6 +20,7 @@ export function detectPatterns(
   const timeBuckets: Record<string, Session[]> = {};
 
   for (const s of missedOrMoved) {
+    if (!s.scheduled_at) continue;
     const d = dayName(s.scheduled_at);
     const t = timeOfDay(s.scheduled_at);
     const dayKey = `${d} ${t}`;
@@ -54,6 +55,7 @@ export function detectPatterns(
   // 3. Back-to-back / calendar conflict detection (proxy: same-day multiple missed)
   const dayMissBuckets: Record<string, Session[]> = {};
   for (const s of missedOrMoved) {
+    if (!s.scheduled_at) continue;
     const dateKey = new Date(s.scheduled_at).toDateString();
     (dayMissBuckets[dateKey] ??= []).push(s);
   }
@@ -106,7 +108,8 @@ export function detectPatterns(
 
   // 6. Journal-linked context near missed sessions
   if (journalEntries.length > 0) {
-    for (const s of missedOrMoved.slice(0, 3)) {
+    for (const s of missedOrMoved.filter((item) => item.scheduled_at).slice(0, 3)) {
+      if (!s.scheduled_at) continue;
       const sessionDate = new Date(s.scheduled_at);
       const nearby = journalEntries.filter((j) => {
         const jd = new Date(j.created_at);
