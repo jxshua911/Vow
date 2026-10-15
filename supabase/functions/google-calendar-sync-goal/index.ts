@@ -79,14 +79,26 @@ serve(async (req) => {
     const { data: planItems, error: planError } = await admin.from("goal_plan_items").select("id, week_number, day_of_week, scheduled_at, task, purpose, target_metric, duration_minutes, status").eq("goal_id", goalId).eq("user_id", user.id).eq("status", "scheduled").order("scheduled_at", { ascending: true });
     if (planError) throw planError;
 
-    const sessionByTime = new Map((sessions || []).filter((session) => session.status === "scheduled").map((session) => [`${session.scheduled_at}|${session.title}`, session]));
+    const sessionByTime = new Map((sessions || []).filter((session) => session.status === "scheduled").map((session) => [session.scheduled_at, session]));
     let createdCount = 0;
     for (const item of planItems || []) {
-      const session = Array.from(sessionByTime.values()).find((candidate) => candidate.scheduled_at === item.scheduled_at && candidate.title === item.task);
+      const session = sessionByTime.get(item.scheduled_at);
       const start = new Date(item.scheduled_at);
       const end = new Date(start.getTime() + Math.max(5, item.duration_minutes || 60) * 60000);
-      const description = [item.purpose, item.target_metric ? `Target: ${item.target_metric}` : null, `VOW goal: ${goal.title}`, `Week ${item.week_number} · ${item.day_of_week}`].filter(Boolean).join("\n");
-      const event = await googleRequest("/calendars/primary/events", accessToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ summary: `VOW: ${item.task}`, description, start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() }, reminders: { useDefault: true } }) });
+      const noteLines = String(session?.notes || "").split("\n");
+      const task = noteLines.find((line) => line.startsWith("Task: "))?.slice(6) || item.task;
+      const steps = noteLines.filter((line) => /^Step \d+: /.test(line));
+      const description = [
+        `Goal: ${goal.title}`,
+        `Session: ${task}`,
+        item.purpose ? `Purpose: ${item.purpose}` : null,
+        item.target_metric ? `Finish condition: ${item.target_metric}` : null,
+        `Week ${item.week_number} · ${item.day_of_week}`,
+        steps.length ? `\nWhat to do:\n${steps.map((line) => line.replace(/^Step \d+: /, "")).map((line, index) => `${index + 1}. ${line}`).join("\n")}` : null,
+        noteLines.find((line) => line.startsWith("Video: ")) || null,
+      ].filter(Boolean).join("\n");
+      const summary = `VOW · Practice · W${item.week_number} · ${String(item.day_of_week).slice(0, 3)}`;
+      const event = await googleRequest("/calendars/primary/events", accessToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ summary, description, start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() }, reminders: { useDefault: true } }) });
       createdCount += 1;
       if (session?.id && event?.id) {
         const { error: updateError } = await admin.from("sessions").update({ external_event_id: event.id }).eq("id", session.id).eq("user_id", user.id);
