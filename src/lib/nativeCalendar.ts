@@ -39,7 +39,7 @@ async function getCalendarId(preferredAccountEmail?: string): Promise<string | u
 }
 
 export async function addSessionToNativeCalendar(session: Session, preferredAccountEmail?: string): Promise<string | null> {
-  if (!Capacitor.isNativePlatform()) return null;
+  if (!Capacitor.isNativePlatform() || !session.scheduled_at) return null;
   if (!await requestNativeCalendarAccess()) throw new Error('Calendar access was not granted.');
   const calendarId = await getCalendarId(preferredAccountEmail);
   const startDate = new Date(session.scheduled_at).getTime();
@@ -81,7 +81,7 @@ export async function listNativeCalendarEvents(from: Date, to: Date): Promise<Na
 
 export async function syncSessionsToNativeCalendar(sessions: Session[], preferredAccountEmail?: string): Promise<number> {
   if (!Capacitor.isNativePlatform()) return 0;
-  const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now());
+  const upcoming = sessions.filter((session) => session.status === 'scheduled' && Boolean(session.scheduled_at) && new Date(session.scheduled_at as string).getTime() > Date.now());
   if (!upcoming.length || !await requestNativeCalendarAccess()) return 0;
   const calendarId = await getCalendarId(preferredAccountEmail);
   let createdOrRefreshed = 0;
@@ -93,7 +93,7 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
     const storedEventId = storedValue && storedValue !== 'true' ? storedValue : null;
 
     if (storedValue === 'true') {
-      const startDate = new Date(session.scheduled_at);
+      const startDate = new Date(session.scheduled_at || '');
       const from = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
       const to = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
       const legacy = (await listNativeCalendarEvents(from, to)).find((event) => {
@@ -119,6 +119,7 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
       localStorage.removeItem(storageKey);
     }
 
+    if (!session.scheduled_at) continue;
     const startDate = new Date(session.scheduled_at).getTime();
     const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
     const { id } = await CapacitorCalendar.createEvent({ calendarId, title: desiredTitle, description: nativeDescription(session), startDate, endDate, alerts: [-15, 0] });
@@ -134,6 +135,11 @@ export async function replaceSessionInNativeCalendar(previous: Session, updated:
   if (!Capacitor.isNativePlatform()) return null;
   if (!await requestNativeCalendarAccess()) throw new Error('Calendar access was not granted.');
 
+  if (!updated.scheduled_at) {
+    await deleteSessionFromNativeCalendar(previous);
+    localStorage.removeItem(`${SYNCED_PREFIX}${updated.id}`);
+    return null;
+  }
   const calendarId = await getCalendarId();
   const startDate = new Date(updated.scheduled_at).getTime();
   const endDate = startDate + Math.max(15, updated.duration_minutes || 60) * 60_000;
@@ -153,6 +159,7 @@ export async function replaceSessionInNativeCalendar(previous: Session, updated:
     let oldEventId = storedValue && storedValue !== 'true' ? storedValue : null;
 
     if (!oldEventId) {
+      if (!previous.scheduled_at) throw new Error('Previous session has no scheduled time to match.');
       const oldStart = new Date(previous.scheduled_at);
       const events = await listNativeCalendarEvents(
         new Date(oldStart.getTime() - 24 * 60 * 60 * 1000),
@@ -189,6 +196,7 @@ export async function deleteSessionFromNativeCalendar(session: Session): Promise
   // Older app versions stored only a boolean. Recover their event by matching
   // the VOW-prefixed title and scheduled start time before deleting anything.
   if (!eventId) {
+    if (!session.scheduled_at) { localStorage.removeItem(storageKey); return; }
     const start = new Date(session.scheduled_at);
     const from = new Date(start.getTime() - 24 * 60 * 60 * 1000);
     const to = new Date(start.getTime() + 24 * 60 * 60 * 1000);
