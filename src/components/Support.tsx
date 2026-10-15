@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { ArrowLeft } from '@/lib/ui-icons';
@@ -8,16 +8,19 @@ type Status = 'idle' | 'sending' | 'success' | 'stored' | 'unconfigured' | 'erro
 
 export function SupportPage({ onBack, onLegal }: Props) {
   const { session, displayName } = useAuth();
-  const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [reason, setReason] = useState('Bug or technical issue'); const [message, setMessage] = useState(''); const [status, setStatus] = useState<Status>('idle');
+  const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [reason, setReason] = useState('Bug or technical issue'); const [message, setMessage] = useState(''); const [status, setStatus] = useState<Status>('idle'); const requestIdRef = useRef<string | null>(null);
   useEffect(() => { if (session?.user.email) setEmail((current) => current || session.user.email || ''); if (displayName && displayName !== 'there') setName((current) => current || displayName); }, [session?.user.email, displayName]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (status === 'sending') return;
     const text = message.trim(); if (!text) { setStatus('error'); return; }
     setStatus('sending');
+    const requestId = requestIdRef.current ?? crypto.randomUUID();
+    requestIdRef.current = requestId;
     try {
-      const { data: result, error } = await supabase.functions.invoke('vow-support', { body: { name: name.trim(), email: email.trim(), issue: reason, message: text } });
+      const { data: result, error } = await supabase.functions.invoke('vow-support', { body: { request_id: requestId, name: name.trim(), email: email.trim(), issue: reason, message: text } });
       if (error) throw error;
       if (result?.persisted !== true) { setStatus('error'); return; }
+      requestIdRef.current = null;
       setMessage(''); setStatus(result.accepted === true ? 'success' : result.delivery_configured === false ? 'unconfigured' : 'stored');
     } catch (error) { console.error('[VOW] Support submission failed:', error); setStatus('error'); }
   }
