@@ -158,8 +158,7 @@ export async function replaceSessionInNativeCalendar(previous: Session, updated:
     const storedValue = localStorage.getItem(storageKey);
     let oldEventId = storedValue && storedValue !== 'true' ? storedValue : null;
 
-    if (!oldEventId) {
-      if (!previous.scheduled_at) throw new Error('Previous session has no scheduled time to match.');
+    if (!oldEventId && previous.scheduled_at) {
       const oldStart = new Date(previous.scheduled_at);
       const events = await listNativeCalendarEvents(
         new Date(oldStart.getTime() - 24 * 60 * 60 * 1000),
