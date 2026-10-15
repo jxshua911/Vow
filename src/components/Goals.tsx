@@ -8,7 +8,7 @@ import { GoalPlanner } from './GoalPlanner';
 import { GoalAI } from './GoalAI';
 import { cancelActionRemindersForSession, cancelReminder, notificationId, syncSessionActionReminders, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import { Capacitor } from '@capacitor/core';
-import { addSessionToNativeCalendar, deleteSessionFromNativeCalendar } from '@/lib/nativeCalendar';
+import { addSessionToNativeCalendar, deleteSessionFromNativeCalendar, replaceSessionInNativeCalendar } from '@/lib/nativeCalendar';
 import { GoalResources } from './GoalResources';
 import { SessionActions } from './SessionActions';
 import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Clock } from '@/lib/ui-icons';
@@ -314,8 +314,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     }
     if (Capacitor.isNativePlatform()) {
       try {
-        await deleteSessionFromNativeCalendar(target);
-        await addSessionToNativeCalendar(combinedSession);
+        await replaceSessionInNativeCalendar(target, combinedSession);
       } catch (calendarError) {
         calendarSyncWarning = true;
         console.error('[VOW] Sessions merged but phone-calendar target event could not be updated:', calendarError);
