@@ -90,6 +90,23 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
     const storedValue = localStorage.getItem(storageKey);
     const storedEventId = storedValue && storedValue !== 'true' ? storedValue : null;
 
+    if (storedValue === 'true') {
+      const startDate = new Date(session.scheduled_at);
+      const from = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+      const to = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+      const legacy = (await listNativeCalendarEvents(from, to)).find((event) => {
+        const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
+        return (event.summary === `VOW · ${session.title}` || event.summary === desiredTitle)
+          && Number.isFinite(eventStart) && Math.abs(eventStart - startDate.getTime()) < 60_000;
+      });
+      if (legacy?.summary === desiredTitle) {
+        markSynced(session.id, legacy.id);
+        continue;
+      }
+      if (legacy) await CapacitorCalendar.deleteEvent({ id: legacy.id });
+      localStorage.removeItem(storageKey);
+    }
+
     if (storedEventId) {
       const startDate = new Date(session.scheduled_at);
       const from = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
