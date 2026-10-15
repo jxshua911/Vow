@@ -3,7 +3,7 @@ import { LocalNotifications, type PermissionStatus } from '@capacitor/local-noti
 import { PushNotifications } from '@capacitor/push-notifications';
 import { VOW_BUILD_TIER } from '@/lib/buildTier';
 import { supabase } from '@/lib/supabase';
-import type { Session } from '@/types/database';
+import type { Session, SessionAction } from '@/types/database';
 
 export type NotificationPermission = PermissionStatus['display'];
 export type NotificationPreferences = { enabled: boolean; sound: boolean; vibration: boolean };
@@ -169,6 +169,37 @@ export async function scheduleReminder(id: number, title: string, body: string, 
 export async function cancelReminder(id: number): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => undefined);
+}
+
+export async function cancelActionRemindersForSession(sessionId: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  const pending = await LocalNotifications.getPending();
+  const ids = pending.notifications.filter((notification) => {
+    if (!isActionReminder(notification) || !notification.extra || typeof notification.extra !== 'object') return false;
+    return (notification.extra as { sessionId?: unknown }).sessionId === sessionId;
+  }).map((notification) => notification.id);
+  if (ids.length) await LocalNotifications.cancel({ notifications: ids.map((id) => ({ id })) });
+}
+
+export async function syncSessionActionReminders(sessionId: string, sessionTitle: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  const preferences = getNotificationPreferences();
+  if (!preferences.enabled) return;
+  if (await getNotificationPermission() !== 'granted') return;
+  const { data, error } = await supabase.from('session_actions').select('*').eq('session_id', sessionId).eq('status', 'pending').not('scheduled_at', 'is', null);
+  if (error) throw error;
+  const actions = (data || []) as SessionAction[];
+  const desired = new Set(actions.filter((action) => new Date(action.scheduled_at || '').getTime() > Date.now()).map((action) => notificationId(action.id)));
+  const pending = await LocalNotifications.getPending();
+  const stale = pending.notifications.filter((notification) => {
+    if (!isActionReminder(notification) || !notification.extra || typeof notification.extra !== 'object') return false;
+    return (notification.extra as { sessionId?: unknown }).sessionId === sessionId && !desired.has(notification.id);
+  }).map((notification) => notification.id);
+  if (stale.length) await LocalNotifications.cancel({ notifications: stale.map((id) => ({ id })) });
+  for (const action of actions) {
+    if (!action.scheduled_at || new Date(action.scheduled_at).getTime() <= Date.now()) continue;
+    await scheduleReminder(notificationId(action.id), `VOW · ${action.title.slice(0, 48)}`, `Action for ${sessionTitle}`, new Date(action.scheduled_at), sessionId, 'action');
+  }
 }
 
 export async function cancelAllVowNotifications(): Promise<void> {
