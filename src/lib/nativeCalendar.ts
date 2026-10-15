@@ -6,6 +6,16 @@ const SYNCED_PREFIX = 'vow:native-calendar-session:';
 
 function isSynced(sessionId: string): boolean { return Boolean(localStorage.getItem(`${SYNCED_PREFIX}${sessionId}`)); }
 function markSynced(sessionId: string, eventId: string): void { localStorage.setItem(`${SYNCED_PREFIX}${sessionId}`, eventId); }
+function nativeTitle(session: Session): string {
+  const shortTitle = session.title.startsWith('Practice ·') ? session.title : 'Practice';
+  return `VOW · ${shortTitle}`;
+}
+function nativeDescription(session: Session): string {
+  const lines = (session.notes || '').split('\\n');
+  const task = lines.find((line) => line.startsWith('Task: '))?.slice(6) || session.title;
+  const steps = lines.filter((line) => /^Step \\d+: /.test(line)).map((line) => line.replace(/^Step \\d+: /, ''));
+  return [task, ...steps.map((step, index) => `${index + 1}. ${step}`), `${session.duration_minutes} min commitment created from VOW.`].join('\\n');
+}
 
 export async function requestNativeCalendarAccess(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false;
@@ -32,7 +42,7 @@ export async function addSessionToNativeCalendar(session: Session, preferredAcco
   const calendarId = await getCalendarId(preferredAccountEmail);
   const startDate = new Date(session.scheduled_at).getTime();
   const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
-  const { id } = await CapacitorCalendar.createEvent({ calendarId, title: `VOW · ${session.title}`, description: `${session.duration_minutes} min commitment created from VOW.`, startDate, endDate, alerts: [-15, 0] });
+  const { id } = await CapacitorCalendar.createEvent({ calendarId, title: nativeTitle(session), description: nativeDescription(session), startDate, endDate, alerts: [-15, 0] });
   if (id) markSynced(session.id, id);
   return id;
 }
@@ -69,18 +79,34 @@ export async function listNativeCalendarEvents(from: Date, to: Date): Promise<Na
 
 export async function syncSessionsToNativeCalendar(sessions: Session[], preferredAccountEmail?: string): Promise<number> {
   if (!Capacitor.isNativePlatform()) return 0;
-  const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now() && !isSynced(session.id));
+  const upcoming = sessions.filter((session) => session.status === 'scheduled' && new Date(session.scheduled_at).getTime() > Date.now());
   if (!upcoming.length || !await requestNativeCalendarAccess()) return 0;
   const calendarId = await getCalendarId(preferredAccountEmail);
-  let created = 0;
+  let createdOrRefreshed = 0;
+
   for (const session of upcoming) {
+    const desiredTitle = nativeTitle(session);
+    const storageKey = `${SYNCED_PREFIX}${session.id}`;
+    const storedValue = localStorage.getItem(storageKey);
+    const storedEventId = storedValue && storedValue !== 'true' ? storedValue : null;
+
+    if (storedEventId) {
+      const startDate = new Date(session.scheduled_at);
+      const from = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+      const to = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+      const existing = (await listNativeCalendarEvents(from, to)).find((event) => event.id === storedEventId);
+      if (existing?.summary === desiredTitle) continue;
+      if (existing) await CapacitorCalendar.deleteEvent({ id: storedEventId });
+      localStorage.removeItem(storageKey);
+    }
+
     const startDate = new Date(session.scheduled_at).getTime();
     const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
-    const { id } = await CapacitorCalendar.createEvent({ calendarId, title: `VOW · ${session.title}`, description: `${session.duration_minutes} min commitment created from VOW.`, startDate, endDate, alerts: [-15, 0] });
+    const { id } = await CapacitorCalendar.createEvent({ calendarId, title: desiredTitle, description: nativeDescription(session), startDate, endDate, alerts: [-15, 0] });
     if (id) markSynced(session.id, id);
-    created += 1;
+    createdOrRefreshed += 1;
   }
-  return created;
+  return createdOrRefreshed;
 }
 
 
@@ -100,7 +126,7 @@ export async function deleteSessionFromNativeCalendar(session: Session): Promise
     const to = new Date(start.getTime() + 24 * 60 * 60 * 1000);
     const events = await listNativeCalendarEvents(from, to);
     const match = events.find((event) => {
-      if (event.summary !== `VOW · ${session.title}`) return false;
+      if (event.summary !== nativeTitle(session) && event.summary !== `VOW · ${session.title}`) return false;
       const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
       return Number.isFinite(eventStart) && Math.abs(eventStart - start.getTime()) < 60_000;
     });
