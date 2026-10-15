@@ -140,7 +140,7 @@ function isYoutubeUrl(value: string): boolean {
   }
 }
 function conciseSessionTitle(task: string, week: number): string {
-  const compact = task.trim().replace(/^(practice|practise|work on|complete|perform|train|study|review)\\s+/i, '').split(/\\s+/).slice(0, 5).join(' ').replace(/[.,:;]+$/, '');
+  const compact = task.trim().replace(/^(practice|practise|work on|complete|perform|train|study|review)\s+/i, '').split(/\s+/).slice(0, 5).join(' ').replace(/[.,:;]+$/, '');
   const readable = compact ? compact.charAt(0).toUpperCase() + compact.slice(1) : 'Practice';
   return `${readable.slice(0, 36)} · W${week}`;
 }
