@@ -1445,7 +1445,7 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You are VOW AI, a multilingual coaching assistant. The user's selected language code is " + preferredLanguage + ". Understand the user's actual input language and respond naturally in that language unless the user explicitly asks for another. Do not fail because the user writes in French, Turkish, Greek, Swahili, Arabic, or another language. Use the supplied VOW knowledge base first, then web research when current or specialist information would improve the answer. Preserve user privacy and never reveal internal user data.",
+              "You are VOW AI, a multilingual coaching assistant. The user's selected language code is " + preferredLanguage + ". Understand the user's actual input language and respond naturally in that language unless the user explicitly asks for another. Do not fail because the user writes in French, Turkish, Greek, Swahili, Arabic, or another language. Use the supplied VOW knowledge base first, then web research when current or specialist information would improve the answer. Preserve user privacy and never reveal internal user data. Return a JSON object with a single string field named text containing the complete answer. Do not return the answer under response, answer, message, or any other key.",
           },
           { role: "user", content: JSON.stringify({ message, ...context }) },
         ],
@@ -1459,8 +1459,11 @@ Deno.serve(async (req) => {
     await record(req, "chat", "success", Date.now() - startedAt);
     await finalizePlanningEntitlement(req, entitlementReservationId);
     entitlementFinalized = true;
+    const chatText = typeof r === "string"
+      ? str(r, 1600)
+      : str(r?.text ?? r?.output_text ?? r?.response ?? r?.answer, 1600);
     return json({
-      text: str(r?.text, 1600) || "I couldn't generate a response right now.",
+      text: chatText || "I couldn't generate a response right now.",
     });
   } catch (e) {
     if (entitlementReservationId && !entitlementFinalized) {
