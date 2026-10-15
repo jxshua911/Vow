@@ -39,6 +39,16 @@ const rules = [
   },
   {
     category: 'Sports',
+    goal_type: 'Taekwondo / Martial Arts',
+    metric: 'technique quality, controlled repetitions, coached feedback, training sessions',
+    evidence: ['martial-arts practice sessions', 'technique checklists', 'instructor feedback', 'manual progress updates'],
+    integration: null,
+    methodology: 'Build beginner foundations progressively through stance, footwork, basic techniques, controlled solo drills, and instructor feedback. Treat belt readiness as an instructor-assessed outcome rather than a guaranteed timeline.',
+    required_inputs: ['current martial-arts experience', 'available instructor or dojo access', 'current skill level and training days'],
+    keywords: ['taekwondo', 'martial art', 'karate', 'judo', 'jiu-jitsu', 'jiujitsu', 'kickboxing', 'muay thai', 'kung fu', 'boxing training', 'combat sport'],
+  },
+  {
+    category: 'Sports',
     goal_type: 'Football',
     metric: 'sessions, minutes, performance',
     evidence: ['training sessions', 'match activity', 'manual performance notes'],
