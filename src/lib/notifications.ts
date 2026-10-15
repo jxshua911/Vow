@@ -133,7 +133,7 @@ export async function requestExactAlarmPermission(): Promise<boolean | null> {
   }
 }
 
-export async function scheduleReminder(id: number, title: string, body: string, at: Date, sessionId?: string): Promise<void> {
+export async function scheduleReminder(id: number, title: string, body: string, at: Date, sessionId?: string, kind: 'session' | 'action' = 'session'): Promise<void> {
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
 
   const preferences = getNotificationPreferences();
@@ -156,7 +156,7 @@ export async function scheduleReminder(id: number, title: string, body: string, 
       body,
       channelId: channelId(preferences),
       sound: preferences.sound ? 'default' : undefined,
-      extra: { vow: true, ...(sessionId ? { sessionId } : {}) },
+      extra: { vow: true, kind, ...(sessionId ? { sessionId } : {}) },
       ...(exactAlarmGranted === undefined ? {} : { isExactNotification: exactAlarmGranted }),
       schedule: { at, allowWhileIdle: true },
     }],
@@ -196,6 +196,11 @@ export function notificationId(sessionId: string): number {
   return id || 1;
 }
 
+function isActionReminder(notification: { extra?: unknown }): boolean {
+  return Boolean(notification.extra && typeof notification.extra === 'object' && 'kind' in notification.extra
+    && (notification.extra as { kind?: unknown }).kind === 'action');
+}
+
 export async function syncUpcomingSessionNotifications(sessions: Session[]): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
@@ -222,7 +227,7 @@ export async function syncUpcomingSessionNotifications(sessions: Session[]): Pro
   // completed, skipped and moved sessions.
   const pending = await LocalNotifications.getPending();
   const staleIds = pending.notifications
-    .filter((notification) => isVowNotification(notification) && !desiredIds.has(notification.id))
+    .filter((notification) => isVowNotification(notification) && !desiredIds.has(notification.id) && !isActionReminder(notification))
     .map((notification) => notification.id);
 
   if (staleIds.length > 0) {
