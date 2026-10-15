@@ -73,6 +73,10 @@ begin
   set session_id = v_target.id, updated_at = now()
   where session_id = v_source.id and user_id = v_user_id;
 
+  update public.vow_session_moves
+  set session_id = v_target.id
+  where session_id = v_source.id and user_id = v_user_id;
+
   update public.sessions
   set notes = nullif(v_notes, ''),
       duration_minutes = v_duration,
@@ -90,3 +94,8 @@ $$;
 
 revoke all on function public.vow_merge_sessions(uuid, uuid) from public, anon;
 grant execute on function public.vow_merge_sessions(uuid, uuid) to authenticated;
+
+create index if not exists idx_session_actions_parent_action_id
+  on public.session_actions(parent_action_id);
+create index if not exists idx_session_actions_user_id
+  on public.session_actions(user_id);
