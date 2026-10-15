@@ -7,6 +7,8 @@ import { PageHeader, NewButton } from './AppShell';
 import { GoalPlanner } from './GoalPlanner';
 import { GoalAI } from './GoalAI';
 import { cancelReminder, notificationId, syncUpcomingSessionNotifications } from '@/lib/notifications';
+import { Capacitor } from '@capacitor/core';
+import { deleteSessionFromNativeCalendar } from '@/lib/nativeCalendar';
 import { GoalResources } from './GoalResources';
 import { GoalReferenceList } from './GoalReferenceList';
 import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from '@/lib/ui-icons';
@@ -203,6 +205,26 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     if (!error && status !== 'scheduled') await cancelReminder(notificationId(sessId));
     await load();
   }
+
+  async function deleteSession(sess: Session) {
+    if (!session || !confirm('Delete this session from VOW and remove its linked phone-calendar event?')) return;
+    const { error } = await supabase.from('sessions').delete().eq('id', sess.id).eq('user_id', session.user.id);
+    if (error) {
+      console.error('[VOW] Could not delete session:', error);
+      alert('Could not delete this session. Please try again.');
+      return;
+    }
+    await cancelReminder(notificationId(sess.id));
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await deleteSessionFromNativeCalendar(sess);
+      } catch (calendarError) {
+        console.error('[VOW] Session deleted but native calendar cleanup failed:', calendarError);
+        alert('The session was deleted from VOW, but its phone-calendar event could not be removed. Check calendar permission and remove the leftover event from your calendar.');
+      }
+    }
+    await load();
+  }
   function openSessionEditor(sess: Session) {
     const localDate = new Date(sess.scheduled_at);
     const localValue = new Date(localDate.getTime() - localDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -306,7 +328,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       {readOnly ? <p className="text-xs text-vow-muted">Reconnect to consult VOW AI. Your saved goal and plan remain available offline.</p> : <GoalAI goal={goal} />}
     </section>
     <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Milestones</h2><button onClick={() => setExpandedMilestone(expandedMilestone ? null : milestones[0]?.id || null)} className="vow-btn-soft text-xs">{expandedMilestone ? 'Collapse' : 'Expand'}</button></div><div className="border-t border-vow-border">{milestones.map((ms) => { const Icon = ms.status === 'completed' ? CheckCircle2 : Circle; return <div key={ms.id} className="border-b border-vow-border py-4"><button className="w-full text-left flex items-start gap-3" onClick={() => setExpandedMilestone(expandedMilestone === ms.id ? null : ms.id)}><Icon className="w-4 h-4 mt-0.5" /><div className="flex-1"><p className="text-sm text-vow-ink">{ms.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(ms.deadline)}</p>{expandedMilestone === ms.id && <p className="text-xs text-vow-muted mt-2">{ms.description}</p>}</div><ChevronDown className={`w-4 h-4 transition-transform ${expandedMilestone === ms.id ? 'rotate-180' : ''}`} /></button>{!readOnly && <button onClick={() => toggleMilestoneStatus(ms)} className="vow-btn-soft text-xs ml-7 mt-2">{ms.status === 'completed' ? 'Mark pending' : 'Mark completed'}</button>}</div>; })}</div></div>
-    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions & routine</h2>{!readOnly && <button onClick={() => setShowAddSession(!showAddSession)} className="vow-btn-ghost"><Calendar className="w-4 h-4" />Session options</button>}</div><div className="border-t border-vow-border">{sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; return <div key={sess.id} className="border-b border-vow-border py-4 flex items-center gap-4"><Icon className="w-4 h-4 text-vow-muted" /><div className="flex-1"><p className="text-sm text-vow-ink">{sess.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(sess.scheduled_at)} · {formatTime(sess.scheduled_at)} · {sess.duration_minutes} min</p></div>{!readOnly && sess.status === 'scheduled' && <div className="flex gap-2"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-soft text-xs">Complete</button><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => openSessionEditor(sess)} className="vow-btn-soft text-xs">Reschedule</button></div>}</div>; })}</div></div>
+    <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions & routine</h2>{!readOnly && <button onClick={() => setShowAddSession(!showAddSession)} className="vow-btn-ghost"><Calendar className="w-4 h-4" />Session options</button>}</div><div className="border-t border-vow-border">{sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; return <div key={sess.id} className="border-b border-vow-border py-4 flex items-center gap-4"><Icon className="w-4 h-4 text-vow-muted" /><div className="flex-1"><p className="text-sm text-vow-ink">{sess.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(sess.scheduled_at)} · {formatTime(sess.scheduled_at)} · {sess.duration_minutes} min</p></div>{!readOnly && sess.status === 'scheduled' && <div className="flex gap-2"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-soft text-xs">Complete</button><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => openSessionEditor(sess)} className="vow-btn-soft text-xs">Reschedule</button><button onClick={() => void deleteSession(sess)} className="vow-btn-soft text-xs">Delete</button></div>}</div>; })}</div></div>
     {showAddSession && <div className="border border-vow-border p-5 mb-8"><p className="text-sm text-vow-ink mb-2">About sessions</p><p className="text-xs text-vow-muted">VOW currently schedules sessions from your goal plan; manual session creation is not available in this view yet. Use “Reschedule” on an existing session to change its time.</p><button onClick={() => setShowAddSession(false)} className="vow-btn-ghost mt-4">Close</button></div>}
     {!readOnly && <div className="border-t border-vow-border pt-6 mt-10 flex flex-wrap gap-3"><button onClick={completeGoal} className="vow-btn-primary"><Check className="w-4 h-4" />Complete goal</button><button onClick={() => setShowPauseModal(true)} className="vow-btn-ghost"><Pause className="w-4 h-4" />Pause</button><button onClick={abandonGoal} className="vow-btn-ghost">Abandon</button><button onClick={deleteGoal} className="vow-btn-ghost text-red-600">Delete</button></div>}
     {!readOnly && editingSession && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Adjust this session</h2><p className="text-sm text-vow-muted mb-4">{editingSession.title}. Change the date, time or amount of time you can give it. Completed sessions and goal progress stay intact.</p><label className="vow-label block mb-2" htmlFor="session-schedule-time">Date and time</label><input id="session-schedule-time" type="datetime-local" value={editScheduledAt} onChange={(event) => setEditScheduledAt(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-4" /><label className="vow-label block mb-2" htmlFor="session-duration">Duration (minutes)</label><input id="session-duration" type="number" min="5" max="1440" step="5" value={editDurationMinutes} onChange={(event) => setEditDurationMinutes(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-5" /><div className="flex gap-3"><button onClick={() => setEditingSession(null)} className="vow-btn-ghost">Cancel</button><button onClick={saveSessionChanges} className="vow-btn-primary flex-1">Save changes</button></div></div></div>}
