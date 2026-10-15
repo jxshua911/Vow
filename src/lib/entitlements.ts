@@ -1,5 +1,19 @@
 import { supabase } from '@/lib/supabase';
 
+const ENTITLEMENT_CACHE_KEY = 'vow:last-known-entitlement:';
+function cacheKey() { return ENTITLEMENT_CACHE_KEY + (typeof window !== 'undefined' ? window.localStorage.getItem('vow:auth-user-id') || 'current' : 'current'); }
+function readCachedEntitlement(): EntitlementSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const value = JSON.parse(window.localStorage.getItem(cacheKey()) || 'null') as EntitlementSnapshot | null;
+    return value && (value.plan === 'free' || value.plan === 'premium') ? value : null;
+  } catch { return null; }
+}
+function rememberEntitlement(snapshot: EntitlementSnapshot | null) {
+  if (typeof window === 'undefined' || !snapshot) return;
+  try { window.localStorage.setItem(cacheKey(), JSON.stringify(snapshot)); } catch { /* Storage may be unavailable. */ }
+}
+
 export const FREE_PLANNING_ACTION_LIMIT = 3;
 
 export type EntitlementFeature =
