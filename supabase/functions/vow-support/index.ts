@@ -65,13 +65,22 @@ Deno.serve(async (request) => {
   if (!resendKey) return json({ accepted: false, persisted: true, delivery_status: 'failed', delivery_configured: false });
   const received = new Date(submission.created_at).toISOString();
   const subject = `[VOW Support] ${issue.replace(/[\r\n]+/g, ' ').slice(0, 120)}`;
-  const plainText = ['New support request', '', `Name: ${name}`, `Email: ${email || 'Not provided'}`, `Issue: ${issue}`, '', 'Message', message, '', `Reference: ${submission.id}`, `Received: ${received}`].join('\n');
-  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;color:#111;background:#fff;line-height:1.5"><h1 style="font-size:20px;font-weight:600;margin:0 0 24px">New support request</h1><table style="border-collapse:collapse;width:100%;font-size:14px"><tr><td style="padding:6px 16px 6px 0;font-weight:600;vertical-align:top">Name</td><td style="padding:6px 0">${escapeHtml(name)}</td></tr><tr><td style="padding:6px 16px 6px 0;font-weight:600;vertical-align:top">Email</td><td style="padding:6px 0">${escapeHtml(email || 'Not provided')}</td></tr><tr><td style="padding:6px 16px 6px 0;font-weight:600;vertical-align:top">Issue</td><td style="padding:6px 0">${escapeHtml(issue)}</td></tr></table><h2 style="font-size:15px;margin:28px 0 8px">Message</h2><div style="white-space:pre-wrap;border-left:2px solid #111;padding-left:14px">${escapeHtml(message)}</div><p style="font-size:12px;color:#555;margin-top:28px">Reference: ${escapeHtml(submission.id)}<br>Received: ${escapeHtml(received)} UTC</p></div>`;
+  const replyInstructions = email
+    ? 'Reply directly to this email to respond to the requester; the reply-to address is set to the requester.'
+    : 'No reply email was provided, so this message does not have a requester reply-to address.';
+  const plainText = ['New support request', '', replyInstructions, '', `Name: ${name}`, `Email: ${email || 'Not provided'}`, `Issue: ${issue}`, '', 'Message', message, '', `Reference: ${submission.id}`, `Received: ${received}`].join('\n');
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;color:#111;background:#fff;line-height:1.5"><h1 style="font-size:20px;font-weight:600;margin:0 0 16px">New support request</h1><p style="padding:12px;background:#f2f5f8;border-radius:6px;font-size:14px">${escapeHtml(replyInstructions)}</p><table style="border-collapse:collapse;width:100%;font-size:14px"><tr><td style="padding:6px 16px 6px 0;font-weight:600;vertical-align:top">Name</td><td style="padding:6px 0">${escapeHtml(name)}</td></tr><tr><td style="padding:6px 16px 6px 0;font-weight:600;vertical-align:top">Email</td><td style="padding:6px 0">${escapeHtml(email || 'Not provided')}</td></tr><tr><td style="padding:6px 16px 6px 0;font-weight:600;vertical-align:top">Issue</td><td style="padding:6px 0">${escapeHtml(issue)}</td></tr></table><h2 style="font-size:15px;margin:28px 0 8px">Message</h2><div style="white-space:pre-wrap;border-left:2px solid #111;padding-left:14px">${escapeHtml(message)}</div><p style="font-size:12px;color:#555;margin-top:28px">Reference: ${escapeHtml(submission.id)}<br>Received: ${escapeHtml(received)} UTC</p></div>`;
   try {
     const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from, to: [recipient], reply_to: email || undefined, subject, text: plainText, html }) });
-    await response.text().catch(() => '');
-    if (!response.ok) { await admin.from('support_submissions').update({ delivery_status: 'failed', delivery_error: `Resend ${response.status}` }).eq('id', submission.id); return json({ accepted: false, persisted: true, delivery_status: 'failed', delivery_configured: true }); }
-    await admin.from('support_submissions').update({ delivery_status: 'sent' }).eq('id', submission.id);
+    const providerResult = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error('[VOW Support] Email provider rejected support notification:', response.status);
+      await admin.from('support_submissions').update({ delivery_status: 'failed', delivery_error: `Resend ${response.status}` }).eq('id', submission.id);
+      return json({ accepted: false, persisted: true, delivery_status: 'failed', delivery_configured: true });
+    }
+    const deliveryId = typeof providerResult?.id === 'string' ? providerResult.id : null;
+    const { error: deliveryUpdateError } = await admin.from('support_submissions').update({ delivery_status: 'sent', delivery_id: deliveryId }).eq('id', submission.id);
+    if (deliveryUpdateError) console.error('[VOW Support] Email accepted but delivery receipt could not be recorded.');
     return json({ accepted: true, persisted: true, delivery_status: 'sent' });
   } catch (_error) {
     await admin.from('support_submissions').update({ delivery_status: 'failed', delivery_error: 'Resend request failed' }).eq('id', submission.id);
