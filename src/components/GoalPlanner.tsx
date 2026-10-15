@@ -652,7 +652,7 @@ export function GoalPlanner({
             weekly_commitment_target: availableDays.length,
             domain: goalAnalysis,
           },
-          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days: ${availableDays.join(', ')}\nSession times: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}\nThe deterministic domain analysis is ${goalAnalysis.category} / ${goalAnalysis.goal_type}; preserve this specialist classification unless the goal text clearly contradicts it. Identify the right kind of activity or outcome, then ask 2-3 high-value questions that resolve the most important missing inputs. Use plain, direct language and one idea per question; avoid vague phrases such as 'physical training experience that could influence your learning pace'. Prefer concrete wording such as 'Have you done any martial arts before?' or 'What training or sports do you do now?'. Briefly explain any specialist term the user may not know.`,
+          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days: ${availableDays.join(', ')}\nSession times: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}\nThe deterministic domain analysis is ${goalAnalysis.category} / ${goalAnalysis.goal_type}; preserve this specialist classification unless the goal text clearly contradicts it. Identify the right kind of activity or outcome, then ask at most 2-3 genuinely useful personal-context questions. Never ask users to supply facts VOW can look up (for example a known book's page count, a food's published nutrition facts, or public information about a named person, place, product, event, or topic). Do not ask users to predict unknowable future measurements such as exact running distance, calorie burn, pace, or future performance; establish a baseline with a simple optional test or use a clearly labelled adjustable estimate. Do not require the user to own a book or product just because they want to plan around it. Accept 'I don't know' and blank answers; treat them as uncertainty to plan around, not as a reason to block generation. Ask only about meaningful personal preferences, current experience, constraints, or desired outcome. Use plain, direct language and briefly explain specialist terms.`,
           available_days: availableDays,
           references: [],
         });
@@ -721,19 +721,15 @@ export function GoalPlanner({
         }
         return;
       }
-      const clean = answers.map((answer) => String(answer ?? '').trim());
+      const clean = answers.map((answer) => {
+        const value = String(answer ?? '').trim();
+        return value || 'Not sure — use a reasonable estimate and state the assumption.';
+      });
       const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
-      const isUnanswered = (a: string) => !a || unknown.test(a);
-      const unresolved = clean.filter(isUnanswered).length;
+      const unresolved = clean.filter((answer) => unknown.test(answer)).length;
       console.log('[VOW] Clarification answers:', { answers, clean, unresolved });
-      if (clean.some((answer) => !answer)) {
-        setError('Please answer each follow-up question. If you are unsure, say so and VOW will account for that uncertainty.');
-        return;
-      }
-      if (unresolved === clean.length) {
-        setError('VOW needs at least one useful detail before it can build a responsible plan. Please replace “not sure” with what you know, or add context.');
-        return;
-      }
+      // Missing personal estimates are not blockers. Tell the planner to use a
+      // transparent, adjustable assumption rather than forcing users to guess.
       const goalId = await ensureDraft(domain);
       const { error: de } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
       if (de) throw de;
