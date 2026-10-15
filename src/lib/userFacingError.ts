@@ -26,6 +26,7 @@ const errorMap: Record<string, string> = {
   INVALID_GOAL_STATUS: 'This draft has changed and cannot be activated as-is. Reopen the draft and try again.',
   GOAL_NOT_FOUND: 'VOW could not find this draft. Refresh your goals and try again.',
   PLAN_REQUIRED: 'The generated plan was not saved completely. Rebuild the plan before confirming it.',
+  PLAN_QUALITY_REJECTED: 'VOW could not activate this plan because one or more steps are incomplete or too generic. Rebuild the plan with specific actions and measurable outcomes.',
   PLAN_DURATION_MISMATCH: 'The plan duration no longer matches your selection. Rebuild the plan and confirm again.',
   MILESTONE_COUNT_INVALID: 'VOW could not save the plan because it needs at least two clear milestones. Rebuild the plan.',
   PLAN_ITEM_COUNT_INVALID: 'VOW could not save the schedule. Rebuild the plan with sessions on your selected days.',
