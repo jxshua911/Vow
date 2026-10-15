@@ -33,6 +33,11 @@ export function UpgradePage() {
   const [manageState, setManageState] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [purchaseState, setPurchaseState] = useState('');
+  const monthlyPrice = 4.99;
+  const yearlyPrice = 40;
+  const monthlyAnnualTotal = monthlyPrice * 12;
+  const yearlySavings = Math.max(0, monthlyAnnualTotal - yearlyPrice);
+  const yearlySavingsPercent = Math.round((yearlySavings / monthlyAnnualTotal) * 100);
   const [products, setProducts] = useState<Array<{ identifier: string; price: number; priceString: string }>>([]);
   const isYearly = billing === 'yearly';
   const isPremium = usage?.plan === 'premium';
@@ -169,16 +174,16 @@ export function UpgradePage() {
           <div className="space-y-2.5">{freeBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
         <div className="relative border border-vow-ink rounded-xl p-5 pt-8">
-          {isYearly && <div className="absolute -top-3 right-3 z-10 rounded-full border border-vow-border bg-vow-ink px-3 py-1.5 text-center shadow-sm"><span className="block text-[11px] font-bold uppercase tracking-wide text-vow-bg">33% OFF</span></div>}
+          {isYearly && <div className="absolute -top-3 right-3 z-10 rounded-full border border-vow-border bg-vow-ink px-3 py-1.5 text-center shadow-sm" aria-label={`Save ${yearlySavings.toFixed(2)} per year, ${yearlySavingsPercent}% off`}><span className="block text-[11px] font-bold uppercase tracking-wide text-vow-bg">SAVE ${yearlySavings.toFixed(2)}</span><span className="block text-[10px] font-semibold uppercase tracking-wide text-vow-bg">{yearlySavingsPercent}% OFF</span></div>}
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
-          <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? '$39.99' : '$4.99'}</div>
+          <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? `${yearlyPrice.toFixed(0)}` : `${monthlyPrice.toFixed(2)}`}</div>
           <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
-        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">$4.99 / month</span></button>
-        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">$39.99 / year</span></button>
+        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">${monthlyPrice.toFixed(2)} / month</span></button>
+        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">${yearlyPrice.toFixed(0)} / year</span></button>
       </div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
