@@ -130,6 +130,55 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
 }
 
 
+/** Replace a session event without deleting the existing event until its replacement exists. */
+export async function replaceSessionInNativeCalendar(previous: Session, updated: Session): Promise<string | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  if (!await requestNativeCalendarAccess()) throw new Error('Calendar access was not granted.');
+
+  const calendarId = await getCalendarId();
+  const startDate = new Date(updated.scheduled_at).getTime();
+  const endDate = startDate + Math.max(15, updated.duration_minutes || 60) * 60_000;
+  const created = await CapacitorCalendar.createEvent({
+    calendarId,
+    title: nativeTitle(updated),
+    description: nativeDescription(updated),
+    startDate,
+    endDate,
+    alerts: [-15, 0],
+  });
+  if (!created.id) throw new Error('The replacement calendar event was not created.');
+
+  const storageKey = `${SYNCED_PREFIX}${previous.id}`;
+  const storedValue = localStorage.getItem(storageKey);
+  let oldEventId = storedValue && storedValue !== 'true' ? storedValue : null;
+
+  if (!oldEventId) {
+    const oldStart = new Date(previous.scheduled_at);
+    const events = await listNativeCalendarEvents(
+      new Date(oldStart.getTime() - 24 * 60 * 60 * 1000),
+      new Date(oldStart.getTime() + 24 * 60 * 60 * 1000),
+    );
+    const match = events.find((event) => {
+      if (event.summary !== nativeTitle(previous) && event.summary !== `VOW · ${previous.title}`) return false;
+      const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
+      return Number.isFinite(eventStart) && Math.abs(eventStart - oldStart.getTime()) < 60_000;
+    });
+    oldEventId = match?.id || null;
+  }
+
+  try {
+    if (oldEventId && oldEventId !== created.id) {
+      await CapacitorCalendar.deleteEvent({ id: oldEventId });
+    }
+  } catch (error) {
+    await CapacitorCalendar.deleteEvent({ id: created.id }).catch(() => undefined);
+    throw error;
+  }
+
+  markSynced(updated.id, created.id);
+  return created.id;
+}
+
 /** Remove the native event that belongs to a VOW session, including legacy synced events. */
 export async function deleteSessionFromNativeCalendar(session: Session): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
