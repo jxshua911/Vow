@@ -56,7 +56,6 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
 
   const arrowClass = 'h-7 w-9 border border-vow-border text-vow-muted hover:text-vow-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-vow-ink select-none';
   const valueClass = 'w-9 text-center text-lg font-medium tabular-nums text-vow-ink';
-  const colonClass = 'mt-7 self-start font-mono text-xl font-semibold leading-none text-vow-ink';
   const holdProps = (unit: 'hour' | 'minute', amount: number) => ({
     onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
@@ -71,21 +70,22 @@ export function TimeWheelPicker({ value, onChange, label = 'Session time' }: Tim
     },
   });
 
+  const { hour, minute } = parseTime(value);
+
   return (
-    <div className="inline-flex items-end gap-3" aria-label={label}>
-      <div className="flex flex-col items-center gap-1">
-        <button type="button" {...holdProps('hour', 1)} className={arrowClass} aria-label="Increase hour">↑</button>
-        <span className={valueClass} aria-label={`Hour ${parseTime(value).hour}`}>{String(parseTime(value).hour).padStart(2, '0')}</span>
-        <button type="button" {...holdProps('hour', -1)} className={arrowClass} aria-label="Decrease hour">↓</button>
-        <span className="text-[10px] uppercase tracking-wider text-vow-muted">Hour</span>
-      </div>
-      <span className={colonClass} aria-hidden="true">:</span>
-      <div className="flex flex-col items-center gap-1">
-        <button type="button" {...holdProps('minute', 1)} className={arrowClass} aria-label="Increase minute">↑</button>
-        <span className={valueClass} aria-label={`Minute ${parseTime(value).minute}`}>{String(parseTime(value).minute).padStart(2, '0')}</span>
-        <button type="button" {...holdProps('minute', -1)} className={arrowClass} aria-label="Decrease minute">↓</button>
-        <span className="text-[10px] uppercase tracking-wider text-vow-muted">Min</span>
-      </div>
+    <div className="inline-grid grid-cols-[2.25rem_auto_2.25rem] grid-rows-[1.75rem_2rem_1.75rem_auto] items-center gap-x-3 gap-y-1" aria-label={label}>
+      <button type="button" {...holdProps('hour', 1)} className={arrowClass} aria-label="Increase hour">↑</button>
+      <span aria-hidden="true" />
+      <button type="button" {...holdProps('minute', 1)} className={arrowClass} aria-label="Increase minute">↑</button>
+      <span className={valueClass} aria-label={`Hour ${hour}`}>{String(hour).padStart(2, '0')}</span>
+      <span className="self-center text-center font-mono text-xl font-semibold leading-none text-vow-ink" aria-hidden="true">:</span>
+      <span className={valueClass} aria-label={`Minute ${minute}`}>{String(minute).padStart(2, '0')}</span>
+      <button type="button" {...holdProps('hour', -1)} className={arrowClass} aria-label="Decrease hour">↓</button>
+      <span aria-hidden="true" />
+      <button type="button" {...holdProps('minute', -1)} className={arrowClass} aria-label="Decrease minute">↓</button>
+      <span className="text-[10px] uppercase tracking-wider text-vow-muted text-center">Hour</span>
+      <span aria-hidden="true" />
+      <span className="text-[10px] uppercase tracking-wider text-vow-muted text-center">Min</span>
     </div>
   );
 }
