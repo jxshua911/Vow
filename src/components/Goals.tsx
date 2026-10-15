@@ -315,7 +315,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       calendarSyncWarning = true;
       console.error('[VOW] Sessions merged but reminders could not be fully synchronized:', syncError);
     });
-    if (canSyncTargetCalendar && mergeRecord.target_external_event_id && navigator.onLine) {
+    if (canSyncTargetCalendar && mergeRecord.target_external_event_id && combinedScheduledAt && navigator.onLine) {
       const eventEnd = new Date(new Date(combinedScheduledAt).getTime() + savedCombinedDuration * 60_000).toISOString();
       const { error: calendarUpdateError } = await supabase.functions.invoke('google-calendar-events', {
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -443,7 +443,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
        alert('Could not delete goal. Please try again.');
        return;
     }
-    await Promise.all(sessions.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at).getTime() > Date.now()).map(s => cancelReminder(notificationId(s.id))));
+    await Promise.all(sessions.filter(s => s.status === 'scheduled' && Boolean(s.scheduled_at) && new Date(s.scheduled_at as string).getTime() > Date.now()).map(s => cancelReminder(notificationId(s.id))));
     onBack();
   }
   async function handlePause(context: string) {
