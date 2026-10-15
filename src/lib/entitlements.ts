@@ -1,7 +1,15 @@
 import { supabase } from '@/lib/supabase';
 
 const ENTITLEMENT_CACHE_KEY = 'vow:last-known-entitlement:';
-function cacheKey() { return ENTITLEMENT_CACHE_KEY + (typeof window !== 'undefined' ? window.localStorage.getItem('vow:auth-user-id') || 'current' : 'current'); }
+function cacheKey() {
+  if (typeof window === 'undefined') return ENTITLEMENT_CACHE_KEY + 'current';
+  try {
+    const authKey = Object.keys(window.localStorage).find((key) => key.startsWith('sb-') && key.endsWith('-auth-token'));
+    const session = authKey ? JSON.parse(window.localStorage.getItem(authKey) || 'null') : null;
+    const userId = session?.user?.id;
+    return ENTITLEMENT_CACHE_KEY + (typeof userId === 'string' ? userId : 'current');
+  } catch { return ENTITLEMENT_CACHE_KEY + 'current'; }
+}
 function readCachedEntitlement(): EntitlementSnapshot | null {
   if (typeof window === 'undefined') return null;
   try {
