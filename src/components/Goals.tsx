@@ -9,7 +9,7 @@ import { GoalAI } from './GoalAI';
 import { cancelReminder, notificationId, syncUpcomingSessionNotifications } from '@/lib/notifications';
 import { GoalResources } from './GoalResources';
 import { GoalReferenceList } from './GoalReferenceList';
-import { Plus, Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from '@/lib/ui-icons';
+import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Calendar, Clock } from '@/lib/ui-icons';
 
 export function GoalsPage() {
   const { session } = useAuth();
