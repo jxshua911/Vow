@@ -143,6 +143,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
   const [editDurationMinutes, setEditDurationMinutes] = useState('');
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [expandedMilestone, setExpandedMilestone] = useState<string | 'all' | null>(null);
+  const [, setShowAbandonModal] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [unansweredQuestions, setUnansweredQuestions] = useState<string[]>([]);
   const load = useCallback(async () => {
