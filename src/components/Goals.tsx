@@ -298,7 +298,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       ...target,
       notes: combinedNotes,
       scheduled_at: combinedScheduledAt,
-      duration_minutes: combinedDuration,
+      duration_minutes: mergeRecord.combined_duration_minutes,
       status: 'scheduled',
     } as Session;
     await syncUserUpcomingSessionNotifications(session.user.id).catch((syncError) => {
