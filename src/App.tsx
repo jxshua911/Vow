@@ -38,6 +38,7 @@ function SplashOverlay({ fadingOut }: { fadingOut: boolean }) { const { theme } 
 function AppContent() {
   const { session, loading } = useAuth();
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [accountSuspended, setAccountSuspended] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
@@ -251,6 +252,7 @@ function AppContent() {
         return;
       }
       if (data === false) {
+        setAccountSuspended(true);
         await cancelAllVowNotifications();
         await clearCloudPushRegistration();
         await supabase.auth.signOut({ scope: 'local' });
@@ -354,9 +356,9 @@ function AppContent() {
 
   let content: React.ReactNode;
   if (loading || (session && (settingsLoading || termsLoading))) content = <AppLoading />;
-  else if (!session) content = <AuthPage />;
+  else if (!session) content = <AuthPage suspended={accountSuspended} onSuspensionDismiss={() => setAccountSuspended(false)} />;
   else content = (
-    <ProtectedRoute fallback={<AuthPage />}>
+    <ProtectedRoute fallback={<AuthPage suspended={accountSuspended} onSuspensionDismiss={() => setAccountSuspended(false)} />}>
       {!termsAccepted ? (
         <TermsAcceptance userId={session.user.id} onAccepted={() => setTermsAccepted(true)} />
       ) : !settings || !settings.onboarding_complete ? (
