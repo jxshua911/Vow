@@ -262,12 +262,6 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     setMergeBusy(true);
     setActionError(null);
     const combinedScheduledAt = target.scheduled_at;
-    const combinedDuration = source.duration_minutes + target.duration_minutes;
-    if (combinedDuration > 1440) {
-      setActionError('These sessions together exceed VOW’s 24-hour session limit. Shorten one session before combining them.');
-      setMergeBusy(false);
-      return;
-    }
     let calendarSyncWarning = false;
     const mergeResult = await supabase.rpc('vow_merge_sessions', {
       p_source_session_id: source.id,
