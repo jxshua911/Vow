@@ -254,12 +254,20 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
   }
   async function mergeSessions(source: Session, target: Session) {
     if (!session || source.id === target.id || source.goal_id !== target.goal_id || mergeBusy) return;
-    if (!confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will use the earlier of the two scheduled times and the sum of their durations. This cannot be automatically undone.`)) return;
+    if (!confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will keep the chosen appointment time and add the durations together. This cannot be automatically undone.`)) return;
     setMergeBusy(true);
     setActionError(null);
     const combinedNotes = [...new Set([...(target.notes || '').split('\n'), ...(source.notes || '').split('\n')].map((line) => line.trim()).filter(Boolean))].join('\n');
-    const combinedScheduledAt = new Date(Math.min(new Date(source.scheduled_at).getTime(), new Date(target.scheduled_at).getTime())).toISOString();
+    const combinedScheduledAt = target.scheduled_at;
     const combinedDuration = Math.min(1440, source.duration_minutes + target.duration_minutes);
+    const sourceActionsResult = await supabase.from('session_actions').select('id').eq('session_id', source.id).eq('user_id', session.user.id);
+    if (sourceActionsResult.error) {
+      console.error('[VOW] Could not inspect source actions before merge:', sourceActionsResult.error);
+      setActionError('VOW could not verify the source actions. Neither session was changed.');
+      setMergeBusy(false);
+      return;
+    }
+    const sourceActionIds = (sourceActionsResult.data || []).map((action) => action.id);
     const targetUpdate = await supabase.from('sessions').update({
       notes: combinedNotes,
       scheduled_at: combinedScheduledAt,
@@ -292,7 +300,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     const sourceDelete = await supabase.from('sessions').delete().eq('id', source.id).eq('user_id', session.user.id);
     if (sourceDelete.error) {
       console.error('[VOW] Could not finish merged session:', sourceDelete.error);
-      await supabase.from('session_actions').update({ session_id: source.id, updated_at: new Date().toISOString() }).eq('session_id', target.id).eq('user_id', session.user.id);
+      if (sourceActionIds.length) await supabase.from('session_actions').update({ session_id: source.id, updated_at: new Date().toISOString() }).in('id', sourceActionIds).eq('user_id', session.user.id);
       await supabase.from('sessions').update({
         notes: target.notes,
         scheduled_at: target.scheduled_at,
