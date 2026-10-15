@@ -1116,7 +1116,7 @@ export function GoalPlanner({
                           onClick={() => void openPlanReference(item.video_url || videoSearch.url)}
                           className="text-sm text-vow-ink underline underline-offset-4"
                         >
-                          {item.video_url ? 'Watch the recommended session video' : 'Find videos for this session'}
+                          {item.video_url && !item.video_url.includes('/results?') ? 'Watch the recommended session video' : 'Find videos for this session'}
                         </button>
                       </div>
                     )}
