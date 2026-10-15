@@ -37,6 +37,7 @@ export function GoalReferenceList({ goalId }: { goalId: string }) {
   const [resources, setResources] = useState<Array<GoalResource & { displayUrl: string }>>([]);
   const [error, setError] = useState('');
   const [openError, setOpenError] = useState('');
+  const [showMore, setShowMore] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,22 +49,21 @@ export function GoalReferenceList({ goalId }: { goalId: string }) {
           .eq('goal_id', goalId)
           .order('created_at', { ascending: true });
         let rows = (data || []) as GoalResource[];
-        if (loadError || !rows.length) {
-          if (loadError) console.error('[VOW] Goal resource rows could not be loaded; trying the saved plan:', loadError);
-          const { data: goal, error: goalError } = await supabase
-            .from('goals')
-            .select('plan_json')
-            .eq('id', goalId)
-            .maybeSingle();
-          if (goalError) {
-            console.error('[VOW] Saved goal resources could not be loaded:', goalError);
-            throw loadError || goalError;
-          }
-          rows = referencesFromPlan(goal?.plan_json);
-          if (loadError && !rows.length) throw loadError;
-        }
+        if (loadError) console.error('[VOW] Goal resource rows could not be loaded; using saved plan references too:', loadError);
+        const { data: goal, error: goalError } = await supabase
+          .from('goals')
+          .select('plan_json')
+          .eq('id', goalId)
+          .maybeSingle();
+        if (goalError && loadError) throw loadError;
+        if (goalError) console.error('[VOW] Saved plan references could not be loaded:', goalError);
+        const planRows = referencesFromPlan(goal?.plan_json);
+        const merged = [...rows, ...planRows].filter((resource, index, all) =>
+          all.findIndex((candidate) => candidate.url === resource.url) === index
+        );
+        if (loadError && !merged.length) throw loadError;
         const next = await Promise.all(
-          rows.map(async (resource) => ({
+          merged.map(async (resource) => ({
             ...resource,
             displayUrl: await displayUrl(resource.url),
           }))
@@ -87,7 +87,7 @@ export function GoalReferenceList({ goalId }: { goalId: string }) {
       {error && <p role="alert" className="mb-4 border-l-2 border-vow-ink px-4 py-3 text-sm text-vow-muted">{error}</p>}
       {openError && <p role="alert" className="mb-4 border-l-2 border-vow-ink px-4 py-3 text-sm text-vow-muted">{openError}</p>}
       <div className="border-t border-vow-border">
-        {resources.map((resource) => (
+        {(showMore ? resources : resources.slice(0, 2)).map((resource) => (
           <div key={resource.id} className="flex gap-4 border-b border-vow-border py-4">
             <div className="w-20 shrink-0">
               {resource.displayUrl && resource.resource_type === 'image' ? (
@@ -121,6 +121,16 @@ export function GoalReferenceList({ goalId }: { goalId: string }) {
           </div>
         ))}
       </div>
+      {resources.length > 2 && (
+        <button
+          type="button"
+          onClick={() => setShowMore(current => !current)}
+          aria-expanded={showMore}
+          className="mt-3 text-xs text-vow-muted underline underline-offset-4 hover:text-vow-ink"
+        >
+          {showMore ? 'Show less' : `More · ${resources.length - 2} additional links`}
+        </button>
+      )}
     </section>
   );
 }
