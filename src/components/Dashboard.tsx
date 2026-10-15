@@ -47,7 +47,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const completedSessions = sessions.filter((s) => s.status === 'completed').length;
   const now = new Date();
   const planningLimit = Math.min(entitlement?.planning_limit ?? FREE_PLANNING_ACTION_LIMIT, FREE_PLANNING_ACTION_LIMIT);
-  const allUpcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled');
+  const allUpcoming = sessions.filter((s) => Boolean(s.scheduled_at) && new Date(s.scheduled_at as string) >= now && s.status === 'scheduled');
   const upcoming = allUpcoming.slice(0, 5);
   if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
 
