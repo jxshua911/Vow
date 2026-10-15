@@ -115,6 +115,7 @@ export function ReviewPage() {
       const settings = (settingsRes.data || null) as UserSettings | null;
 
       const weekSessions = allSessions.filter((s) => {
+        if (!s.scheduled_at) return false;
         const d = new Date(s.scheduled_at);
         return d >= start && d <= end;
       });
