@@ -334,7 +334,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
         body: { action: 'update', eventId: target.external_event_id, event: {
           start: { dateTime: combinedScheduledAt }, end: { dateTime: eventEnd },
           summary: `VOW · ${target.title}`,
-          description: combinedNotes + `\\n\\n${combinedDuration} minute combined commitment from VOW.`,
+          description: combinedNotes + `\n\n${combinedDuration} minute combined commitment from VOW.`,
         } },
       });
       if (calendarUpdateError) { calendarSyncWarning = true; console.error('[VOW] Sessions merged but Google Calendar target event could not be updated:', calendarUpdateError); }
@@ -407,10 +407,10 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
         body: { action: 'update', eventId: editingSession.external_event_id, event: {
           start: { dateTime: nextIso }, end: { dateTime: eventEnd },
           summary: `VOW · ${editingSession.title}`,
-          description: (editingSession.notes || editingSession.title) + `\\n\\n${nextDuration} minute commitment from VOW.`,
+          description: (editingSession.notes || editingSession.title) + `\n\n${nextDuration} minute commitment from VOW.`,
         } },
       });
-      if (calendarUpdateError) console.error('[VOW] Session moved in VOW but Google Calendar update failed:', calendarUpdateError);
+      if (calendarUpdateError) { console.error('[VOW] Session moved in VOW but Google Calendar update failed:', calendarUpdateError); setActionError('The session was rescheduled in VOW, but Google Calendar could not be updated. Reconnect Google Calendar and check the event.'); }
     }
     if (Capacitor.isNativePlatform()) {
       try {
@@ -419,6 +419,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
         await addSessionToNativeCalendar(updatedSession);
       } catch (calendarError) {
         console.error('[VOW] Session moved in VOW but phone-calendar sync failed:', calendarError);
+        setActionError('The session was rescheduled in VOW, but the phone-calendar event could not be updated. Check calendar permissions and the event.');
       }
     }
     if (dateChanged) {
