@@ -333,6 +333,7 @@ export function GoalPlanner({
   const [resourceError, setResourceError] = useState('');
   const [calendarConflicts, setCalendarConflicts] = useState<string[]>([]);
   const [expandedScheduleKey, setExpandedScheduleKey] = useState<string | null>(null);
+  const [showAllPlanReferences, setShowAllPlanReferences] = useState(false);
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
 
   useEffect(() => {
@@ -1142,39 +1143,33 @@ export function GoalPlanner({
             ))}
             <p className="text-sm text-vow-muted pt-4 border-t border-vow-border">{plan.progression}</p>
           </section>
-          {plan.references?.some(reference => isYoutubeUrl(reference.url)) && (
-            <section className="border border-vow-border p-5" aria-live="polite">
-              <p className="vow-label mb-1">Recommended YouTube videos</p>
-              <p className="mb-4 text-xs leading-5 text-vow-muted">These goal-specific video links are ready to open now; they do not depend on saving the goal first.</p>
-              {plan.references.filter(reference => isYoutubeUrl(reference.url)).map(reference => (
-                <button
-                  type="button"
-                  key={reference.url}
-                  onClick={() => void openPlanReference(reference.url)}
-                  className="mb-3 block text-left text-sm text-vow-ink underline underline-offset-4 last:mb-0"
-                >
-                  {reference.title || 'Open YouTube video'}
-                </button>
-              ))}
-            </section>
-          )}
-          {plan.references?.some(reference => !isYoutubeUrl(reference.url)) ? (
+          {(plan.references?.length || 0) > 0 && (
             <section className="border border-vow-border p-5">
-              <p className="vow-label mb-1">Other resources for this goal</p>
-              <p className="mb-4 text-xs leading-5 text-vow-muted">Trusted websites and apps VOW recommends for this goal. Open an app's website to learn more.</p>
-              {plan.references.filter(reference => !isYoutubeUrl(reference.url)).map(reference => (
+              <p className="vow-label mb-1">Helpful links</p>
+              <p className="mb-4 text-xs leading-5 text-vow-muted">A short list of useful resources for the overall goal. Session-specific videos stay inside each session.</p>
+              {(showAllPlanReferences ? (plan.references || []) : (plan.references || []).slice(0, 2)).map(reference => (
                 <button
                   type="button"
                   key={reference.url}
                   onClick={() => void openPlanReference(reference.url)}
-                  className="mb-3 block text-left text-sm text-vow-ink underline underline-offset-4 last:mb-0"
+                  className="mb-3 block max-w-full break-words text-left text-sm text-vow-ink underline underline-offset-4 last:mb-0"
                 >
-                  {reference.title || reference.url}
+                  {reference.title || (isYoutubeUrl(reference.url) ? 'Open YouTube resource' : reference.url)}
                 </button>
               ))}
+              {(plan.references || []).length > 2 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllPlanReferences(current => !current)}
+                  aria-expanded={showAllPlanReferences}
+                  className="mt-1 text-xs text-vow-muted underline underline-offset-4 hover:text-vow-ink"
+                >
+                  {showAllPlanReferences ? 'Show less' : `More · ${(plan.references || []).length - 2} additional links`}
+                </button>
+              )}
               {resourceError && <p role="alert" className="mt-3 text-xs text-vow-muted">{resourceError}</p>}
             </section>
-          ) : null}
+          )}
           {calendarConflicts.length > 0 && (
             <section className="border-l-2 border-amber-500 bg-vow-gray/10 p-4 space-y-3" role="alert">
               <p className="text-sm font-medium text-vow-ink">Possible calendar conflicts</p>
