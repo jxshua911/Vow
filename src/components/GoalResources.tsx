@@ -62,7 +62,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
       if (goalError) console.warn('[VOW] Could not load plan-level references:', goalError);
       const planJson = goalRow?.plan_json;
       const planReferences = planJson && typeof planJson === 'object' && !Array.isArray(planJson) && 'references' in planJson && Array.isArray(planJson.references)
-        ? planJson.references.flatMap((entry, index) => {
+        ? planJson.references.flatMap((entry: unknown, index: number) => {
             if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
             const urlValue = 'url' in entry && typeof entry.url === 'string' ? entry.url.trim() : '';
             if (!/^https:\/\//i.test(urlValue)) return [];
