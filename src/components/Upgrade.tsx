@@ -55,6 +55,7 @@ export function UpgradePage() {
     };
     window.addEventListener('vow:entitlement-changed', onEntitlementChanged);
     window.addEventListener('focus', refreshUsage);
+    window.addEventListener('online', refreshUsage);
     void getPremiumProducts().then((result) => {
       if (!active) return;
       setProducts((result.products || []).map((product) => ({
@@ -67,6 +68,7 @@ export function UpgradePage() {
       active = false;
       window.removeEventListener('vow:entitlement-changed', onEntitlementChanged);
       window.removeEventListener('focus', refreshUsage);
+      window.removeEventListener('online', refreshUsage);
     };
   }, []);
 
