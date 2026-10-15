@@ -261,7 +261,6 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     if (!confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will keep the chosen appointment time and add the durations together. This cannot be automatically undone.`)) return;
     setMergeBusy(true);
     setActionError(null);
-    const combinedNotes = [...new Set([...(target.notes || '').split('\n'), ...(source.notes || '').split('\n')].map((line) => line.trim()).filter(Boolean))].join('\n');
     const combinedScheduledAt = target.scheduled_at;
     const combinedDuration = source.duration_minutes + target.duration_minutes;
     if (combinedDuration > 1440) {
@@ -270,57 +269,27 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       return;
     }
     let calendarSyncWarning = false;
-    const sourceActionsResult = await supabase.from('session_actions').select('id').eq('session_id', source.id).eq('user_id', session.user.id);
-    if (sourceActionsResult.error) {
-      console.error('[VOW] Could not inspect source actions before merge:', sourceActionsResult.error);
-      setActionError('VOW could not verify the source actions. Neither session was changed.');
+    const mergeResult = await supabase.rpc('vow_merge_sessions', {
+      p_source_session_id: source.id,
+      p_target_session_id: target.id,
+    });
+    if (mergeResult.error || !mergeResult.data?.length) {
+      console.error('[VOW] Atomic session merge failed:', mergeResult.error);
+      const message = mergeResult.error?.message || 'No merge result was returned.';
+      setActionError(message.includes('24 hours')
+        ? 'These sessions together exceed VOW’s 24-hour session limit. Shorten one session before combining them.'
+        : 'VOW could not combine these sessions. Both sessions have been kept unchanged; please retry.');
       setMergeBusy(false);
       return;
     }
-    const sourceActionIds = (sourceActionsResult.data || []).map((action) => action.id);
-    const targetUpdate = await supabase.from('sessions').update({
-      notes: combinedNotes,
-      scheduled_at: combinedScheduledAt,
-      duration_minutes: combinedDuration,
-      updated_at: new Date().toISOString(),
-    }).eq('id', target.id).eq('user_id', session.user.id);
-    if (targetUpdate.error) {
-      console.error('[VOW] Could not prepare merged session:', targetUpdate.error);
-      setActionError('VOW could not prepare the combined session. Neither session was removed.');
-      setMergeBusy(false);
-      return;
-    }
-    const actionMove = await supabase.from('session_actions').update({
-      session_id: target.id,
-      goal_id: target.goal_id,
-      updated_at: new Date().toISOString(),
-    }).eq('session_id', source.id).eq('user_id', session.user.id);
-    if (actionMove.error) {
-      console.error('[VOW] Could not transfer session actions:', actionMove.error);
-      await supabase.from('sessions').update({
-        notes: target.notes,
-        scheduled_at: target.scheduled_at,
-        duration_minutes: target.duration_minutes,
-        updated_at: new Date().toISOString(),
-      }).eq('id', target.id).eq('user_id', session.user.id);
-      setActionError('VOW could not transfer the source actions. Both sessions have been kept; please retry.');
-      setMergeBusy(false);
-      return;
-    }
-    const sourceDelete = await supabase.from('sessions').delete().eq('id', source.id).eq('user_id', session.user.id);
-    if (sourceDelete.error) {
-      console.error('[VOW] Could not finish merged session:', sourceDelete.error);
-      if (sourceActionIds.length) await supabase.from('session_actions').update({ session_id: source.id, updated_at: new Date().toISOString() }).in('id', sourceActionIds).eq('user_id', session.user.id);
-      await supabase.from('sessions').update({
-        notes: target.notes,
-        scheduled_at: target.scheduled_at,
-        duration_minutes: target.duration_minutes,
-        updated_at: new Date().toISOString(),
-      }).eq('id', target.id).eq('user_id', session.user.id);
-      setActionError('VOW could not finish combining the sessions. Both sessions have been kept; please retry.');
-      setMergeBusy(false);
-      return;
-    }
+    const mergeRecord = mergeResult.data[0] as {
+      target_session_id: string;
+      combined_duration_minutes: number;
+      source_external_event_id: string | null;
+      target_external_event_id: string | null;
+      combined_notes: string | null;
+    };
+    const combinedNotes = mergeRecord.combined_notes || '';
     await cancelReminder(notificationId(source.id));
     await cancelReminder(notificationId(target.id));
     await cancelActionRemindersForSession(source.id).catch((error) => { calendarSyncWarning = true; console.error('[VOW] Could not cancel source action reminders:', error); });
@@ -336,11 +305,11 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       calendarSyncWarning = true;
       console.error('[VOW] Sessions merged but reminders could not be fully synchronized:', syncError);
     });
-    if (target.external_event_id && navigator.onLine) {
+    if (mergeRecord.target_external_event_id && navigator.onLine) {
       const eventEnd = new Date(new Date(combinedScheduledAt).getTime() + combinedDuration * 60_000).toISOString();
       const { error: calendarUpdateError } = await supabase.functions.invoke('google-calendar-events', {
         headers: { Authorization: `Bearer ${session.access_token}` },
-        body: { action: 'update', eventId: target.external_event_id, event: {
+        body: { action: 'update', eventId: mergeRecord.target_external_event_id, event: {
           start: { dateTime: combinedScheduledAt }, end: { dateTime: eventEnd },
           summary: `VOW · ${target.title}`,
           description: combinedNotes + `\n\n${combinedDuration} minute combined commitment from VOW.`,
@@ -365,10 +334,10 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
         console.error('[VOW] Merged sessions but source phone-calendar event may remain:', calendarError);
       }
     }
-    if (source.external_event_id && navigator.onLine) {
+    if (mergeRecord.source_external_event_id && navigator.onLine) {
       const { error: googleDeleteError } = await supabase.functions.invoke('google-calendar-events', {
         headers: { Authorization: `Bearer ${session.access_token}` },
-        body: { action: 'delete', eventId: source.external_event_id },
+        body: { action: 'delete', eventId: mergeRecord.source_external_event_id },
       });
       if (googleDeleteError) { calendarSyncWarning = true; console.error('[VOW] Merged sessions but source Google Calendar event may remain:', googleDeleteError); }
     }
