@@ -56,10 +56,14 @@ export type EntitlementResult = {
 export async function getEntitlementSnapshot(): Promise<EntitlementSnapshot | null> {
   const { data, error } = await supabase.rpc('vow_get_entitlement_snapshot');
   if (error) {
-    console.error('[VOW] Failed to load entitlement snapshot:', error);
-    return null;
+    console.warn('[VOW] Entitlement refresh failed; using the last verified snapshot when available:', error.message);
+    // This cached value is for continuity of the interface only. All protected
+    // actions remain server-authorized by vow_consume_entitlement.
+    return readCachedEntitlement();
   }
-  return data as EntitlementSnapshot;
+  const snapshot = data as EntitlementSnapshot | null;
+  if (snapshot && (snapshot.plan === 'free' || snapshot.plan === 'premium')) rememberEntitlement(snapshot);
+  return snapshot;
 }
 
 export async function refreshEntitlementSnapshot(): Promise<EntitlementSnapshot | null> {
