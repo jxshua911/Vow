@@ -80,15 +80,3 @@ CREATE INDEX IF NOT EXISTS idx_session_actions_goal_id
 CREATE INDEX IF NOT EXISTS idx_session_actions_scheduled_at
   ON session_actions(scheduled_at) WHERE scheduled_at IS NOT NULL;
 
-CREATE OR REPLACE FUNCTION set_session_actions_updated_at()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS session_actions_updated_at ON session_actions;
-CREATE TRIGGER session_actions_updated_at
-  BEFORE UPDATE ON session_actions
-  FOR EACH ROW EXECUTE FUNCTION set_session_actions_updated_at();
