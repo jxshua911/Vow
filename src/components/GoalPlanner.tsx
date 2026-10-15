@@ -917,7 +917,7 @@ export function GoalPlanner({
         );
         return {
           title: conciseSessionTitle(item.task, item.week),
-          scheduled_at: date.toISOString(),
+          scheduled_at: date?.toISOString() ?? null,
           duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
           status: 'scheduled',
           milestone_sort_order: milestoneIndex,
