@@ -47,12 +47,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const completedSessions = sessions.filter((s) => s.status === 'completed').length;
   const now = new Date();
   const planningLimit = Math.min(entitlement?.planning_limit ?? FREE_PLANNING_ACTION_LIMIT, FREE_PLANNING_ACTION_LIMIT);
-  const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 5);
+  const allUpcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled');
+  const upcoming = allUpcoming.slice(0, 5);
   if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
 
   return <div className="min-w-0 max-w-full overflow-x-clip">
     <PageHeader title={`Welcome back, ${displayName}`} subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`} />
-    <div className="grid min-w-0 grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-6 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="Sessions this week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} subtitle={`${completionPct}% completed`} /><StatCell label="Sessions completed" value={completedSessions} subtitle="All time" /><StatCell label="Upcoming sessions" value={upcoming.length} subtitle="Scheduled" /></div>
+    <div className="grid min-w-0 grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-6 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="Sessions this week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} subtitle={`${completionPct}% completed`} /><StatCell label="Sessions completed" value={completedSessions} subtitle="All time" /><StatCell label="Upcoming sessions" value={allUpcoming.length} subtitle="Scheduled" /></div>
     {entitlement?.plan !== 'premium' && <div className="grid grid-cols-2 gap-3 mb-6"><div className="border border-vow-border rounded-xl p-3"><p className="text-xs text-vow-muted mb-1">Planning actions</p><p className="text-lg font-medium text-vow-ink">{entitlement?.planning_used ?? 0}/{planningLimit ?? FREE_PLANNING_ACTION_LIMIT}</p><div className="h-1 bg-vow-surface mt-2 overflow-hidden"><div className="h-full bg-vow-ink" style={{ width: `${Math.min(100, Math.round(((entitlement?.planning_used ?? 0) / (planningLimit ?? FREE_PLANNING_ACTION_LIMIT)) * 100))}%` }} /></div></div><div className="border border-vow-border rounded-xl p-3"><p className="text-xs text-vow-muted mb-1">Weekly review</p><p className="text-lg font-medium text-vow-ink">{entitlement?.advanced_reviews_used ?? 0}/{entitlement?.advanced_reviews_limit ?? 1}</p></div></div>}
     <div className="grid min-w-0 md:grid-cols-2 gap-6 md:gap-12">
       <div>
