@@ -862,7 +862,7 @@ async function researchGoalFacts(goalTitle: string, why: string) {
     .replace(/&#x27;|&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
   const fetchJson = async (url: string) => {
     const controller = new AbortController();
@@ -926,21 +926,23 @@ async function researchGoalFacts(goalTitle: string, why: string) {
     return { source: "Wikipedia", title: pageTitle, summary: extract, url: pageUrl };
   }));
   sources.push(...summaries.filter((item): item is { source: string; title: string; summary: string; url: string } => Boolean(item)));
-  const webResults = [...webSearchHtml.matchAll(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi)]
-    .slice(0, 4)
-    .map((match) => {
-      let url = match[1].replace(/&amp;/g, "&");
-      const redirected = /[?&]uddg=([^&]+)/.exec(url);
-      if (redirected) {
-        try { url = decodeURIComponent(redirected[1]); } catch { /* Keep the original URL if decoding fails. */ }
-      }
-      const titleText = cleanHtml(match[2]).slice(0, 180);
-      const snippetMatch = new RegExp('<(?:a|div)[^>]*class="result__snippet"[^>]*>([\\\\s\\\\S]*?)</(?:a|div)>', "i").exec(webSearchHtml.slice(match.index, match.index + 5000));
-      const summary = snippetMatch ? cleanHtml(snippetMatch[1]).slice(0, 700) : "";
-      if (!/^https?:\\/\\//i.test(url) || !titleText || !summary) return null;
-      return { source: "Web search", title: titleText, summary, url };
-    })
-    .filter((item): item is { source: string; title: string; summary: string; url: string } => Boolean(item));
+  const webResults: Array<{ source: string; title: string; summary: string; url: string }> = [];
+  const resultPattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = resultPattern.exec(webSearchHtml)) && webResults.length < 4) {
+    let url = match[1].replace(/&amp;/g, "&");
+    const redirected = /[?&]uddg=([^&]+)/.exec(url);
+    if (redirected) {
+      try { url = decodeURIComponent(redirected[1]); } catch { /* Keep original URL if decoding fails. */ }
+    }
+    const titleText = cleanHtml(match[2]).slice(0, 180);
+    const tail = webSearchHtml.slice(match.index, match.index + 5000);
+    const snippetMatch = /<(?:a|div)[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/i.exec(tail);
+    const summary = snippetMatch ? cleanHtml(snippetMatch[1]).slice(0, 700) : "";
+    if (/^https?:\/\//i.test(url) && titleText && summary) {
+      webResults.push({ source: "Web search", title: titleText, summary, url });
+    }
+  }
   sources.push(...webResults);
   const products = Array.isArray((foodData as any)?.products) ? (foodData as any).products.slice(0, 3) : [];
   for (const product of products) {
