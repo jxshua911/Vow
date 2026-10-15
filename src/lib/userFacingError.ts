@@ -1,6 +1,8 @@
 const errorMap: Record<string, string> = {
   UNAUTHORIZED: 'Please sign in again to continue.',
   PURCHASE_TOKEN_MISSING: 'Google Play did not return a purchase token. Your purchase was not confirmed.',
+  PLAY_STORE_UNAVAILABLE: 'Google Play Billing could not connect. This does not mean your VOW Premium access is missing; check that Google Play Store is available on this device and try again.',
+  PLAY_STORE_RESTORE_FAILED: 'Google Play could not restore purchases right now. Your VOW account access has not been changed. Please try again later.',
   PURCHASE_VERIFICATION_FAILED: 'We could not verify the purchase with Google Play. Your Premium access has not been changed.',
   PURCHASE_ACCOUNT_MISMATCH: 'This purchase is linked to a different VOW account. Sign in with the account that originally made the purchase.',
   PURCHASE_ALREADY_LINKED: 'This purchase is already linked to another VOW account.',
