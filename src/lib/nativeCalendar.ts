@@ -110,7 +110,7 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
     }
 
     if (storedEventId) {
-      const startDate = new Date(session.scheduled_at);
+      const startDate = new Date(session.scheduled_at || '');
       const from = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
       const to = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
       const existing = (await listNativeCalendarEvents(from, to)).find((event) => event.id === storedEventId);
