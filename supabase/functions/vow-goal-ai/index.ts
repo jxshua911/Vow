@@ -1144,7 +1144,13 @@ Deno.serve(async (req) => {
         { error: "Please include what you would like help with." },
         400
       );
-    const wait = await cooldown(uid, kind);
+    // A goal-plan response may itself request clarification. Let the user answer
+    // that follow-up immediately instead of making the next legitimate planning
+    // step fail the same 30-second cooldown. The initial request still uses the
+    // normal cooldown; concurrency and entitlement guardrails remain in force.
+    const wait = mode === "goal-plan" && p?.is_followup === true
+      ? 0
+      : await cooldown(uid, kind);
     if (wait)
       return json(
         {
