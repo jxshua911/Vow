@@ -72,10 +72,19 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     const handleEntitlementChange = (event: Event) => {
       setEntitlement((event as CustomEvent<EntitlementSnapshot | null>).detail ?? null);
     };
+    const refreshEntitlement = () => {
+      void getEntitlementSnapshot().then((snapshot) => {
+        if (active) setEntitlement(snapshot);
+      });
+    };
     window.addEventListener('vow:entitlement-changed', handleEntitlementChange);
+    window.addEventListener('online', refreshEntitlement);
+    window.addEventListener('focus', refreshEntitlement);
     return () => {
       active = false;
       window.removeEventListener('vow:entitlement-changed', handleEntitlementChange);
+      window.removeEventListener('online', refreshEntitlement);
+      window.removeEventListener('focus', refreshEntitlement);
     };
   }, []);
 
