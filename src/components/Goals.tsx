@@ -220,7 +220,18 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
   }
 
   async function deleteSession(sess: Session) {
-    if (!session || !confirm('Delete this session from VOW and remove its linked phone-calendar event?')) return;
+    if (!session || !confirm('Delete this session from VOW and remove its linked Google/phone-calendar events?')) return;
+    if (sess.external_event_id && navigator.onLine) {
+      const { error: googleDeleteError } = await supabase.functions.invoke('google-calendar-events', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: { action: 'delete', eventId: sess.external_event_id },
+      });
+      if (googleDeleteError) {
+        console.error('[VOW] Could not delete linked Google Calendar event:', googleDeleteError);
+        alert('VOW could not remove the linked Google Calendar event, so the session was kept. Reconnect Google Calendar and try again.');
+        return;
+      }
+    }
     const { error } = await supabase.from('sessions').delete().eq('id', sess.id).eq('user_id', session.user.id);
     if (error) {
       console.error('[VOW] Could not delete session:', error);
