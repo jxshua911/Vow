@@ -11,10 +11,10 @@ function nativeTitle(session: Session): string {
   return `VOW · ${shortTitle}`;
 }
 function nativeDescription(session: Session): string {
-  const lines = (session.notes || '').split('\\n');
+  const lines = (session.notes || '').split('\n');
   const task = lines.find((line) => line.startsWith('Task: '))?.slice(6) || session.title;
-  const steps = lines.filter((line) => /^Step \\d+: /.test(line)).map((line) => line.replace(/^Step \\d+: /, ''));
-  return [task, ...steps.map((step, index) => `${index + 1}. ${step}`), `${session.duration_minutes} min commitment created from VOW.`].join('\\n');
+  const steps = lines.filter((line) => /^Step \d+: /.test(line)).map((line) => line.replace(/^Step \d+: /, ''));
+  return [task, ...steps.map((step, index) => `${index + 1}. ${step}`), `${session.duration_minutes} min commitment created from VOW.`].join('\n');
 }
 
 export async function requestNativeCalendarAccess(): Promise<boolean> {
