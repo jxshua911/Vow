@@ -64,7 +64,7 @@ export function detectPatterns(
       patterns.push({
         type: 'calendar_conflict',
         description: `Multiple sessions missed on ${new Date(dateKey).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}`,
-        evidence: bucket.map((s) => `${s.title} at ${new Date(s.scheduled_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`),
+        evidence: bucket.map((s) => `${s.title} at ${new Date(s.scheduled_at || '').toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`),
         hypothesis: `That day may have had competing commitments. Packing sessions on already-busy days tends to fail.`,
         proposed_adjustment: `Spread sessions across lighter days instead of stacking them on one.`,
       });
