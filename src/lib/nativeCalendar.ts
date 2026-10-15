@@ -8,7 +8,7 @@ function isSynced(sessionId: string): boolean { return Boolean(localStorage.getI
 function markSynced(sessionId: string, eventId: string): void { localStorage.setItem(`${SYNCED_PREFIX}${sessionId}`, eventId); }
 function nativeTitle(session: Session): string {
   if (session.title.startsWith('Practice ·') || session.title.includes(' · W')) return `VOW · ${session.title}`;
-  const lines = (session.notes || '').split('\\n');
+  const lines = (session.notes || '').split('\n');
   const task = lines.find((line) => line.startsWith('Task: '))?.slice(6) || session.title;
   const compact = task.trim().replace(/^(practice|practise|work on|complete|perform|train|study|review)\s+/i, '').split(/\s+/).slice(0, 5).join(' ').replace(/[.,:;]+$/, '');
   return `VOW · ${(compact || 'Practice').slice(0, 40)}`;
