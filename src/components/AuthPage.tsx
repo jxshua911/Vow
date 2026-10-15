@@ -10,6 +10,7 @@ import { userFacingError } from '@/lib/userFacingError';
 import { AccountSuspendedPage } from './AccountSuspendedPage';
 
 type AuthMode = 'signin' | 'signup'; type AuthMethod = 'options' | 'email';
+type AuthPageProps = { suspended?: boolean; onSuspensionDismiss?: () => void };
 async function isPasswordCompromised(password: string): Promise<boolean> {
   const data = new TextEncoder().encode(password); const digest = await crypto.subtle.digest('SHA-1', data);
   const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -17,7 +18,7 @@ async function isPasswordCompromised(password: string): Promise<boolean> {
   if (!response.ok) throw new Error('Password safety check failed');
   const suffix = hash.slice(5); return (await response.text()).split('\n').some((line) => line.trim().toUpperCase().startsWith(suffix + ':'));
 }
-export function AuthPage() {
+export function AuthPage({ suspended: accountSuspended = false, onSuspensionDismiss }: AuthPageProps) {
   const [mode, setMode] = useState<AuthMode>('signup'); const [method, setMethod] = useState<AuthMethod>('options');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false); const [suspended, setSuspended] = useState(false);
 
@@ -58,7 +59,7 @@ export function AuthPage() {
   } catch (err) { handleAuthError(err); } }
   return <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12"><div className="w-full max-w-sm">
     <div className="text-center mb-10"><BrandLogo className="mx-auto w-28 h-auto mb-6" /><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
-    {suspended ? <AccountSuspendedPage onBack={() => { setSuspended(false); setLoading(false); setError(null); setMethod('options'); }} /> : method === 'options' ? <div className="space-y-4">
+    {(accountSuspended || suspended) ? <AccountSuspendedPage onBack={() => { setSuspended(false); onSuspensionDismiss?.(); setLoading(false); setError(null); setMethod('options'); }} /> : method === 'options' ? <div className="space-y-4">
       <button type="button" onClick={handleGoogle} disabled={loading} className="w-full flex items-center justify-center gap-3 border border-vow-border bg-vow-surface py-3.5 text-sm font-medium text-vow-ink hover:bg-vow-border transition-colors disabled:opacity-40"><GoogleIcon className="w-5 h-5" /> Continue with Google</button>
       <div className="flex items-center gap-4"><div className="h-px flex-1 bg-vow-border" /><span className="text-xs text-vow-muted">or</span><div className="h-px flex-1 bg-vow-border" /></div>
       <button type="button" onClick={() => { setError(null); setMessage(''); setMethod('email'); }} className="w-full flex items-center justify-center gap-3 border border-vow-border bg-vow-surface py-3.5 text-sm font-medium text-vow-ink hover:bg-vow-border transition-opacity"><Mail className="w-5 h-5 shrink-0" /> Continue with Email</button>
