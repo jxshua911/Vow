@@ -56,7 +56,8 @@ export function fromDateString(value: string): Date {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-export function formatTime(dt: string): string {
+export function formatTime(dt: string | null): string {
+  if (!dt) return 'No time set';
   return new Date(dt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
@@ -69,7 +70,8 @@ export function formatDateLong(dt: string): string {
   return new Date(dt).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-export function formatRelative(dt: string): string {
+export function formatRelative(dt: string | null): string {
+  if (!dt) return 'Unscheduled';
   const now = new Date();
   const target = new Date(dt);
   const diffMs = target.getTime() - now.getTime();
@@ -84,7 +86,8 @@ export function formatRelative(dt: string): string {
   return formatDate(dt);
 }
 
-export function isThisWeek(dt: string): boolean {
+export function isThisWeek(dt: string | null): boolean {
+  if (!dt) return false;
   const { start, end } = weekRange();
   const target = new Date(dt);
   return target >= start && target <= end;
@@ -94,11 +97,13 @@ export function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-export function dayName(dt: string): string {
+export function dayName(dt: string | null): string {
+  if (!dt) return 'Unscheduled';
   return new Date(dt).toLocaleDateString([], { weekday: 'long' });
 }
 
-export function timeOfDay(dt: string): 'morning' | 'afternoon' | 'evening' {
+export function timeOfDay(dt: string | null): 'morning' | 'afternoon' | 'evening' | 'unscheduled' {
+  if (!dt) return 'unscheduled';
   const h = new Date(dt).getHours();
   if (h < 12) return 'morning';
   if (h < 17) return 'afternoon';
