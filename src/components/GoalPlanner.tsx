@@ -1103,16 +1103,20 @@ export function GoalPlanner({
                           <p className="text-sm leading-6 text-vow-ink">{item.purpose || item.task}</p>
                         </div>
                         <div>
+                          <p className="vow-label mb-1">Step-by-step session</p>
+                          {item.substeps?.length ? <ol className="list-decimal pl-5 space-y-2">{item.substeps.map((step, stepIndex) => <li key={stepIndex} className="text-sm leading-6 text-vow-ink">{step}</li>)}</ol> : <p className="text-sm leading-6 text-vow-muted">Follow the session task in order, then record the result.</p>}
+                        </div>
+                        <div>
                           <p className="vow-label mb-1">How to measure it</p>
                           <p className="text-sm leading-6 text-vow-muted">{item.target_metric || 'Complete the session and record what you practised.'}</p>
                         </div>
                         <p className="text-xs text-vow-muted">Planned time: {item.preferred_time} · {item.duration_minutes} minutes</p>
                         <button
                           type="button"
-                          onClick={() => void openPlanReference(videoSearch.url)}
+                          onClick={() => void openPlanReference(item.video_url || videoSearch.url)}
                           className="text-sm text-vow-ink underline underline-offset-4"
                         >
-                          Find videos for this session
+                          {item.video_url ? 'Watch the recommended session video' : 'Find videos for this session'}
                         </button>
                       </div>
                     )}
