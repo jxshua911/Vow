@@ -139,6 +139,11 @@ function isYoutubeUrl(value: string): boolean {
     return false;
   }
 }
+function conciseSessionTitle(task: string, week: number): string {
+  const compact = task.trim().replace(/^(practice|practise|work on|complete|perform|train|study|review)\\s+/i, '').split(/\\s+/).slice(0, 5).join(' ').replace(/[.,:;]+$/, '');
+  const readable = compact ? compact.charAt(0).toUpperCase() + compact.slice(1) : 'Practice';
+  return `${readable.slice(0, 36)} · W${week}`;
+}
 function youtubeSearchReference(goalText: string, goalType: string): PlanReference {
   const query = [goalType, goalText, 'guide'].filter(Boolean).join(' ');
   return {
@@ -906,7 +911,7 @@ export function GoalPlanner({
           Math.max(0, plan.milestones.length - 1)
         );
         return {
-          title: `Practice · W${item.week} · ${item.day.slice(0, 3)}`,
+          title: conciseSessionTitle(item.task, item.week),
           scheduled_at: date.toISOString(),
           duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
           status: 'scheduled',
