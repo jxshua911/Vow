@@ -206,7 +206,7 @@ function normalizePlan(
       purpose: String(item?.purpose ?? '').trim().slice(0, 300),
       target_metric: String(item?.target_metric ?? '').trim().slice(0, 120),
       duration_minutes: Math.max(5, Math.min(240, Math.round(Number(item?.duration_minutes) || 30))),
-      preferred_time: String(item?.preferred_time ?? '09:00').trim().slice(0, 8),
+      preferred_time: /^\d{1,2}:\d{2}$/.test(String(item?.preferred_time ?? '')) ? String(item.preferred_time).trim().slice(0, 8) : null,
       video_url: (() => { const url = String(item?.video_url ?? '').trim().slice(0, 1000); return isYoutubeUrl(url) ? url : ''; })(),
       substeps: Array.isArray(item?.substeps) ? item.substeps.map((step: unknown) => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 12) : [],
     }))
@@ -848,7 +848,7 @@ export function GoalPlanner({
 
       // Only inspect the device calendar when the user has already opted into
       // calendar sync; do not trigger a surprise permission prompt during planning.
-      if (!ignoreCalendarConflicts && Capacitor.isNativePlatform() && localStorage.getItem('vow:native-calendar-sync') === 'true') {
+      if (!ignoreCalendarConflicts && scheduleTimesEnabled && Capacitor.isNativePlatform() && localStorage.getItem('vow:native-calendar-sync') === 'true') {
         const rangeEnd = addDays(start, (selectedDurationWeeks || 1) * 7);
         let events: NativeCalendarEvent[];
         try {
@@ -861,7 +861,7 @@ export function GoalPlanner({
         }
         const conflicts: string[] = [];
         for (const item of filteredItems) {
-          const sessionStart = buildDate(item.week, item.day, item.preferred_time).getTime();
+          const sessionStart = buildDate(item.week, item.day, item.preferred_time || currentLocalTime()).getTime();
           const sessionEnd = sessionStart + Math.max(5, Number(item.duration_minutes) || 30) * 60_000;
           const collision = events.find((event) => {
             if (event.summary.startsWith('VOW ·')) return false;
@@ -910,7 +910,7 @@ export function GoalPlanner({
       });
 
       const sessionRows = filteredItems.map(item => {
-        const date = buildDate(item.week, item.day, item.preferred_time);
+        const date = scheduleTimesEnabled ? buildDate(item.week, item.day, item.preferred_time || currentLocalTime()) : null;
         const milestoneIndex = Math.min(
           Math.max(0, Math.floor(((item.week - 1) / Math.max(1, selectedDurationWeeks || 1)) * plan.milestones.length)),
           Math.max(0, plan.milestones.length - 1)
@@ -1120,7 +1120,7 @@ export function GoalPlanner({
                           <p className="vow-label mb-1">How to measure it</p>
                           <p className="text-sm leading-6 text-vow-muted">{item.target_metric || 'Complete the session and record what you practised.'}</p>
                         </div>
-                        <p className="text-xs text-vow-muted">Planned time: {item.preferred_time} · {item.duration_minutes} minutes</p>
+                        <p className="text-xs text-vow-muted">{item.preferred_time ? `Planned time: ${item.preferred_time} · ` : 'Day-based session · '}{item.duration_minutes} minutes</p>
                         <button
                           type="button"
                           onClick={() => void openPlanReference(item.video_url || videoSearch.url)}
