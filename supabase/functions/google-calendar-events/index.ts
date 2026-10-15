@@ -179,6 +179,19 @@ serve(async (req) => {
       });
     }
 
+    if (action === "delete") {
+      const eventId = typeof body.eventId === "string" ? body.eventId.trim() : "";
+      if (!eventId || eventId.length > 1024 || /[\\/]/.test(eventId)) return json({ error: "Invalid calendar event ID" }, 400);
+      const response = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (response.status === 404 || response.status === 410 || response.ok) return json({ deleted: true });
+      if (response.status === 401) return json({ error: "Google Calendar authorization is no longer valid. Please reconnect Google Calendar.", code: "REAUTH_REQUIRED" }, 401);
+      const errorBody = await response.json().catch(() => ({}));
+      return json({ error: errorBody?.error?.message || "Could not delete the Google Calendar event." }, response.status);
+    }
+
     if (action === "create") {
       const rawEvent = body.event;
       if (!rawEvent || typeof rawEvent !== "object" || Array.isArray(rawEvent)) return json({ error: "Missing event" }, 400);
