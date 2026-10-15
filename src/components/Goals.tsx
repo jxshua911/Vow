@@ -261,7 +261,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     if (!confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will keep the chosen appointment time and add the durations together. This cannot be automatically undone.`)) return;
     setMergeBusy(true);
     setActionError(null);
-    const combinedScheduledAt = target.scheduled_at;
+    let combinedScheduledAt = target.scheduled_at;
     let calendarSyncWarning = false;
     const mergeResult = await supabase.rpc('vow_merge_sessions', {
       p_source_session_id: source.id,
@@ -285,12 +285,26 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     };
     const combinedNotes = mergeRecord.combined_notes || '';
     const savedCombinedDuration = mergeRecord.combined_duration_minutes;
+    const { data: latestTarget, error: latestTargetError } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', mergeRecord.target_session_id)
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+    if (latestTargetError || !latestTarget) {
+      calendarSyncWarning = true;
+      console.error('[VOW] Sessions merged, but the saved target could not be reloaded for calendar sync:', latestTargetError);
+    } else {
+      combinedScheduledAt = (latestTarget as Session).scheduled_at;
+    }
+    const mergedTitle = (latestTarget as Session | null)?.title || target.title;
     await cancelReminder(notificationId(source.id));
     await cancelReminder(notificationId(target.id));
     await cancelActionRemindersForSession(source.id).catch((error) => { calendarSyncWarning = true; console.error('[VOW] Could not cancel source action reminders:', error); });
-    await syncSessionActionReminders(target.id, target.title).catch((error) => { calendarSyncWarning = true; console.error('[VOW] Could not resync combined action reminders:', error); });
+    await syncSessionActionReminders(target.id, mergedTitle).catch((error) => { calendarSyncWarning = true; console.error('[VOW] Could not resync combined action reminders:', error); });
     const combinedSession = {
       ...target,
+      ...(latestTarget as Session | null),
       notes: combinedNotes,
       scheduled_at: combinedScheduledAt,
       duration_minutes: savedCombinedDuration,
@@ -306,7 +320,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: { action: 'update', eventId: mergeRecord.target_external_event_id, event: {
           start: { dateTime: combinedScheduledAt }, end: { dateTime: eventEnd },
-          summary: `VOW · ${target.title}`,
+          summary: `VOW · ${mergedTitle}`,
           description: combinedNotes + `\n\n${savedCombinedDuration} minute combined commitment from VOW.`,
         } },
       });
