@@ -257,7 +257,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     if (!confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will use the earlier of the two scheduled times and the sum of their durations. This cannot be automatically undone.`)) return;
     setMergeBusy(true);
     setActionError(null);
-    const combinedNotes = [...new Set([...(target.notes || '').split('\\n'), ...(source.notes || '').split('\\n')].map((line) => line.trim()).filter(Boolean))].join('\\n');
+    const combinedNotes = [...new Set([...(target.notes || '').split('\n'), ...(source.notes || '').split('\n')].map((line) => line.trim()).filter(Boolean))].join('\n');
     const combinedScheduledAt = new Date(Math.min(new Date(source.scheduled_at).getTime(), new Date(target.scheduled_at).getTime())).toISOString();
     const combinedDuration = Math.min(1440, source.duration_minutes + target.duration_minutes);
     const targetUpdate = await supabase.from('sessions').update({
