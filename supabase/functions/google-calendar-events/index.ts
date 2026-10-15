@@ -192,6 +192,27 @@ serve(async (req) => {
       return json({ error: errorBody?.error?.message || "Could not delete the Google Calendar event." }, response.status);
     }
 
+    if (action === "update") {
+      const eventId = typeof body.eventId === "string" ? body.eventId.trim() : "";
+      const rawEvent = body.event;
+      if (!eventId || eventId.length > 1024 || /[\\/]/.test(eventId)) return json({ error: "Invalid calendar event ID" }, 400);
+      if (!rawEvent || typeof rawEvent !== "object" || Array.isArray(rawEvent)) return json({ error: "Missing event" }, 400);
+      const eventJson = JSON.stringify(rawEvent);
+      if (eventJson.length > 60000) return json({ error: "Event payload is too large" }, 400);
+      const response = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: eventJson,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) return json({ error: "Google Calendar authorization is no longer valid. Please reconnect Google Calendar.", code: "REAUTH_REQUIRED" }, 401);
+        if (response.status === 404 || response.status === 410) return json({ error: "The linked Google Calendar event no longer exists." }, 404);
+        return json({ error: data?.error?.message || "Could not update the Google Calendar event." }, response.status);
+      }
+      return json({ event: data, updated: true });
+    }
+
     if (action === "create") {
       const rawEvent = body.event;
       if (!rawEvent || typeof rawEvent !== "object" || Array.isArray(rawEvent)) return json({ error: "Missing event" }, 400);
