@@ -15,7 +15,7 @@ export function SupportPage({ onBack, onLegal }: Props) {
     const text = message.trim(); if (!text) { setStatus('error'); return; }
     setStatus('sending');
     try {
-      const { data: result, error } = await supabase.functions.invoke('vow-support', { body: { name: name.trim(), issue: reason, message: text } });
+      const { data: result, error } = await supabase.functions.invoke('vow-support', { body: { name: name.trim(), email: email.trim(), issue: reason, message: text } });
       if (error) throw error;
       if (result?.persisted !== true) { setStatus('error'); return; }
       setMessage(''); setStatus(result.accepted === true ? 'success' : result.delivery_configured === false ? 'unconfigured' : 'stored');
