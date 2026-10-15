@@ -56,13 +56,13 @@ begin
     raise exception 'Combined session exceeds 24 hours' using errcode = '22023';
   end if;
 
-  select string_agg(line, E'\n' order by first_seen)
+  select string_agg(line, chr(10) order by first_seen)
   into v_notes
   from (
     select line, min(ord) as first_seen
     from (
       select btrim(line) as line, ord
-      from regexp_split_to_table(coalesce(v_target.notes, '') || E'\n' || coalesce(v_source.notes, ''), E'\n')
+      from regexp_split_to_table(coalesce(v_target.notes, '') || chr(10) || coalesce(v_source.notes, ''), chr(10))
         with ordinality as split(line, ord)
       where btrim(line) <> ''
     ) all_lines
