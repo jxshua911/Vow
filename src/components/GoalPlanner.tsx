@@ -329,6 +329,9 @@ export function GoalPlanner({
   const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
   const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
   const missingSessionTimes = availableDays.filter((day) => !sessionTimes[day]);
+  const previewDomain = rawInput.trim().length >= 3
+    ? analyseGoalForEvidence({ title: rawInput.trim(), outcome: rawInput.trim(), why_it_matters: why.trim() || null })
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -1262,7 +1265,7 @@ export function GoalPlanner({
         {rawInput.trim().length >= 3 && (
           <div className="border border-vow-border p-4 space-y-1">
             <p className="text-xs text-vow-muted uppercase tracking-wider">
-              Goal type · {domain?.goal_type ?? 'General'}
+              Goal type · {domain?.goal_type ?? previewDomain?.goal_type ?? 'Not identified yet'}
             </p>
             <p className="text-sm text-vow-ink">VOW is shaping the plan around this goal type and your available time.</p>
           </div>
