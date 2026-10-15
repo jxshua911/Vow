@@ -148,25 +148,25 @@ export async function replaceSessionInNativeCalendar(previous: Session, updated:
   });
   if (!created.id) throw new Error('The replacement calendar event was not created.');
 
-  const storageKey = `${SYNCED_PREFIX}${previous.id}`;
-  const storedValue = localStorage.getItem(storageKey);
-  let oldEventId = storedValue && storedValue !== 'true' ? storedValue : null;
-
-  if (!oldEventId) {
-    const oldStart = new Date(previous.scheduled_at);
-    const events = await listNativeCalendarEvents(
-      new Date(oldStart.getTime() - 24 * 60 * 60 * 1000),
-      new Date(oldStart.getTime() + 24 * 60 * 60 * 1000),
-    );
-    const match = events.find((event) => {
-      if (event.summary !== nativeTitle(previous) && event.summary !== `VOW · ${previous.title}`) return false;
-      const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
-      return Number.isFinite(eventStart) && Math.abs(eventStart - oldStart.getTime()) < 60_000;
-    });
-    oldEventId = match?.id || null;
-  }
-
   try {
+    const storageKey = `${SYNCED_PREFIX}${previous.id}`;
+    const storedValue = localStorage.getItem(storageKey);
+    let oldEventId = storedValue && storedValue !== 'true' ? storedValue : null;
+
+    if (!oldEventId) {
+      const oldStart = new Date(previous.scheduled_at);
+      const events = await listNativeCalendarEvents(
+        new Date(oldStart.getTime() - 24 * 60 * 60 * 1000),
+        new Date(oldStart.getTime() + 24 * 60 * 60 * 1000),
+      );
+      const match = events.find((event) => {
+        if (event.summary !== nativeTitle(previous) && event.summary !== `VOW · ${previous.title}`) return false;
+        const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
+        return Number.isFinite(eventStart) && Math.abs(eventStart - oldStart.getTime()) < 60_000;
+      });
+      oldEventId = match?.id || null;
+    }
+
     if (oldEventId && oldEventId !== created.id) {
       await CapacitorCalendar.deleteEvent({ id: oldEventId });
     }
