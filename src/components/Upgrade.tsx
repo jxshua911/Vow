@@ -174,87 +174,9 @@ export function UpgradePage() {
           <div className="space-y-2.5">{freeBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
         <div className="relative border border-vow-ink rounded-xl p-5 pt-8">
-          {isYearly && <div className="absolute -top-3 right-3 z-10 rounded-full border border-vow-border bg-vow-ink px-3 py-1.5 text-center shadow-sm" aria-label={`Save ${yearlySavings.toFixed(2)} per year, ${yearlySavingsPercent}% off`}><span className="block text-[11px] font-bold uppercase tracking-wide text-vow-bg">SAVE ${yearlySavings.toFixed(2)}</span><span className="block text-[10px] font-semibold uppercase tracking-wide text-vow-bg">{yearlySavingsPercent}% OFF</span></div>}
+          {isYearly && <div className="absolute -top-3 right-3 z-10 rounded-full border border-vow-border bg-vow-ink px-3 py-1.5 text-center shadow-sm" aria-label={`Save $${yearlySavings.toFixed(2)} per year, ${yearlySavingsPercent}% off`}><span className="block text-[11px] font-bold uppercase tracking-wide text-vow-bg">SAVE ${yearlySavings.toFixed(2)}</span><span className="block text-[10px] font-semibold uppercase tracking-wide text-vow-bg">{yearlySavingsPercent}% OFF</span></div>}
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
           <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? '$' + yearlyPrice.toFixed(0) : '$' + monthlyPrice.toFixed(2)}</div>
-          <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
-          <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
-        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">${monthlyPrice.toFixed(2)} / month</span></button>
-        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">${yearlyPrice.toFixed(0)} / year</span></button>
-      </div>
-      {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
-        <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
-        <p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.</p>
-        <button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button>
-      </div>}
-      {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
-        <p className="text-sm font-medium text-vow-ink">Premium is active</p>
-        <p className="text-xs text-vow-muted mt-1">Manage or cancel your subscription through Google Play.</p>
-        <button type="button" onClick={() => setConfirmCancel(true)} className="vow-btn-ghost mt-4">Manage or cancel subscription</button>
-      </div>}
-      <div className="flex flex-col sm:flex-row gap-3 mt-4">
-        <button type="button" onClick={handleRestore} className="vow-btn-soft">Restore purchase</button>
-      </div>
-      {restoreState && <p role="status" className="text-xs text-vow-muted mt-3">{restoreState}</p>}
-      {purchaseState && <p role="status" className="text-xs text-vow-muted mt-3">{purchaseState}</p>}
-      {manageState && <p role="alert" className="text-xs text-vow-muted mt-3">{manageState}</p>}
-    </section>
-
-    <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-8"><p className="vow-label mb-3">What you unlock</p><h2 className="vow-heading text-xl text-vow-ink mb-4">More support as your goals grow.</h2><div className="grid sm:grid-cols-2 gap-3">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><span aria-hidden="true">✓</span><span>{benefit}</span></div>)}</div></section>
-    <section className="border-t border-vow-border pt-7"><p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Built for real goals</p><p className="text-sm text-vow-muted leading-relaxed max-w-2xl">Run a 10K. Make ravioli. Learn Spanish. Build a robot. Pass your exams. Launch an app. VOW is about the planning intelligence underneath the goal — not the category itself.</p></section>
-
-    {confirmCancel && <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-premium-title">
-      <div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full rounded-xl">
-        <h2 id="cancel-premium-title" className="vow-heading text-xl text-vow-ink mb-2">Are you sure you want to cancel Premium?</h2>
-        <p className="text-sm text-vow-muted leading-relaxed mb-6">Google Play will handle the cancellation. You can keep your Premium access for the current billing period, subject to Google Play's subscription rules.</p>
-        <div className="flex gap-3"><button type="button" onClick={() => setConfirmCancel(false)} className="vow-btn-ghost flex-1">Keep Premium</button><button type="button" onClick={() => { setConfirmCancel(false); void handleManage(); }} className="vow-btn-primary flex-1">Continue to Google Play</button></div>
-      </div>
-    </div>}
-  </div>;
-}
- + yearlyPrice.toFixed(0) : '</div>
-          <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
-          <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
-        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">${monthlyPrice.toFixed(2)} / month</span></button>
-        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">${yearlyPrice.toFixed(0)} / year</span></button>
-      </div>
-      {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
-        <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
-        <p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.</p>
-        <button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button>
-      </div>}
-      {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
-        <p className="text-sm font-medium text-vow-ink">Premium is active</p>
-        <p className="text-xs text-vow-muted mt-1">Manage or cancel your subscription through Google Play.</p>
-        <button type="button" onClick={() => setConfirmCancel(true)} className="vow-btn-ghost mt-4">Manage or cancel subscription</button>
-      </div>}
-      <div className="flex flex-col sm:flex-row gap-3 mt-4">
-        <button type="button" onClick={handleRestore} className="vow-btn-soft">Restore purchase</button>
-      </div>
-      {restoreState && <p role="status" className="text-xs text-vow-muted mt-3">{restoreState}</p>}
-      {purchaseState && <p role="status" className="text-xs text-vow-muted mt-3">{purchaseState}</p>}
-      {manageState && <p role="alert" className="text-xs text-vow-muted mt-3">{manageState}</p>}
-    </section>
-
-    <section className="border border-vow-border bg-vow-bg rounded-2xl p-5 md:p-6 mb-8"><p className="vow-label mb-3">What you unlock</p><h2 className="vow-heading text-xl text-vow-ink mb-4">More support as your goals grow.</h2><div className="grid sm:grid-cols-2 gap-3">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><span aria-hidden="true">✓</span><span>{benefit}</span></div>)}</div></section>
-    <section className="border-t border-vow-border pt-7"><p className="text-xs uppercase tracking-[0.18em] text-vow-muted mb-3">Built for real goals</p><p className="text-sm text-vow-muted leading-relaxed max-w-2xl">Run a 10K. Make ravioli. Learn Spanish. Build a robot. Pass your exams. Launch an app. VOW is about the planning intelligence underneath the goal — not the category itself.</p></section>
-
-    {confirmCancel && <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-premium-title">
-      <div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full rounded-xl">
-        <h2 id="cancel-premium-title" className="vow-heading text-xl text-vow-ink mb-2">Are you sure you want to cancel Premium?</h2>
-        <p className="text-sm text-vow-muted leading-relaxed mb-6">Google Play will handle the cancellation. You can keep your Premium access for the current billing period, subject to Google Play's subscription rules.</p>
-        <div className="flex gap-3"><button type="button" onClick={() => setConfirmCancel(false)} className="vow-btn-ghost flex-1">Keep Premium</button><button type="button" onClick={() => { setConfirmCancel(false); void handleManage(); }} className="vow-btn-primary flex-1">Continue to Google Play</button></div>
-      </div>
-    </div>}
-  </div>;
-}
- + monthlyPrice.toFixed(2)}</div>
           <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
