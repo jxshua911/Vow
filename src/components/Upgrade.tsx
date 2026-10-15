@@ -131,7 +131,13 @@ export function UpgradePage() {
           {premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-ink"><span aria-hidden="true">✓</span><span>{benefit}</span></div>)}
         </div>
       </section>
-      <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'dashboard' }))} className="vow-btn-primary">Go to your dashboard →</button>
+      <div className="flex flex-wrap gap-3">
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'dashboard' }))} className="vow-btn-primary">Go to your dashboard →</button>
+        <button type="button" onClick={() => void handleManage()} className="vow-btn-soft">Manage subscription</button>
+        <button type="button" onClick={() => void handleRestore()} className="vow-btn-ghost">Restore purchase</button>
+      </div>
+      <p className="text-xs text-vow-muted mt-3">To cancel a Google Play subscription, open subscription management and cancel it there. Removing VOW from your device does not cancel a subscription.</p>
+      {manageState && <p role="status" className="text-xs text-vow-muted mt-3">{manageState}</p>}
       {restoreState && <p role="status" className="text-xs text-vow-muted mt-3">{restoreState}</p>}
     </div>;
   }
