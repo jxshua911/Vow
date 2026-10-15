@@ -290,6 +290,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       combined_notes: string | null;
     };
     const combinedNotes = mergeRecord.combined_notes || '';
+    const savedCombinedDuration = mergeRecord.combined_duration_minutes;
     await cancelReminder(notificationId(source.id));
     await cancelReminder(notificationId(target.id));
     await cancelActionRemindersForSession(source.id).catch((error) => { calendarSyncWarning = true; console.error('[VOW] Could not cancel source action reminders:', error); });
@@ -298,7 +299,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       ...target,
       notes: combinedNotes,
       scheduled_at: combinedScheduledAt,
-      duration_minutes: mergeRecord.combined_duration_minutes,
+      duration_minutes: savedCombinedDuration,
       status: 'scheduled',
     } as Session;
     await syncUserUpcomingSessionNotifications(session.user.id).catch((syncError) => {
@@ -306,13 +307,13 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       console.error('[VOW] Sessions merged but reminders could not be fully synchronized:', syncError);
     });
     if (mergeRecord.target_external_event_id && navigator.onLine) {
-      const eventEnd = new Date(new Date(combinedScheduledAt).getTime() + combinedDuration * 60_000).toISOString();
+      const eventEnd = new Date(new Date(combinedScheduledAt).getTime() + savedCombinedDuration * 60_000).toISOString();
       const { error: calendarUpdateError } = await supabase.functions.invoke('google-calendar-events', {
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: { action: 'update', eventId: mergeRecord.target_external_event_id, event: {
           start: { dateTime: combinedScheduledAt }, end: { dateTime: eventEnd },
           summary: `VOW · ${target.title}`,
-          description: combinedNotes + `\n\n${combinedDuration} minute combined commitment from VOW.`,
+          description: combinedNotes + `\n\n${savedCombinedDuration} minute combined commitment from VOW.`,
         } },
       });
       if (calendarUpdateError) { calendarSyncWarning = true; console.error('[VOW] Sessions merged but Google Calendar target event could not be updated:', calendarUpdateError); }
