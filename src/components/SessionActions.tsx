@@ -115,6 +115,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       console.error('[VOW] Could not save action completion:', updateError);
       setError('Completion could not be saved. Please try again.');
     } else {
+      if (nextStatus === 'completed') await cancelReminder(notificationId(action.id));
       setActions((existing) => existing.map((item) => item.id === action.id ? { ...item, status: nextStatus, completed_at: nextStatus === 'completed' ? new Date().toISOString() : null } : item));
     }
     setBusyId(null);
