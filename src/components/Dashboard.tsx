@@ -44,18 +44,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const thisWeekSessions = sessions.filter((s) => isThisWeek(s.scheduled_at));
   const completedThisWeek = thisWeekSessions.filter((s) => s.status === 'completed');
   const completionPct = thisWeekSessions.length > 0 ? Math.round((completedThisWeek.length / thisWeekSessions.length) * 100) : 0;
-  const completedDayKeys = new Set(sessions.filter((s) => s.status === 'completed').map((s) => new Date(s.scheduled_at).toDateString()));
-  let streak = 0;
-  for (let i = 0; i < 365; i++) {
-    const day = new Date();
-    day.setDate(day.getDate() - i);
-    if (completedDayKeys.has(day.toDateString())) streak++;
-    else if (i > 0 || !completedDayKeys.has(day.toDateString())) {
-      // today may have no completed session yet without breaking the streak
-      if (i === 0) continue;
-      break;
-    }
-  }
+  const completedSessions = sessions.filter((s) => s.status === 'completed').length;
   const now = new Date();
   const planningLimit = Math.min(entitlement?.planning_limit ?? FREE_PLANNING_ACTION_LIMIT, FREE_PLANNING_ACTION_LIMIT);
   const upcoming = sessions.filter((s) => new Date(s.scheduled_at) >= now && s.status === 'scheduled').slice(0, 5);
@@ -63,7 +52,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   return <div>
     <PageHeader title={`Welcome back, ${displayName}`} subtitle={`${dayName(new Date().toISOString())} — ${new Date().toLocaleDateString([], { month: 'long', day: 'numeric' })}`} />
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-6 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="Weekly follow-through" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} subtitle={`${completionPct}% completed`} /><StatCell label="Current streak" value={streak} subtitle={streak === 0 ? 'No completed day yet' : 'Consecutive days'} /><StatCell label="Upcoming sessions" value={upcoming.length} subtitle="Scheduled" /></div>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-vow-border mb-6 border border-vow-border"><StatCell label="Active goals" value={activeGoals.length} /><StatCell label="Sessions this week" value={`${completedThisWeek.length}/${thisWeekSessions.length}`} subtitle={`${completionPct}% completed`} /><StatCell label="Sessions completed" value={completedSessions} subtitle="All time" /><StatCell label="Upcoming sessions" value={upcoming.length} subtitle="Scheduled" /></div>
     {entitlement?.plan !== 'premium' && <div className="grid grid-cols-2 gap-3 mb-6"><div className="border border-vow-border rounded-xl p-3"><p className="text-xs text-vow-muted mb-1">Planning actions</p><p className="text-lg font-medium text-vow-ink">{entitlement?.planning_used ?? 0}/{planningLimit ?? FREE_PLANNING_ACTION_LIMIT}</p><div className="h-1 bg-vow-surface mt-2 overflow-hidden"><div className="h-full bg-vow-ink" style={{ width: `${Math.min(100, Math.round(((entitlement?.planning_used ?? 0) / (planningLimit ?? FREE_PLANNING_ACTION_LIMIT)) * 100))}%` }} /></div></div><div className="border border-vow-border rounded-xl p-3"><p className="text-xs text-vow-muted mb-1">Weekly review</p><p className="text-lg font-medium text-vow-ink">{entitlement?.advanced_reviews_used ?? 0}/{entitlement?.advanced_reviews_limit ?? 1}</p></div></div>}
     <div className="grid md:grid-cols-2 gap-12">
       <div>
