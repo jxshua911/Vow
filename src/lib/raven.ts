@@ -61,11 +61,12 @@ function weekEnd(start: Date) {
 }
 
 export function buildRavenWeeks(sessions: Session[], now = new Date()): RavenWeek[] {
-  const relevant = sessions.filter((s) => new Date(s.scheduled_at) <= now);
+  const relevant = sessions.filter((s) => Boolean(s.scheduled_at) && new Date(s.scheduled_at as string) <= now);
   if (!relevant.length) return [];
 
   const buckets = new Map<string, RavenWeek>();
   for (const session of relevant) {
+    if (!session.scheduled_at) continue;
     const start = monday(new Date(session.scheduled_at));
     const key = isoDate(start);
     const current = buckets.get(key) || {
@@ -92,8 +93,8 @@ export function buildRavenWeeks(sessions: Session[], now = new Date()): RavenWee
 export function calculateStreaks(sessions: Session[], now = new Date()) {
   const completedDays = new Set(
     sessions
-      .filter((s) => s.status === 'completed' && new Date(s.scheduled_at) <= now)
-      .map((s) => isoDate(new Date(s.scheduled_at))),
+      .filter((s) => s.status === 'completed' && Boolean(s.scheduled_at) && new Date(s.scheduled_at as string) <= now)
+      .map((s) => isoDate(new Date(s.scheduled_at as string))),
   );
   const days = [...completedDays].sort();
   if (!days.length) return { current: 0, best: 0 };
@@ -126,8 +127,8 @@ export function calculateStreaks(sessions: Session[], now = new Date()) {
 }
 
 export function calculateRavenSnapshot(sessions: Session[], previousSnapshot?: RavenSnapshot | null, now = new Date()): RavenSnapshot {
-  const completed = sessions.filter((s) => s.status === 'completed' && new Date(s.scheduled_at) <= now).length;
-  const observed = sessions.filter((s) => new Date(s.scheduled_at) <= now).length;
+  const completed = sessions.filter((s) => s.status === 'completed').length;
+  const observed = sessions.filter((s) => s.scheduled_at ? new Date(s.scheduled_at) <= now : s.status === 'completed' || s.status === 'skipped' || s.status === 'moved').length;
   const weeks = buildRavenWeeks(sessions, now);
   const recent = weeks.slice(-8);
   const currentWeek = weeks[weeks.length - 1] || null;
