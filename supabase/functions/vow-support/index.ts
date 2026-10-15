@@ -60,7 +60,7 @@ Deno.serve(async (request) => {
   const { data: submission, error: insertError } = await admin.from('support_submissions').insert({ user_id: user.id, name, email, issue, message, delivery_status: 'pending' }).select('id, created_at').single();
   if (insertError || !submission) {
     console.error('[VOW Support] Support submission insert failed; no email was sent.');
-    return json({ persisted: false, error: 'We couldn\\'t submit your request. Please try again.' }, 500);
+    return json({ persisted: false, error: "We couldn't submit your request. Please try again." }, 500);
   }
   const recordDelivery = async (values: Record<string, unknown>) => {
     const { error } = await admin.from('support_submissions').update(values).eq('id', submission.id);
@@ -91,7 +91,6 @@ Deno.serve(async (request) => {
       console.error('[VOW Support] Email provider rejected support notification:', response.status);
       const recorded = await recordDelivery({ delivery_status: 'failed', delivery_error: `Resend HTTP ${response.status}` });
       return json({ accepted: false, persisted: true, delivery_status: recorded ? 'failed' : 'unknown', delivery_configured: true, status_recorded: recorded });
-      return json({ accepted: false, persisted: true, delivery_status: 'failed', delivery_configured: true });
     }
     const deliveryId = typeof providerResult?.id === 'string' ? providerResult.id.trim() : '';
     if (!deliveryId) {
