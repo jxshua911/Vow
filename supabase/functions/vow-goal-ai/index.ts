@@ -840,6 +840,30 @@ async function researchGoalFacts(goalTitle: string, why: string) {
   const title = str(goalTitle, 300);
   if (!title) return [];
   const sources: Array<{ source: string; title: string; summary: string; url: string }> = [];
+  const fetchText = async (url: string, timeoutMs = 2500) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: "text/html", "User-Agent": "VOW-AI/1.0 (goal planning research)" },
+        signal: controller.signal,
+      });
+      return response.ok ? await response.text() : "";
+    } catch {
+      return "";
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const cleanHtml = (value: string) => value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\\s+/g, " ")
+    .trim();
   const fetchJson = async (url: string) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000);
@@ -871,7 +895,11 @@ async function researchGoalFacts(goalTitle: string, why: string) {
   jobs.push(isNutritionGoal && foodQuery
     ? fetchJson("https://world.openfoodfacts.org/cgi/search.pl?search_terms=" + encodeURIComponent(foodQuery) + "&search_simple=1&action=process&json=1&page_size=3&fields=product_name,brands,nutriments,code")
     : Promise.resolve(null));
-  const [bookData, wikiData, foodData] = await Promise.all(jobs);
+  const searchTerms = title.replace(/^\\s*(?:i want to|i want|want to|save up to|save for|buy|purchase|learn about|learn|train for|prepare for)\\s+/i, "").trim();
+  const webSearchPromise = searchTerms
+    ? fetchText("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(searchTerms + " price specifications guide"))
+    : Promise.resolve("");
+  const [bookData, wikiData, foodData, webSearchHtml] = await Promise.all([...jobs, webSearchPromise]);
   const docs = Array.isArray((bookData as any)?.docs) ? (bookData as any).docs.slice(0, 3) : [];
   for (const doc of docs) {
     const bookTitle = str(doc?.title, 180);
@@ -898,6 +926,22 @@ async function researchGoalFacts(goalTitle: string, why: string) {
     return { source: "Wikipedia", title: pageTitle, summary: extract, url: pageUrl };
   }));
   sources.push(...summaries.filter((item): item is { source: string; title: string; summary: string; url: string } => Boolean(item)));
+  const webResults = [...webSearchHtml.matchAll(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi)]
+    .slice(0, 4)
+    .map((match) => {
+      let url = match[1].replace(/&amp;/g, "&");
+      const redirected = /[?&]uddg=([^&]+)/.exec(url);
+      if (redirected) {
+        try { url = decodeURIComponent(redirected[1]); } catch { /* Keep the original URL if decoding fails. */ }
+      }
+      const titleText = cleanHtml(match[2]).slice(0, 180);
+      const snippetMatch = new RegExp('<(?:a|div)[^>]*class="result__snippet"[^>]*>([\\\\s\\\\S]*?)</(?:a|div)>', "i").exec(webSearchHtml.slice(match.index, match.index + 5000));
+      const summary = snippetMatch ? cleanHtml(snippetMatch[1]).slice(0, 700) : "";
+      if (!/^https?:\\/\\//i.test(url) || !titleText || !summary) return null;
+      return { source: "Web search", title: titleText, summary, url };
+    })
+    .filter((item): item is { source: string; title: string; summary: string; url: string } => Boolean(item));
+  sources.push(...webResults);
   const products = Array.isArray((foodData as any)?.products) ? (foodData as any).products.slice(0, 3) : [];
   for (const product of products) {
     const productName = str(product?.product_name, 140);
