@@ -895,9 +895,11 @@ async function researchGoalFacts(goalTitle: string, why: string) {
   jobs.push(isNutritionGoal && foodQuery
     ? fetchJson("https://world.openfoodfacts.org/cgi/search.pl?search_terms=" + encodeURIComponent(foodQuery) + "&search_simple=1&action=process&json=1&page_size=3&fields=product_name,brands,nutriments,code")
     : Promise.resolve(null));
-  const searchTerms = title.replace(/^\\s*(?:i want to|i want|want to|save up to|save for|buy|purchase|learn about|learn|train for|prepare for)\\s+/i, "").trim();
+  const searchTerms = title.replace(/^\s*(?:i want to|i want|want to|save up to buy|save up for|save up to|save for|buy|purchase|learn about|learn|train for|prepare for)\s+/i, "").replace(/^(?:a|an|the)\s+/i, "").trim();
+  const isPurchaseGoal = /\b(?:buy|purchase|save up|price|cost|budget|202[0-9])\b/i.test(title + " " + why);
+  const researchSuffix = isPurchaseGoal ? " current price cost market value" : " authoritative guide beginner steps";
   const webSearchPromise = searchTerms
-    ? fetchText("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(searchTerms + " price specifications guide"))
+    ? fetchText("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(searchTerms + researchSuffix))
     : Promise.resolve("");
   const [bookData, wikiData, foodData, webSearchHtml] = await Promise.all([...jobs, webSearchPromise]);
   const docs = Array.isArray((bookData as any)?.docs) ? (bookData as any).docs.slice(0, 3) : [];
