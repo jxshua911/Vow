@@ -836,6 +836,65 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
     await releaseGuardrail(req, requestId);
   }
 }
+async function researchGoalFacts(goalTitle: string, why: string) {
+  const title = str(goalTitle, 300);
+  if (!title) return [];
+  const sources: Array<{ source: string; title: string; summary: string; url: string }> = [];
+  const fetchJson = async (url: string) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4500);
+    try {
+      const response = await fetch(url, {
+        headers: { "Accept": "application/json", "User-Agent": "VOW-AI/1.0 (goal planning research)" },
+        signal: controller.signal,
+      });
+      if (!response.ok) return null;
+      return await response.json().catch(() => null);
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const bookQuery = title.replace(/^.*?\b(?:read|finish|study|summarize|summarise)\s+(?:the\s+)?/i, "").trim();
+  if (/\b(read|book|novel|chapter|pages|atomic habits|monk who sold|monk with a ferrari)\b/i.test(title + " " + why) && bookQuery) {
+    const data = await fetchJson("https://openlibrary.org/search.json?title=" + encodeURIComponent(bookQuery) + "&limit=3&fields=title,author_name,first_publish_year,number_of_pages_median,key");
+    const docs = Array.isArray(data?.docs) ? data.docs.slice(0, 3) : [];
+    for (const doc of docs) {
+      const bookTitle = str(doc?.title, 180);
+      if (!bookTitle) continue;
+      const authors = Array.isArray(doc?.author_name) ? doc.author_name.slice(0, 3).map((x: unknown) => str(x, 80)).filter(Boolean) : [];
+      const facts = [
+        authors.length ? "Author(s): " + authors.join(", ") : "",
+        doc?.first_publish_year ? "First publication year: " + String(doc.first_publish_year) : "",
+        doc?.number_of_pages_median ? "Catalogue median page count: " + String(doc.number_of_pages_median) + " pages (edition-dependent estimate)" : "",
+      ].filter(Boolean);
+      sources.push({ source: "Open Library", title: bookTitle, summary: facts.join("; ") || "Catalogue record found; page count may vary by edition.", url: "https://openlibrary.org" + str(doc?.key, 160) });
+    }
+  }
+  const query = title.replace(/^\s*(?:i want to|i want|want to|learn about|learn|read|study|train for|prepare for)\s+/i, "").trim();
+  if (query) {
+    const search = await fetchJson("https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(query) + "&format=json&utf8=1&srlimit=3");
+    const hits = Array.isArray(search?.query?.search) ? search.query.search.slice(0, 3) : [];
+    for (const hit of hits) {
+      const pageTitle = str(hit?.title, 180);
+      if (!pageTitle) continue;
+      const summary = await fetchJson("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(pageTitle.replace(/ /g, "_")));
+      const extract = str(summary?.extract, 900);
+      if (!extract) continue;
+      const pageUrl = typeof summary?.content_urls?.desktop?.page === "string" ? summary.content_urls.desktop.page : "https://en.wikipedia.org/wiki/" + encodeURIComponent(pageTitle.replace(/ /g, "_"));
+      sources.push({ source: "Wikipedia", title: pageTitle, summary: extract, url: pageUrl });
+    }
+  }
+  const seen = new Set<string>();
+  return sources.filter((item) => {
+    const key = item.source + "|" + item.title;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 5);
+}
+
 function meaningfulTokens(text: string) {
   return new Set(
     text
@@ -1161,6 +1220,9 @@ Deno.serve(async (req) => {
       (domain?.needs_ai_research === true ||
         detectAmbiguousTerms(message) ||
         detectAmbiguousTerms(g?.outcome || ""));
+    const research = mode === "goal-plan"
+      ? await researchGoalFacts(str(g?.title || g?.outcome, 300), str(g?.why_it_matters, 500))
+      : [];
     const context = {
       goal: {
         title: str(g?.title || g?.outcome, 300),
@@ -1177,6 +1239,7 @@ Deno.serve(async (req) => {
       previousGoals: userGoals || [],
       journalEntries: userJournal || [],
       knowledge,
+      research,
     };
     console.log("[VOW AI] Initial domain.category:", domain?.category);
     let fallbackCategory = domain?.category;
@@ -1299,7 +1362,7 @@ Deno.serve(async (req) => {
       const planMessages = [
             {
               role: "system",
-              content: `You are VOW's expert planning and research engine. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base, domain profile, previous goals, and recent journal context are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. If AI research is required, you MUST perform at least one web_search before selecting or finalising the specialist domain; do not guess what an abbreviation, event, competition, slang term, or specialist phrase means. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. If a required input is genuinely missing, return JSON with clarification_needed:true and questions instead of a generic plan. Use previous goals and recent journal entries as personal context when relevant, but never expose unrelated private details or assume that past goals must continue. Never fill missing personal context with boilerplate. Verify resource URLs with web_search: when suitable, include one direct, genuinely relevant YouTube video and one authoritative website for this exact goal and level. Do not invent titles or URLs; omit an unavailable resource rather than fabricate it. The app may add clearly labelled YouTube searches and app suggestions separately. Duration (${w} weeks) and available days (${ds.join(
+              content: `You are VOW's expert planning and research engine. Use the supplied research results and cite their URLs in references when relevant. Treat catalogue page counts as edition-dependent estimates. If a public lookup is unavailable, proceed with a transparent assumption rather than pretending research happened. Never make the user supply facts that can reasonably be looked up, and never block a plan because the user cannot know a precise measurement in advance. For unknown personal baselines, choose a safe, adjustable starting estimate or include a short baseline-measuring activity in the first session. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base, domain profile, previous goals, and recent journal context are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. Use the supplied research results when available. If a specialist term remains ambiguous after lookup, avoid unsupported claims and build a cautious plan around the user's stated meaning or ask one concise clarification only when the ambiguity materially changes the plan. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. Only return clarification_needed:true when a genuinely essential personal choice or safety constraint makes planning inappropriate without an answer. Do not ask for searchable public facts, product/book specifications, nutrition labels, exact future performance, or measurements the user cannot reasonably know. Use assumptions and mark them clearly in assumptions[]. Use previous goals and recent journal entries as personal context when relevant, but never expose unrelated private details or assume that past goals must continue. Never fill missing personal context with boilerplate. Verify resource URLs with web_search: when suitable, include one direct, genuinely relevant YouTube video and one authoritative website for this exact goal and level. Do not invent titles or URLs; omit an unavailable resource rather than fabricate it. The app may add clearly labelled YouTube searches and app suggestions separately. Duration (${w} weeks) and available days (${ds.join(
                 ", "
               )}) are HARD constraints. Follow-up answers are HARD personal context. Domain profile: ${JSON.stringify(domain)}. Return ONLY JSON with outcome, success_metric, baseline, assumptions, milestones (2-8 objects with title,description,week), weekly_session_templates (one object per week, each containing week and sessions; sessions must contain one concrete, distinct session for each selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), session_templates (fallback template per selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), weekly_focus (exactly one string per week), progression, checkpoints (3-8), risks (3-8), fallback_rules (2-6), summary, references (0-4 objects with url,title,resource_type). Make the plan genuinely domain-specific. Do not invent specialist claims when the knowledge/research does not support them. Each week's sessions must advance that week's focus rather than repeating the same task. Sessions must be concrete enough that the user can execute them without guessing what "work on it" means. For skill-based physical activities, specify named drills and sub-steps, sets and repetitions or rounds, rest periods where appropriate, technique cues, and a clear finish condition. For beginner martial arts, progress from stance, balance, footwork and basic techniques to controlled combinations; prioritise qualified instructor feedback and supervised practice, never prescribe unsupervised sparring or guarantee formal belt readiness by a deadline. For cooking goals, specify actual recipe actions such as preparing ingredients, boiling and timing pasta, simmering sauce, tasting, or plating instead of vague cooking tasks. Every week must meaningfully progress toward the outcome.`,
             },
