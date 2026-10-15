@@ -847,7 +847,8 @@ export function GoalPlanner({
 
       const milestoneRows = plan.milestones.map((m, i) => ({
         title: m.title,
-        description: m.description,
+        description: m.description || `Make measurable progress toward “${rawInput.trim()}” during week ${m.week}.`,
+        week: Math.max(1, Math.min(selectedDurationWeeks || 1, Number(m.week) || 1)),
         sort_order: i,
         deadline: deadlineFor(start, Math.min(selectedDurationWeeks || 1, Math.max(1, m.week))),
         status: i === 0 ? 'in_progress' : 'pending',
@@ -855,15 +856,16 @@ export function GoalPlanner({
 
       const planItemRows = filteredItems.map(item => {
         const date = buildDate(item.week, item.day, item.preferred_time);
+        const duration = Math.max(5, Number(item.duration_minutes) || 30);
         return {
           plan_version: 1,
           week_number: Math.max(1, Math.min(selectedDurationWeeks || 1, item.week)),
           day_of_week: item.day,
           scheduled_at: date.toISOString(),
           task: item.task,
-          purpose: item.purpose || null,
-          target_metric: item.target_metric || null,
-          duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
+          purpose: item.purpose?.trim() || `Complete the scheduled task and build consistency toward “${rawInput.trim()}”.`,
+          target_metric: item.target_metric?.trim() || `Complete the planned ${duration}-minute session and record the result.`,
+          duration_minutes: duration,
           status: 'scheduled',
         };
       });
