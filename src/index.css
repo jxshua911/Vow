@@ -91,3 +91,19 @@
   button:disabled { cursor:not-allowed; }
 }
 @media (max-width: 640px) { .vow-btn-primary, .vow-btn-ghost, .vow-btn-soft { min-height:2.75rem; } }
+
+
+/* Keep native and web screens within the viewport even when a child has long content. */
+html,
+body,
+#root {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+*,
+*::before,
+*::after {
+  min-width: 0;
+}
