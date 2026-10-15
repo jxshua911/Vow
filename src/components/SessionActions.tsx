@@ -25,6 +25,12 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [childTitle, setChildTitle] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingActionId, setEditingActionId] = useState<string | null>(null);
+  const [editInstructions, setEditInstructions] = useState('');
+  const [editDuration, setEditDuration] = useState('');
+  const [editSets, setEditSets] = useState('');
+  const [editReps, setEditReps] = useState('');
+  const [editRest, setEditRest] = useState('');
 
   const loadActions = useCallback(async () => {
     if (!authSession?.user?.id) {
@@ -121,6 +127,45 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
     setBusyId(null);
   }
 
+  function beginEditAction(action: SessionAction) {
+    setEditingActionId(action.id);
+    setEditInstructions(action.instructions || '');
+    setEditDuration(action.duration_minutes == null ? '' : String(action.duration_minutes));
+    setEditSets(action.sets == null ? '' : String(action.sets));
+    setEditReps(action.reps || '');
+    setEditRest(action.rest_seconds == null ? '' : String(action.rest_seconds));
+  }
+
+  async function saveActionDetails(action: SessionAction) {
+    if (!authSession?.user?.id || readOnly) return;
+    const duration = editDuration.trim() ? Number(editDuration) : null;
+    const sets = editSets.trim() ? Number(editSets) : null;
+    const rest = editRest.trim() ? Number(editRest) : null;
+    if ((duration !== null && (!Number.isInteger(duration) || duration < 0 || duration > 1440)) ||
+        (sets !== null && (!Number.isInteger(sets) || sets < 1 || sets > 1000)) ||
+        (rest !== null && (!Number.isInteger(rest) || rest < 0 || rest > 86400))) {
+      setError('Enter valid non-negative duration/rest values and a positive set count.');
+      return;
+    }
+    const patch = {
+      instructions: editInstructions.trim() || null,
+      duration_minutes: duration,
+      sets,
+      reps: editReps.trim() || null,
+      rest_seconds: rest,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: saveError } = await supabase.from('session_actions').update(patch).eq('id', action.id).eq('user_id', authSession.user.id);
+    if (saveError) {
+      console.error('[VOW] Could not save action details:', saveError);
+      setError('VOW could not save these action details. Please try again.');
+      return;
+    }
+    setActions((existing) => existing.map((item) => item.id === action.id ? { ...item, ...patch } : item));
+    setEditingActionId(null);
+    setError(null);
+  }
+
   async function scheduleAction(action: SessionAction, value: string) {
     if (readOnly || !authSession?.user?.id) return;
     const nextDate = value ? new Date(value) : null;
@@ -151,15 +196,25 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
         <div className="min-w-0 flex-1">
           <p className={`text-sm break-words ${action.status === 'completed' ? 'line-through text-vow-muted' : 'text-vow-ink'}`}>{action.title}</p>
           {action.duration_minutes != null && <p className="text-xs text-vow-muted mt-1">{action.duration_minutes} min{action.sets ? ` · ${action.sets} sets` : ''}{action.reps ? ` · ${action.reps}` : ''}{action.rest_seconds ? ` · ${action.rest_seconds}s rest` : ''}</p>}
+          {action.instructions && <p className="text-xs text-vow-muted mt-2 whitespace-pre-wrap break-words">{action.instructions}</p>}
           {action.scheduled_at && <p className="text-xs text-vow-muted mt-1">Step scheduled: {new Date(action.scheduled_at).toLocaleString()}</p>}
           {!readOnly && <div className="flex flex-wrap gap-2 mt-2">
             <button type="button" className="text-xs underline underline-offset-2 text-vow-muted" onClick={() => { setExpandedId(expanded ? null : action.id); setChildTitle(''); }}>{expanded ? 'Close substeps' : 'Add substep'}</button>
+            <button type="button" className="text-xs underline underline-offset-2 text-vow-muted" onClick={() => beginEditAction(action)}>Edit details</button>
             <label className="text-xs underline underline-offset-2 text-vow-muted cursor-pointer">
               {action.scheduled_at ? 'Change step time' : 'Schedule this step'}
               <input aria-label={`Schedule ${action.title}`} type="datetime-local" value={localDateTimeValue(action.scheduled_at)} onChange={(event) => void scheduleAction(action, event.target.value)} className="block mt-1 max-w-full border border-vow-border bg-transparent px-2 py-1 text-xs" />
             </label>
             {action.scheduled_at && <button type="button" className="text-xs underline underline-offset-2 text-vow-muted" onClick={() => void scheduleAction(action, '')}>Use session time</button>}
           </div>}
+          {editingActionId === action.id && !readOnly && <form className="grid grid-cols-2 gap-2 mt-3" onSubmit={(event) => { event.preventDefault(); void saveActionDetails(action); }}>
+            <textarea value={editInstructions} onChange={(event) => setEditInstructions(event.target.value)} placeholder="Instructions" className="col-span-2 border border-vow-border bg-transparent px-3 py-2 text-xs text-vow-ink" rows={3} maxLength={2000} />
+            <input type="number" min="0" max="1440" value={editDuration} onChange={(event) => setEditDuration(event.target.value)} placeholder="Minutes" className="border border-vow-border bg-transparent px-2 py-2 text-xs text-vow-ink" />
+            <input type="number" min="1" max="1000" value={editSets} onChange={(event) => setEditSets(event.target.value)} placeholder="Sets" className="border border-vow-border bg-transparent px-2 py-2 text-xs text-vow-ink" />
+            <input value={editReps} onChange={(event) => setEditReps(event.target.value)} placeholder="Reps / target" maxLength={120} className="border border-vow-border bg-transparent px-2 py-2 text-xs text-vow-ink" />
+            <input type="number" min="0" max="86400" value={editRest} onChange={(event) => setEditRest(event.target.value)} placeholder="Rest seconds" className="border border-vow-border bg-transparent px-2 py-2 text-xs text-vow-ink" />
+            <div className="col-span-2 flex gap-2"><button type="button" className="vow-btn-ghost text-xs" onClick={() => setEditingActionId(null)}>Cancel</button><button type="submit" className="vow-btn-soft text-xs">Save details</button></div>
+          </form>}
           {expanded && !readOnly && <form className="flex gap-2 mt-3" onSubmit={(event) => { event.preventDefault(); void addAction(childTitle, action.id); }}>
             <input value={childTitle} onChange={(event) => setChildTitle(event.target.value)} placeholder="Smaller actionable step" className="min-w-0 flex-1 border border-vow-border bg-transparent px-3 py-2 text-xs text-vow-ink" maxLength={300} />
             <button type="submit" className="vow-btn-soft text-xs" disabled={!childTitle.trim()}>Add</button>
