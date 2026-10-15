@@ -48,7 +48,7 @@ export function GoalReferenceList({ goalId }: { goalId: string }) {
           .select('id,url,title,resource_type,created_at')
           .eq('goal_id', goalId)
           .order('created_at', { ascending: true });
-        let rows = (data || []) as GoalResource[];
+        const rows = (data || []) as GoalResource[];
         if (loadError) console.error('[VOW] Goal resource rows could not be loaded; using saved plan references too:', loadError);
         const { data: goal, error: goalError } = await supabase
           .from('goals')
