@@ -4,8 +4,8 @@ import type { Session } from '@/types/database';
 
 const SYNCED_PREFIX = 'vow:native-calendar-session:';
 
-function isSynced(sessionId: string): boolean { return localStorage.getItem(`${SYNCED_PREFIX}${sessionId}`) === 'true'; }
-function markSynced(sessionId: string): void { localStorage.setItem(`${SYNCED_PREFIX}${sessionId}`, 'true'); }
+function isSynced(sessionId: string): boolean { return Boolean(localStorage.getItem(`${SYNCED_PREFIX}${sessionId}`)); }
+function markSynced(sessionId: string, eventId: string): void { localStorage.setItem(`${SYNCED_PREFIX}${sessionId}`, eventId); }
 
 export async function requestNativeCalendarAccess(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false;
@@ -33,7 +33,7 @@ export async function addSessionToNativeCalendar(session: Session, preferredAcco
   const startDate = new Date(session.scheduled_at).getTime();
   const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
   const { id } = await CapacitorCalendar.createEvent({ calendarId, title: `VOW · ${session.title}`, description: `${session.duration_minutes} min commitment created from VOW.`, startDate, endDate, alerts: [-15, 0] });
-  markSynced(session.id);
+  if (id) markSynced(session.id, id);
   return id;
 }
 
@@ -76,9 +76,37 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
   for (const session of upcoming) {
     const startDate = new Date(session.scheduled_at).getTime();
     const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
-    await CapacitorCalendar.createEvent({ calendarId, title: `VOW · ${session.title}`, description: `${session.duration_minutes} min commitment created from VOW.`, startDate, endDate, alerts: [-15, 0] });
-    markSynced(session.id);
+    const { id } = await CapacitorCalendar.createEvent({ calendarId, title: `VOW · ${session.title}`, description: `${session.duration_minutes} min commitment created from VOW.`, startDate, endDate, alerts: [-15, 0] });
+    if (id) markSynced(session.id, id);
     created += 1;
   }
   return created;
+}
+
+
+/** Remove the native event that belongs to a VOW session, including legacy synced events. */
+export async function deleteSessionFromNativeCalendar(session: Session): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  if (!await requestNativeCalendarAccess()) throw new Error('Calendar access was not granted.');
+  const storageKey = `${SYNCED_PREFIX}${session.id}`;
+  const storedValue = localStorage.getItem(storageKey);
+  let eventId = storedValue && storedValue !== 'true' ? storedValue : null;
+
+  // Older app versions stored only a boolean. Recover their event by matching
+  // the VOW-prefixed title and scheduled start time before deleting anything.
+  if (!eventId) {
+    const start = new Date(session.scheduled_at);
+    const from = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+    const to = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    const events = await listNativeCalendarEvents(from, to);
+    const match = events.find((event) => {
+      if (event.summary !== `VOW · ${session.title}`) return false;
+      const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
+      return Number.isFinite(eventStart) && Math.abs(eventStart - start.getTime()) < 60_000;
+    });
+    eventId = match?.id || null;
+  }
+
+  if (eventId) await CapacitorCalendar.deleteEvent({ id: eventId });
+  localStorage.removeItem(storageKey);
 }
