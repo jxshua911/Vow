@@ -55,6 +55,13 @@ export function CalendarPage() {
     try { setGoogleEvents(JSON.parse(localStorage.getItem(`${CACHE_KEY_PREFIX}${authSession.user.id}`) || '[]')); } catch { setGoogleEvents([]); }
   }, [authSession]);
   useEffect(() => { loadSessions(); checkGoogleConnection(); loadNativeEvents(); }, [loadSessions, checkGoogleConnection, loadNativeEvents]);
+  useEffect(() => {
+    const reconnect = () => { setError(null); void loadSessions(); void checkGoogleConnection(); if (googleConnected) void loadGoogleEvents(); };
+    const offline = () => setError('You’re offline. Saved calendar events remain available; reconnect to sync changes.');
+    window.addEventListener('online', reconnect);
+    window.addEventListener('offline', offline);
+    return () => { window.removeEventListener('online', reconnect); window.removeEventListener('offline', offline); };
+  }, [loadSessions, checkGoogleConnection, loadGoogleEvents, googleConnected]);
   useEffect(() => { if (googleConnected) loadGoogleEvents(); }, [googleConnected, loadGoogleEvents]);
   useEffect(() => { const connected = () => { setConnectingGoogle(false); setGoogleConnected(true); setError(null); }; const failed = (event: Event) => { setConnectingGoogle(false); setError((event as CustomEvent<string>).detail || 'Google Calendar connection failed.'); }; window.addEventListener('vow:google-calendar-connected', connected); window.addEventListener('vow:google-calendar-error', failed); return () => { window.removeEventListener('vow:google-calendar-connected', connected); window.removeEventListener('vow:google-calendar-error', failed); }; }, []);
   async function connectGoogleCalendar() { if (!authSession) return; setConnectingGoogle(true); setError(null); try { const redirectUri = Capacitor.isNativePlatform() ? NATIVE_CALENDAR_REDIRECT : `${window.location.origin}/calendar/oauth/callback`; const { data, error: functionError } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'start', redirectUri } }); if (functionError) throw functionError; if (!data?.authorizationUrl) throw new Error('Google Calendar authorization URL was not returned.'); if (Capacitor.isNativePlatform()) await Browser.open({ url: data.authorizationUrl }); else window.location.assign(data.authorizationUrl); } catch (err) { setConnectingGoogle(false); setError(err instanceof Error ? err.message : 'Could not start Google Calendar connection.'); } }
