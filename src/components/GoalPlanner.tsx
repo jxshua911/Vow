@@ -48,7 +48,7 @@ type PlanItem = {
   target_metric: string;
   duration_minutes: number;
   preferred_time: string | null;
-  scheduled_at?: string;
+  scheduled_at?: string | null;
   video_url?: string;
   substeps?: string[];
 };
@@ -922,6 +922,7 @@ export function GoalPlanner({
           status: 'scheduled',
           milestone_sort_order: milestoneIndex,
           notes: [
+            `Plan day: Week ${item.week}, ${item.day}`,
             `Task: ${item.task}`,
             item.purpose ? `Purpose: ${item.purpose}` : null,
             item.target_metric ? `Target: ${item.target_metric}` : null,
@@ -1009,11 +1010,13 @@ export function GoalPlanner({
       }
 
       try {
+        if (scheduleTimesEnabled) {
                 const { error: calendarError } = await supabase.functions.invoke('google-calendar-sync-goal', {
           headers: sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : undefined,
           body: { goalId: draftGoalId },
         });
         if (calendarError) console.warn('[VOW] Google Calendar sync could not be completed:', calendarError.message);
+        }
       } catch {
         console.warn('[VOW] Google Calendar sync could not be completed.');
       }
