@@ -76,7 +76,9 @@ export function UpgradePage() {
     setRestoreState('');
     try {
       const result = await restorePremium();
-      setRestoreState(result.restored ? 'Your Premium purchase has been restored.' : 'No active VOW purchase was found.');
+      setRestoreState(result.restored
+        ? 'Your Google Play Premium purchase has been restored.'
+        : 'No active Google Play subscription was found. This does not change your VOW account access; this button only restores purchases made through Google Play.');
       if (result.restored) setUsage(await getEntitlementSnapshot());
     } catch (err) {
       setRestoreState(userFacingError(err, 'We could not restore your Premium purchase. Please try again.'));
