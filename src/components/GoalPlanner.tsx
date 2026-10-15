@@ -32,6 +32,7 @@ type SavedPlannerDraft = {
   customDurationUnit?: DurationUnit;
   availableDays?: string[];
   sessionTimes?: Record<string, string>;
+  scheduleTimesEnabled?: boolean;
   clarification?: Clarification | null;
   isPlanFollowup?: boolean;
   answers?: string[];
@@ -46,7 +47,7 @@ type PlanItem = {
   purpose: string;
   target_metric: string;
   duration_minutes: number;
-  preferred_time: string;
+  preferred_time: string | null;
   scheduled_at?: string;
   video_url?: string;
   substeps?: string[];
@@ -319,6 +320,7 @@ export function GoalPlanner({
   const [customDurationUnit, setCustomDurationUnit] = useState<DurationUnit>('months');
   const [availableDays, setAvailableDays] = useState<string[]>([]);
   const [sessionTimes, setSessionTimes] = useState<Record<string, string>>({});
+  const [scheduleTimesEnabled, setScheduleTimesEnabled] = useState(false);
   const [domain, setDomain] = useState<GoalDomain | null>(null);
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [isPlanFollowup, setIsPlanFollowup] = useState(false);
@@ -347,7 +349,7 @@ export function GoalPlanner({
 
   const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
   const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
-  const missingSessionTimes = availableDays.filter((day) => !sessionTimes[day]);
+  const missingSessionTimes = scheduleTimesEnabled ? availableDays.filter((day) => !sessionTimes[day]) : [];
   const previewDomain = rawInput.trim().length >= 3
     ? analyseGoalForEvidence({ title: rawInput.trim(), outcome: rawInput.trim(), why_it_matters: why.trim() || null })
     : null;
@@ -636,7 +638,7 @@ export function GoalPlanner({
       return;
     }
     if (availableDays.length < 1 || availableDays.length > 7 || missingSessionTimes.length > 0) {
-      setError('Choose at least one day and time for your plan.');
+      setError(scheduleTimesEnabled ? 'Choose at least one day and time for your plan.' : 'Choose at least one day for your plan.');
       return;
     }
     setPlanning(true);
@@ -669,8 +671,9 @@ export function GoalPlanner({
             weekly_commitment_target: availableDays.length,
             domain: goalAnalysis,
           },
-          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days: ${availableDays.join(', ')}\nSession times: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}\nThe deterministic domain analysis is ${goalAnalysis.category} / ${goalAnalysis.goal_type}; preserve this specialist classification unless the goal text clearly contradicts it. Identify the right kind of activity or outcome, then ask at most 2-3 genuinely useful personal-context questions. Never ask users to supply facts VOW can look up (for example a known book's page count, a food's published nutrition facts, or public information about a named person, place, product, event, or topic). Do not ask users to predict unknowable future measurements such as exact running distance, calorie burn, pace, or future performance; establish a baseline with a simple optional test or use a clearly labelled adjustable estimate. Do not require the user to own a book or product just because they want to plan around it. Accept 'I don't know' and blank answers; treat them as uncertainty to plan around, not as a reason to block generation. Ask only about meaningful personal preferences, current experience, constraints, or desired outcome. Use plain, direct language and briefly explain specialist terms.`,
+          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days: ${availableDays.join(', ')}\n${scheduleTimesEnabled ? `Session times: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Schedule at these times.` : 'No clock times are required. Organise the plan by week and selected day only; leave preferred_time null and do not invent a time.'}\nThe deterministic domain analysis is ${goalAnalysis.category} / ${goalAnalysis.goal_type}; preserve this specialist classification unless the goal text clearly contradicts it. Identify the right kind of activity or outcome, then ask at most 2-3 genuinely useful personal-context questions. Never ask users to supply facts VOW can look up (for example a known book's page count, a food's published nutrition facts, or public information about a named person, place, product, event, or topic). Do not ask users to predict unknowable future measurements such as exact running distance, calorie burn, pace, or future performance; establish a baseline with a simple optional test or use a clearly labelled adjustable estimate. Do not require the user to own a book or product just because they want to plan around it. Accept 'I don't know' and blank answers; treat them as uncertainty to plan around, not as a reason to block generation. Ask only about meaningful personal preferences, current experience, constraints, or desired outcome. Use plain, direct language and briefly explain specialist terms.`,
           available_days: availableDays,
+          schedule_times_enabled: scheduleTimesEnabled,
           references: [],
         });
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not prepare the follow-up questions.');
@@ -778,9 +781,10 @@ export function GoalPlanner({
             weekly_commitment_target: availableDays.length,
             plan_generated_at: null,
           },
-          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days are exactly: ${availableDays.join(', ')}. Session times by day are exactly: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Use these times for the selected days. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions. Use plain, direct wording. Every session must contain executable details, not just a theme: include named drills or sub-steps, sets/repetitions/rounds and rest when appropriate, the order to do them, and a clear finish condition. Each schedule item must include substeps as an ordered array of 3–8 concrete actions, with time or repetitions for each step and a measurable finish condition. Every schedule item must also include video_url with a directly relevant, valid YouTube video URL for that exact session topic; do not invent URLs, and if you cannot verify a specific video use the goal-level YouTube reference instead. For sport or martial-arts goals, match the user's stated level, build skills progressively, and do not prescribe unsupervised sparring or promise belt readiness; distinguish practice goals from formal instructor assessment. Make each day's session specific enough that the user can follow it without guessing.`,
+          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days are exactly: ${availableDays.join(', ')}. ${scheduleTimesEnabled ? `Session times by day are exactly: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Use these times for the selected days.` : 'Clock times are optional and have not been selected. Do not invent times; return preferred_time as null and organise sessions by week and day.'} Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions. Use plain, direct wording. Every session must contain executable details, not just a theme: include named drills or sub-steps, sets/repetitions/rounds and rest when appropriate, the order to do them, and a clear finish condition. Each schedule item must include substeps as an ordered array of 3–8 concrete actions, with time or repetitions for each step and a measurable finish condition. Every schedule item must also include video_url with a directly relevant, valid YouTube video URL for that exact session topic; do not invent URLs, and if you cannot verify a specific video use the goal-level YouTube reference instead. For sport or martial-arts goals, match the user's stated level, build skills progressively, and do not prescribe unsupervised sparring or promise belt readiness; distinguish practice goals from formal instructor assessment. Make each day's session specific enough that the user can follow it without guessing.`,
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
+          schedule_times_enabled: scheduleTimesEnabled,
           references,
         });
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not build the plan.');
@@ -797,7 +801,7 @@ export function GoalPlanner({
         throw new Error('VOW AI returned a plan for a different duration than you selected. Please try again.');
       const normalized = normalizePlan(next, selectedDurationWeeks, domain, rawInput.trim(), why.trim());
       if (!normalized) throw new Error('VOW AI returned an incomplete plan. Please try again.');
-      normalized.schedule = normalized.schedule.map((item) => ({ ...item, preferred_time: sessionTimes[item.day] || item.preferred_time }));
+      normalized.schedule = normalized.schedule.map((item) => ({ ...item, preferred_time: scheduleTimesEnabled ? (sessionTimes[item.day] || item.preferred_time || null) : null, scheduled_at: null }));
       // Keep the exact generated plan recoverable before the user confirms it.
       // The local draft effect provides immediate device recovery; this database
       // write makes recovery survive route changes, app restarts, and device reloads.
@@ -890,13 +894,13 @@ export function GoalPlanner({
       }));
 
       const planItemRows = filteredItems.map(item => {
-        const date = buildDate(item.week, item.day, item.preferred_time);
+        const date = scheduleTimesEnabled ? buildDate(item.week, item.day, item.preferred_time || currentLocalTime()) : null;
         const duration = Math.max(5, Number(item.duration_minutes) || 30);
         return {
           plan_version: 1,
           week_number: Math.max(1, Math.min(selectedDurationWeeks || 1, item.week)),
           day_of_week: item.day,
-          scheduled_at: date.toISOString(),
+          scheduled_at: date?.toISOString() ?? null,
           task: item.task,
           purpose: item.purpose?.trim() || `Complete the scheduled task and build consistency toward “${rawInput.trim()}”.`,
           target_metric: item.target_metric?.trim() || `Complete the planned ${duration}-minute session and record the result.`,
@@ -1335,13 +1339,19 @@ export function GoalPlanner({
         </div>
 
         {availableDays.length > 0 && <div className="bg-vow-gray/10 border border-vow-border p-4">
-          <label className="vow-label block mb-3">Session time for each day</label>
-          <div className="space-y-3">
-            {availableDays.map(day => <div key={day} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-vow-border pb-3 last:border-b-0 last:pb-0">
-              <div><p className="text-sm text-vow-ink">{day}</p>{!sessionTimes[day] && <p className="text-[11px] text-vow-muted mt-1">Choose a time</p>}</div>
-              <TimeWheelPicker value={sessionTimes[day] || currentLocalTime()} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={`${day} session time`} />
-            </div>)}
+          <div className="flex items-start justify-between gap-3">
+            <div><label className="vow-label block mb-1">Session times</label><p className="text-xs text-vow-muted">Optional. Your plan works without clock times.</p></div>
+            <button type="button" role="switch" aria-checked={scheduleTimesEnabled} onClick={() => setScheduleTimesEnabled(enabled => !enabled)} className={scheduleTimesEnabled ? 'shrink-0 border px-3 py-2 text-xs font-medium bg-vow-ink text-vow-bg border-vow-ink' : 'shrink-0 border px-3 py-2 text-xs font-medium border-vow-border text-vow-ink'}>
+              {scheduleTimesEnabled ? 'Times on' : 'Add times'}
+            </button>
           </div>
+          {scheduleTimesEnabled && <div className="space-y-3 mt-4">
+            {availableDays.map(day => <div key={day} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-vow-border pb-3 last:border-b-0 last:pb-0">
+              <div><p className="text-sm text-vow-ink">{day}</p>{!sessionTimes[day] && <p className="text-[11px] text-vow-muted mt-1">Choose a reminder time</p>}</div>
+              <TimeWheelPicker value={sessionTimes[day] || currentLocalTime()} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={day + ' session time'} />
+            </div>)}
+            <p className="text-xs text-vow-muted">Choose times only if you want a timed schedule or reminders. You can change them later.</p>
+          </div>}
         </div>}
 
         {error && (
