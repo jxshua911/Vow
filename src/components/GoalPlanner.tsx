@@ -173,6 +173,16 @@ function normalizePlan(
       week: Math.max(1, Math.min(durationWeeks, Math.round(Number(m?.week) || 1))),
     }))
     .filter(m => m.title);
+  // The database requires at least two milestones for an active plan.
+  // Keep a sparse but otherwise usable AI response saveable by adding a
+  // distinct end-of-horizon review checkpoint when only one was returned.
+  if (milestones.length === 1) {
+    milestones.push({
+      title: 'Review progress and record the outcome',
+      description: `Review the progress made toward “${goalText}” and record the measurable result against the intended outcome.`,
+      week: durationWeeks,
+    });
+  }
   const schedule = raw.schedule
     .slice(0, 300)
     .map(item => ({
