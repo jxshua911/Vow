@@ -19,6 +19,23 @@ const errorMap: Record<string, string> = {
   INSUFFICIENT_WEEKLY_SESSIONS: 'VOW could not create enough sessions for this plan. Please try again.',
   REPETITIVE_SCHEDULE: 'VOW could not create a varied enough schedule. Please try again.',
   SUBSCRIPTION_RECORD_WRITE_FAILED: 'Your purchase was verified, but VOW could not finish updating Premium. Please try again.',
+  AUTH_REQUIRED: 'Your session has expired. Sign in again before saving this plan.',
+  INVALID_GOAL: 'VOW could not validate this goal. Return to the draft and rebuild the plan.',
+  INVALID_GOAL_STATUS: 'This draft has changed and cannot be activated as-is. Reopen the draft and try again.',
+  GOAL_NOT_FOUND: 'VOW could not find this draft. Refresh your goals and try again.',
+  PLAN_REQUIRED: 'The generated plan was not saved completely. Rebuild the plan before confirming it.',
+  PLAN_DURATION_MISMATCH: 'The plan duration no longer matches your selection. Rebuild the plan and confirm again.',
+  MILESTONE_COUNT_INVALID: 'VOW could not save the plan because it needs at least two clear milestones. Rebuild the plan.',
+  PLAN_ITEM_COUNT_INVALID: 'VOW could not save the schedule. Rebuild the plan with sessions on your selected days.',
+  EXECUTION_COUNT_MISMATCH: 'VOW could not save all scheduled sessions consistently. Rebuild the plan and try again.',
+  MILESTONE_QUALITY_REJECTED: 'One or more milestones need a clearer description. Rebuild the plan and try again.',
+  MILESTONE_WEEK_INVALID: 'A milestone falls outside the selected plan duration. Rebuild the plan and try again.',
+  PLAN_ITEM_QUALITY_REJECTED: 'One or more sessions are missing a clear purpose or measurable target. Rebuild the plan and try again.',
+  PLAN_ITEM_WEEK_INVALID: 'A scheduled session falls outside the selected plan duration. Rebuild the plan and try again.',
+  PLAN_ITEM_SCHEDULE_INVALID: 'One or more sessions have an invalid day or time. Check your schedule and rebuild the plan.',
+  PLAN_ITEM_DURATION_INVALID: 'A session duration is outside the supported range. Rebuild the plan with shorter sessions.',
+  SESSION_QUALITY_REJECTED: 'One or more scheduled sessions are incomplete. Rebuild the plan and try again.',
+  SESSION_DURATION_INVALID: 'A session duration is outside the supported range. Rebuild the plan with shorter sessions.',
 };
 
 export function userFacingError(error: unknown, fallback = 'Something went wrong. Please try again.') {
