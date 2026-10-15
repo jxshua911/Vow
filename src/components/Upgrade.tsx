@@ -141,6 +141,7 @@ export function UpgradePage() {
         <button type="button" onClick={() => void handleRestore()} className="vow-btn-ghost">Restore purchase</button>
       </div>
       <p className="text-xs text-vow-muted mt-3">To cancel a Google Play subscription, open subscription management and cancel it there. Removing VOW from your device does not cancel a subscription.</p>
+      <p className="text-xs text-vow-muted mt-2">Restore checks purchases made through Google Play. Premium granted directly to your VOW account can be active here without appearing in Play Store subscriptions.</p>
       {manageState && <p role="status" className="text-xs text-vow-muted mt-3">{manageState}</p>}
       {restoreState && <p role="status" className="text-xs text-vow-muted mt-3">{restoreState}</p>}
     </div>;
