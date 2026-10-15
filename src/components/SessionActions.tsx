@@ -121,7 +121,11 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       console.error('[VOW] Could not save action completion:', updateError);
       setError('Completion could not be saved. Please try again.');
     } else {
-      if (nextStatus === 'completed') await cancelReminder(notificationId(action.id));
+      if (nextStatus === 'completed') {
+        await cancelReminder(notificationId(action.id));
+      } else if (action.scheduled_at && new Date(action.scheduled_at).getTime() > Date.now()) {
+        await scheduleReminder(notificationId(action.id), `VOW · ${action.title.slice(0, 48)}`, `Action for ${currentSession.title}`, new Date(action.scheduled_at), currentSession.id, 'action');
+      }
       setActions((existing) => existing.map((item) => item.id === action.id ? { ...item, status: nextStatus, completed_at: nextStatus === 'completed' ? new Date().toISOString() : null } : item));
     }
     setBusyId(null);
