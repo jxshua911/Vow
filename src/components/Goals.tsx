@@ -8,7 +8,7 @@ import { GoalPlanner } from './GoalPlanner';
 import { GoalAI } from './GoalAI';
 import { cancelReminder, notificationId, syncUpcomingSessionNotifications } from '@/lib/notifications';
 import { Capacitor } from '@capacitor/core';
-import { deleteSessionFromNativeCalendar } from '@/lib/nativeCalendar';
+import { addSessionToNativeCalendar, deleteSessionFromNativeCalendar } from '@/lib/nativeCalendar';
 import { GoalResources } from './GoalResources';
 import { SessionActions } from './SessionActions';
 import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Clock } from '@/lib/ui-icons';
@@ -361,6 +361,27 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       console.error('[VOW] Could not adjust session:', error);
       alert('Could not save this schedule change. Please try again.');
       return;
+    }
+    if (editingSession.external_event_id && navigator.onLine) {
+      const eventEnd = new Date(nextDate.getTime() + nextDuration * 60_000).toISOString();
+      const { error: calendarUpdateError } = await supabase.functions.invoke('google-calendar-events', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: { action: 'update', eventId: editingSession.external_event_id, event: {
+          start: { dateTime: nextIso }, end: { dateTime: eventEnd },
+          summary: `VOW · ${editingSession.title}`,
+          description: (editingSession.notes || editingSession.title) + `\\n\\n${nextDuration} minute commitment from VOW.`,
+        } },
+      });
+      if (calendarUpdateError) console.error('[VOW] Session moved in VOW but Google Calendar update failed:', calendarUpdateError);
+    }
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const updatedSession = { ...editingSession, scheduled_at: nextIso, duration_minutes: nextDuration } as Session;
+        await deleteSessionFromNativeCalendar(editingSession);
+        await addSessionToNativeCalendar(updatedSession);
+      } catch (calendarError) {
+        console.error('[VOW] Session moved in VOW but phone-calendar sync failed:', calendarError);
+      }
     }
     if (dateChanged) {
       const { error: historyError } = await supabase.from('vow_session_moves').insert({
