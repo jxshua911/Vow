@@ -28,8 +28,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Install locked dependencies
-        run: npm ci
+      - name: Install dependencies
+        run: npm install
       - name: TypeScript typecheck
         run: npm run typecheck
       - name: Build production app
