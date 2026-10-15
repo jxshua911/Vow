@@ -12,6 +12,7 @@ type GoalResource = {
   resource_type: 'youtube' | 'instagram' | 'image' | 'video' | 'link';
   created_at: string;
   displayUrl?: string;
+  isPlanReference?: boolean;
 };
 
 function inferType(url: string): GoalResource['resource_type'] {
@@ -36,6 +37,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [openError, setOpenError] = useState('');
+  const [showMore, setShowMore] = useState(false);
 
   async function signedDisplayUrl(urlValue: string) {
     if (!urlValue.startsWith('storage://')) return urlValue;
@@ -55,7 +57,33 @@ export function GoalResources({ goalId }: { goalId: string }) {
         setLoading(false);
         return;
       }
-      const next = await Promise.all(((data || []) as GoalResource[]).map(async (resource) => ({ ...resource, displayUrl: await signedDisplayUrl(resource.url) })));
+      const savedRows = ((data || []) as GoalResource[]);
+      const { data: goalRow, error: goalError } = await supabase.from('goals').select('plan_json').eq('id', goalId).maybeSingle();
+      if (goalError) console.warn('[VOW] Could not load plan-level references:', goalError);
+      const planJson = goalRow?.plan_json;
+      const planReferences = planJson && typeof planJson === 'object' && !Array.isArray(planJson) && 'references' in planJson && Array.isArray(planJson.references)
+        ? planJson.references.flatMap((entry, index) => {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+            const urlValue = 'url' in entry && typeof entry.url === 'string' ? entry.url.trim() : '';
+            if (!/^https:\/\//i.test(urlValue)) return [];
+            const titleValue = 'title' in entry && typeof entry.title === 'string' ? entry.title : null;
+            const typeValue = 'resource_type' in entry && typeof entry.resource_type === 'string' ? entry.resource_type : inferType(urlValue);
+            return [{
+              id: `plan-ref:${urlValue || index}`,
+              goal_id: goalId,
+              user_id: '',
+              url: urlValue,
+              title: titleValue,
+              resource_type: (['youtube', 'instagram', 'image', 'video', 'link'].includes(typeValue) ? typeValue : inferType(urlValue)) as GoalResource['resource_type'],
+              created_at: '',
+              isPlanReference: true,
+            }];
+          })
+        : [];
+      const merged = [...savedRows, ...planReferences].filter((resource, index, all) =>
+        all.findIndex((candidate) => candidate.url === resource.url) === index
+      );
+      const next = await Promise.all(merged.map(async (resource) => ({ ...resource, displayUrl: await signedDisplayUrl(resource.url) })));
       if (!cancelled) { setResources(next); setLoading(false); }
     });
     return () => { cancelled = true; };
@@ -128,7 +156,7 @@ export function GoalResources({ goalId }: { goalId: string }) {
         </div>
       ) : (
         <div className="border-t border-vow-border">
-          {resources.map((resource) => (
+          {(showMore ? resources : resources.slice(0, 2)).map((resource) => (
             <div key={resource.id} className="border-b border-vow-border py-4 flex items-start gap-4">
               <div className="w-14 shrink-0 flex items-center justify-center">
                 {resource.displayUrl && resource.resource_type === 'image'
@@ -151,12 +179,17 @@ export function GoalResources({ goalId }: { goalId: string }) {
                   </button>
                 )}
               </div>
-              <button type="button" onClick={() => removeResource(resource.id)} className="text-xs text-vow-muted hover:text-vow-ink disabled:opacity-50 flex-shrink-0" aria-label={`Remove reference ${resource.title || resource.url}`}>
+              {!resource.isPlanReference && <button type="button" onClick={() => removeResource(resource.id)} className="text-xs text-vow-muted hover:text-vow-ink disabled:opacity-50 flex-shrink-0" aria-label={`Remove reference ${resource.title || resource.url}`}>
                 <Trash2 className="w-4 h-4" />
-              </button>
+              </button>}
             </div>
           ))}
         </div>
+      )}
+      {resources.length > 2 && (
+        <button type="button" onClick={() => setShowMore(current => !current)} aria-expanded={showMore} className="mt-3 text-xs text-vow-muted underline underline-offset-4 hover:text-vow-ink">
+          {showMore ? 'Show less' : `More · ${resources.length - 2} additional links`}
+        </button>
       )}
     </section>
   );
