@@ -23,7 +23,7 @@ export function AuthPage() {
 
   const handleAuthError = useCallback((err: unknown) => {
     const detail = err instanceof Error ? err.message : String(err ?? '');
-    if (/user.?banned|banned.?until|account.{0,20}(suspend|ban)|temporarily banned|suspended/i.test(detail)) {
+    if (/user.{0,24}banned|banned.?until|account.{0,20}(suspend|ban)|temporarily banned|suspended/i.test(detail)) {
       setSuspended(true);
       setError(null);
       setMessage('');
