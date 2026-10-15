@@ -10,7 +10,6 @@ import { cancelReminder, notificationId, syncUpcomingSessionNotifications } from
 import { Capacitor } from '@capacitor/core';
 import { deleteSessionFromNativeCalendar } from '@/lib/nativeCalendar';
 import { GoalResources } from './GoalResources';
-import { GoalReferenceList } from './GoalReferenceList';
 import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Clock } from '@/lib/ui-icons';
 
 function getSessionVideoUrl(notes: string | null): string | null {
@@ -357,7 +356,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       ) : <p className="text-xs text-vow-muted mb-4">Continue where you left off to finish this goal.</p>}
       {readOnly ? <p className="text-xs text-vow-muted">Reconnect to continue answering and build this plan.</p> : <button type="button" onClick={onContinueDraft} className="vow-btn-primary">Continue answering</button>}
     </section>}
-    {goal.status !== 'draft' && <><GoalResources goalId={goalId} /><GoalReferenceList goalId={goalId} /></>}
+    {goal.status !== 'draft' && <GoalResources goalId={goalId} />}
     {goal.status !== 'draft' && <section className="border border-vow-border p-5 my-10">
       <p className="vow-label mb-2">Planning assistant</p>
       <p className="text-sm text-vow-muted mb-4">Your planning consultant, right here with this goal. Ask about your saved plan, your next action, missed sessions, or adapting your schedule.</p>
