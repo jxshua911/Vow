@@ -139,6 +139,23 @@ function youtubeSearchReference(goalText: string, goalType: string): PlanReferen
     resource_type: 'youtube',
   };
 }
+function readablePlanValue(value: unknown, fallback: string): string {
+  if (typeof value === 'string') return value.trim().slice(0, 600) || fallback;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    const items = value.map((item) => readablePlanValue(item, '')).filter(Boolean);
+    return items.join(' · ').slice(0, 600) || fallback;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const preferredKeys = ['description', 'value', 'current', 'current_level', 'starting_point', 'measure', 'metric', 'details', 'summary'];
+    const parts = preferredKeys.map((key) => record[key]).filter((item) => item !== undefined && item !== null && item !== '');
+    const values = (parts.length ? parts : Object.values(record)).map((item) => readablePlanValue(item, '')).filter(Boolean);
+    return [...new Set(values)].join(' · ').slice(0, 600) || fallback;
+  }
+  return fallback;
+}
+
 function normalizePlan(
   raw: Plan,
   durationWeeks: number,
@@ -221,8 +238,8 @@ function normalizePlan(
     schedule,
     references,
     outcome: String(raw.outcome || '').trim().slice(0, 300),
-    success_metric: String(raw.success_metric || '').trim().slice(0, 300),
-    baseline: String(raw.baseline || '').trim().slice(0, 600),
+    success_metric: readablePlanValue(raw.success_metric, 'Track progress against the goal outcome.' ).slice(0, 300),
+    baseline: readablePlanValue(raw.baseline, 'Baseline not provided yet.'),
     summary: String(raw.summary || '').trim().slice(0, 1200),
     progression: String(raw.progression || '').trim().slice(0, 600),
   };
@@ -1016,7 +1033,7 @@ export function GoalPlanner({
           </section>
           <section className="border border-vow-border p-5">
             <p className="vow-label mb-2">Success metric</p>
-            <p className="text-sm text-vow-ink">{plan.success_metric}</p>
+            <p className="text-sm text-vow-ink">{plan.success_metric.trim().toLowerCase() === plan.outcome.trim().toLowerCase() ? `Track progress toward: ${plan.outcome}` : plan.success_metric}</p>
             <p className="vow-label mt-5 mb-2">Baseline</p>
             <p className="text-sm text-vow-muted">{plan.baseline}</p>
           </section>
