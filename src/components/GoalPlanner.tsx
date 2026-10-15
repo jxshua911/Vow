@@ -48,6 +48,7 @@ type PlanItem = {
   duration_minutes: number;
   preferred_time: string;
   scheduled_at?: string;
+  video_url?: string;
 };
 type PlanReference = {
   url: string;
@@ -199,6 +200,7 @@ function normalizePlan(
       target_metric: String(item?.target_metric ?? '').trim().slice(0, 120),
       duration_minutes: Math.max(5, Math.min(240, Math.round(Number(item?.duration_minutes) || 30))),
       preferred_time: String(item?.preferred_time ?? '09:00').trim().slice(0, 8),
+      video_url: (() => { const url = String(item?.video_url ?? '').trim().slice(0, 1000); return isYoutubeUrl(url) ? url : ''; })(),
     }))
     .filter(item => item.task);
   if (!schedule.length || !milestones.length) return null;
@@ -225,6 +227,8 @@ function normalizePlan(
     })
     .filter((reference, index, references) => references.findIndex((candidate) => candidate.url === reference.url) === index);
   const youtubeReference = candidateReferences.find((reference) => isYoutubeUrl(reference.url));
+  const fallbackYoutube = youtubeReference?.url || youtubeSearchReference(goalText, domain.goal_type).url;
+  for (const item of schedule) if (!item.video_url) item.video_url = fallbackYoutube;
   const websiteReference = candidateReferences.find((reference) => reference !== youtubeReference);
   const references: PlanReference[] = [
     youtubeReference || youtubeSearchReference(goalText, domain.goal_type),
@@ -766,7 +770,7 @@ export function GoalPlanner({
             weekly_commitment_target: availableDays.length,
             plan_generated_at: null,
           },
-          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days are exactly: ${availableDays.join(', ')}. Session times by day are exactly: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Use these times for the selected days. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions. Use plain, direct wording. Every session must contain executable details, not just a theme: include named drills or sub-steps, sets/repetitions/rounds and rest when appropriate, the order to do them, and a clear finish condition. For sport or martial-arts goals, match the user's stated level, build skills progressively, and do not prescribe unsupervised sparring or promise belt readiness; distinguish practice goals from formal instructor assessment. Make each day's session specific enough that the user can follow it without guessing.`,
+          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days are exactly: ${availableDays.join(', ')}. Session times by day are exactly: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Use these times for the selected days. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions. Use plain, direct wording. Every session must contain executable details, not just a theme: include named drills or sub-steps, sets/repetitions/rounds and rest when appropriate, the order to do them, and a clear finish condition. Every schedule item must also include video_url with a directly relevant, valid YouTube video URL for that exact session topic; do not invent URLs, and if you cannot verify a specific video use the goal-level YouTube reference instead. For sport or martial-arts goals, match the user's stated level, build skills progressively, and do not prescribe unsupervised sparring or promise belt readiness; distinguish practice goals from formal instructor assessment. Make each day's session specific enough that the user can follow it without guessing.`,
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
           references,
@@ -905,7 +909,7 @@ export function GoalPlanner({
           duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
           status: 'scheduled',
           milestone_sort_order: milestoneIndex,
-          notes: [item.purpose, item.target_metric ? `Target: ${item.target_metric}` : null]
+          notes: [item.purpose, item.target_metric ? `Target: ${item.target_metric}` : null, item.video_url ? `Video: ${item.video_url}` : null]
             .filter(Boolean)
             .join('\n') || null,
         };
