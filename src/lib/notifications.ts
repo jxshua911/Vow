@@ -278,7 +278,7 @@ export async function syncUpcomingSessionNotifications(sessions: Session[]): Pro
       notificationId(session.id),
       `VOW · ${session.title}`,
       `${session.duration_minutes} min commitment. This is the time you set aside for it.`,
-      new Date(session.scheduled_at),
+      new Date(session.scheduled_at || ''),
       session.id,
     );
   }
