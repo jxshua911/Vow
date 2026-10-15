@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabase';
@@ -21,7 +21,7 @@ export function AuthPage() {
   const [mode, setMode] = useState<AuthMode>('signup'); const [method, setMethod] = useState<AuthMethod>('options');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false); const [suspended, setSuspended] = useState(false);
 
-  function handleAuthError(err: unknown) {
+  const handleAuthError = useCallback((err: unknown) => {
     const detail = err instanceof Error ? err.message : String(err ?? '');
     if (/user.?banned|banned.?until|account.{0,20}(suspend|ban)|temporarily banned|suspended/i.test(detail)) {
       setSuspended(true);
@@ -31,7 +31,7 @@ export function AuthPage() {
       setError(userFacingError(err, 'Sign-in failed. Please try again.'));
     }
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     const onOAuthError = (event: Event) => {
@@ -44,7 +44,7 @@ export function AuthPage() {
     if (callbackError) handleAuthError(new Error(callbackError.replace(/\+/g, ' ')));
     window.addEventListener('vow:oauth-error', onOAuthError);
     return () => window.removeEventListener('vow:oauth-error', onOAuthError);
-  }, []);
+  }, [handleAuthError]);
 
   function switchMode(next: AuthMode) { setMode(next); setError(null); setMessage(''); }
   async function handleSubmit(event: React.FormEvent) { event.preventDefault(); setError(null); setMessage(''); setSuspended(false); setLoading(true); try {
