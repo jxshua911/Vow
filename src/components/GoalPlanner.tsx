@@ -33,6 +33,7 @@ type SavedPlannerDraft = {
   availableDays?: string[];
   sessionTimes?: Record<string, string>;
   clarification?: Clarification | null;
+  isPlanFollowup?: boolean;
   answers?: string[];
   domain?: GoalDomain | null;
   plan?: Plan | null;
@@ -309,6 +310,7 @@ export function GoalPlanner({
   const [sessionTimes, setSessionTimes] = useState<Record<string, string>>({});
   const [domain, setDomain] = useState<GoalDomain | null>(null);
   const [clarification, setClarification] = useState<Clarification | null>(null);
+  const [isPlanFollowup, setIsPlanFollowup] = useState(false);
   const [answers, setAnswers] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [draftGoalId, setDraftGoalId] = useState<string | null>(resumeDraftId || null);
@@ -382,6 +384,7 @@ export function GoalPlanner({
           if (Array.isArray(savedDraft.availableDays)) setAvailableDays(savedDraft.availableDays);
           if (savedDraft.sessionTimes) setSessionTimes(savedDraft.sessionTimes);
           if (savedDraft.clarification) setClarification(savedDraft.clarification);
+          if (typeof savedDraft.isPlanFollowup === 'boolean') setIsPlanFollowup(savedDraft.isPlanFollowup);
           if (Array.isArray(savedDraft.answers)) setAnswers(savedDraft.answers);
           if (savedDraft.domain) setDomain(savedDraft.domain);
           if (savedDraft.plan && Array.isArray(savedDraft.plan.schedule) && Array.isArray(savedDraft.plan.milestones)) {
@@ -483,6 +486,7 @@ export function GoalPlanner({
         availableDays,
         sessionTimes,
         clarification,
+        isPlanFollowup,
         answers,
         domain,
         plan,
@@ -502,6 +506,7 @@ export function GoalPlanner({
     availableDays,
     sessionTimes,
     clarification,
+    isPlanFollowup,
     answers,
     domain,
     plan,
@@ -669,6 +674,7 @@ export function GoalPlanner({
       setDomain(goalDomain);
       const goalId = await ensureDraft(goalDomain);
       setClarification(next);
+      setIsPlanFollowup(false);
       setAnswers(next.questions.map(() => ''));
       const { error: ae } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
       if (ae) throw ae;
@@ -747,6 +753,7 @@ export function GoalPlanner({
       const start = nextMonday();
             const data = await invokeGoalAI({
           mode: 'goal-plan',
+          is_followup: isPlanFollowup,
           goal: {
             id: goalId,
             title: rawInput.trim(),
@@ -768,6 +775,7 @@ export function GoalPlanner({
       if (data.structured?.clarification_needed) {
         const followUp = data.structured as Clarification;
         setClarification(followUp);
+        setIsPlanFollowup(true);
         setAnswers(followUp.questions.map(() => ''));
         setError('VOW needs a bit more detail before it can build a reliable plan — please answer the follow-up below.');
         return;
