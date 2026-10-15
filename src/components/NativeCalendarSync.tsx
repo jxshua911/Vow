@@ -63,7 +63,7 @@ export function NativeCalendarSync() {
       }
       try {
         const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail) : 0;
-        if (!cancelled) dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your Google/device calendar.' : 'Calendar sync is up to date.');
+        if (!cancelled) dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.');
       } catch (error) {
         console.error('[VOW] Native calendar sync failed:', error);
       }
@@ -96,11 +96,11 @@ export function NativeCalendarSync() {
         skipNextEffectSync.current = true;
         setHiding(false);
         setEnabled(true);
-        dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your Google/device calendar.' : 'Calendar sync is up to date.');
+        dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.');
       } else {
         localStorage.setItem(ENABLE_KEY, 'false');
         setEnabled(false);
-        dismissAfterSuccess('Automatic calendar sync is off. Existing calendar events are unchanged.');
+        dismissAfterSuccess('Phone calendar sync is off. Existing calendar events are unchanged.');
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not update calendar sync.');
@@ -109,5 +109,5 @@ export function NativeCalendarSync() {
     }
   }
 
-  return <div className={`border border-vow-border p-5 mb-8 vow-calendar-sync-panel${hiding ? ' vow-calendar-sync-panel-hiding' : ''}`}><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-medium text-vow-ink">Calendar sync</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">VOW adds your sessions to the Google calendar account available on this device, preferring the account matching your VOW email.</p>{message && <p className="text-xs text-vow-ink mt-2">{message}</p>}</div><button onClick={toggle} disabled={busy} className="vow-btn-primary disabled:opacity-50">{busy ? 'Updating…' : enabled ? 'Calendar sync on' : 'Sync VOW with calendar'}</button></div></div>;
+  return <div className={`border border-vow-border p-5 mb-8 vow-calendar-sync-panel${hiding ? ' vow-calendar-sync-panel-hiding' : ''}`}><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-medium text-vow-ink">Phone calendar sync</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">Adds VOW sessions to a writable calendar in your phone’s calendar app (often Google Calendar). This device-calendar permission is separate from connecting your Google Calendar account below.</p>{message && <p className="text-xs text-vow-ink mt-2">{message}</p>}</div><button onClick={toggle} disabled={busy} className="vow-btn-primary disabled:opacity-50">{busy ? 'Updating…' : enabled ? 'Phone calendar sync on' : 'Sync with phone calendar'}</button></div></div>;
 }
