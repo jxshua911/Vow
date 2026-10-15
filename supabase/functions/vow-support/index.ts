@@ -45,7 +45,11 @@ Deno.serve(async (request) => {
   if (!message) return json({ error: 'Please enter a message before submitting.' }, 422);
   const name = clean(body.name, 120) || 'Not provided';
   const issue = clean(body.issue, 120) || 'Support request';
-  const email = user.email || '';
+  const submittedEmail = clean(body.email, 254);
+  const email = submittedEmail || user.email || '';
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return json({ persisted: false, error: 'Please enter a valid reply email address.' }, 422);
+  }
   const serviceKey = secretKey();
   if (!serviceKey) {
     console.error('[VOW Support] Supabase secret key is not configured; request was not persisted.');
