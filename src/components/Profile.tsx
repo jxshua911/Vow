@@ -243,6 +243,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 
         <div className="py-6">
           <h2 className="vow-label mb-2">My Account</h2>
+          {entitlement?.plan === 'premium' && <div className="border border-vow-border rounded-xl p-4 mb-4 flex items-center justify-between gap-3"><div><p className="text-sm text-vow-ink">✦ Premium · Active</p><p className="text-xs text-vow-muted mt-1">Your Premium benefits are active.</p></div><button type="button" onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'upgrade' }))} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">Manage</button></div>}
           <div className="border border-vow-border rounded-xl p-4 mb-4">
             <p className="text-xs text-vow-muted">Signed in as</p>
             <p className="text-sm text-vow-ink mt-1 break-all">{session?.user?.email || 'Account email unavailable'}</p>
@@ -274,17 +275,6 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
           </div>
         </div>
 
-        {entitlement?.plan === 'premium' && <div className="py-6">
-          <h2 className="vow-label mb-2">Premium</h2>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'upgrade' }))}
-            className="w-full py-5 text-left"
-          >
-            <p className="text-sm text-vow-ink">Manage subscription</p>
-            <p className="text-xs text-vow-muted mt-1">View or manage your Premium subscription.</p>
-          </button>
-        </div>}
       </section>
     </div>
   );
