@@ -143,7 +143,6 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
   const [editDurationMinutes, setEditDurationMinutes] = useState('');
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [expandedMilestone, setExpandedMilestone] = useState<string | 'all' | null>(null);
-  const [showAbandonModal, setShowAbandonModal] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [unansweredQuestions, setUnansweredQuestions] = useState<string[]>([]);
   const load = useCallback(async () => {
@@ -427,15 +426,6 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     await load();
   }
   async function toggleMilestoneStatus(ms: Milestone) { const newStatus = ms.status === 'completed' ? 'pending' : 'completed'; await supabase.from('milestones').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', ms.id); load(); }
-  async function abandonGoal(reason: string) {
-    if (!session) return;
-    setActionError(null);
-    const { error } = await supabase.from('goals').update({ status: 'abandoned', plan_json: { ...(goal?.plan_json || {}), abandonment_reason: reason }, updated_at: new Date().toISOString() }).eq('id', goalId).eq('user_id', session.user.id);
-    if (error) { setActionError('VOW could not update this goal. Please try again.'); return; }
-    await Promise.all(sessions.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at).getTime() > Date.now()).map(s => cancelReminder(notificationId(s.id))));
-    setShowAbandonModal(false);
-    onBack();
-  }
   async function completeGoal() {
     if (!session || goal?.status === 'draft') return;
     setActionError(null);
