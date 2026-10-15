@@ -887,7 +887,7 @@ async function researchGoalFacts(goalTitle: string, why: string) {
   if (isBookGoal && bookQuery) {
     jobs.push(fetchJson("https://openlibrary.org/search.json?title=" + encodeURIComponent(bookQuery) + "&limit=3&fields=title,author_name,first_publish_year,number_of_pages_median,key"));
   } else jobs.push(Promise.resolve(null));
-  const query = title.replace(/^\s*(?:i want to|i want|want to|save up to buy|save up for|save up to|buy|purchase|learn about|learn|read|study|train for|prepare for)\s+/i, "").trim();
+  const query = title.replace(/^\s*(?:i want to|i want|want to|save up to buy|save up for|save up to|buy|purchase|learn about|learn|read|study|train for|prepare for)\s+/i, "").replace(/^(?:a|an|the)\s+/i, "").trim();
   jobs.push(query
     ? fetchJson("https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(query) + "&format=json&utf8=1&srlimit=2")
     : Promise.resolve(null));
@@ -1276,15 +1276,19 @@ Deno.serve(async (req) => {
     ]
       .filter(Boolean)
       .join(" ");
+    const titleForResearch = str(g?.title || g?.outcome, 300);
+    const hasNamedEntity = /(?:^|\s)[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*(?=$|\s)/.test(titleForResearch.split(/\s+/).slice(1).join(" "));
     const researchRequired =
       domain?.needs_ai_research === true ||
       detectAmbiguousTerms(message) ||
-      detectAmbiguousTerms(g?.outcome || "");
+      detectAmbiguousTerms(g?.outcome || "") ||
+      hasNamedEntity ||
+      /\b(?:buy|purchase|save up|price|cost|budget|202[0-9])\b/i.test(titleForResearch);
     const [goalsResult, journalResult, knowledge, research] = await Promise.all([
       client(req).from("goals").select("title, outcome, why_it_matters, created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(5),
       client(req).from("journal_entries").select("body, created_at, linked_goal_id").eq("user_id", uid).order("created_at", { ascending: false }).limit(10),
       searchKnowledge(knowledgeQuery),
-      mode === "goal-plan" || researchRequired || /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/.test(str(g?.title || g?.outcome, 300))
+      mode === "goal-plan" || researchRequired
         ? researchGoalFacts(str(g?.title || g?.outcome, 300), str(g?.why_it_matters, 500))
         : Promise.resolve([]),
     ]);
