@@ -97,7 +97,7 @@ serve(async (req) => {
         steps.length ? `\nWhat to do:\n${steps.map((line) => line.replace(/^Step \d+: /, "")).map((line, index) => `${index + 1}. ${line}`).join("\n")}` : null,
         noteLines.find((line) => line.startsWith("Video: ")) || null,
       ].filter(Boolean).join("\n");
-      const summary = `VOW · Practice · W${item.week_number} · ${String(item.day_of_week).slice(0, 3)}`;
+      const summary = `VOW · ${session?.title || `Practice · W${item.week_number}`}`;
       const event = await googleRequest("/calendars/primary/events", accessToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ summary, description, start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() }, reminders: { useDefault: true } }) });
       createdCount += 1;
       if (session?.id && event?.id) {
