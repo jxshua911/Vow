@@ -18,6 +18,11 @@ export function NativeCalendarSync() {
   const [dismissed, setDismissed] = useState(false);
   const [dismissedUserId, setDismissedUserId] = useState<string | null>(null);
   const [hiding, setHiding] = useState(false);
+  const dismissTimer = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (dismissTimer.current !== null) window.clearTimeout(dismissTimer.current);
+  }, []);
 
   // Auth can resolve after the component mounts. Rehydrate dismissal only
   // once the current user's ID is known, and re-check if the account changes.
@@ -35,10 +40,13 @@ export function NativeCalendarSync() {
   const dismissAfterSuccess = useCallback((text: string) => {
     setMessage(text);
     setHiding(true);
-    // Hide immediately after a successful sync; do not leave a collapsed
-    // onboarding panel taking up space or waiting on an animation callback.
-    setDismissed(true);
     if (userId) localStorage.setItem(DISMISSED_KEY_PREFIX + userId, 'true');
+    if (dismissTimer.current !== null) window.clearTimeout(dismissTimer.current);
+    // Let the CSS transition finish before unmounting the panel.
+    dismissTimer.current = window.setTimeout(() => {
+      setDismissed(true);
+      dismissTimer.current = null;
+    }, 480);
   }, [userId]);
 
   useEffect(() => {
