@@ -314,6 +314,7 @@ export function GoalPlanner({
   const [error, setError] = useState('');
   const [resourceError, setResourceError] = useState('');
   const [calendarConflicts, setCalendarConflicts] = useState<string[]>([]);
+  const [expandedScheduleKey, setExpandedScheduleKey] = useState<string | null>(null);
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
 
   useEffect(() => {
@@ -643,7 +644,7 @@ export function GoalPlanner({
             weekly_commitment_target: availableDays.length,
             domain: goalAnalysis,
           },
-          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days: ${availableDays.join(', ')}\nSession times: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}\nIdentify the right kind of activity or outcome, then ask 2-3 high-value questions that resolve the most important missing inputs.`,
+          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days: ${availableDays.join(', ')}\nSession times: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}\nIdentify the right kind of activity or outcome, then ask 2-3 high-value questions that resolve the most important missing inputs. Use plain, direct language and one idea per question; avoid vague phrases such as 'physical training experience that could influence your learning pace'. Prefer concrete wording such as 'Have you done any martial arts before?' or 'What training or sports do you do now?'. Briefly explain any specialist term the user may not know.`,
           available_days: availableDays,
           references: [],
         });
@@ -754,7 +755,7 @@ export function GoalPlanner({
             weekly_commitment_target: availableDays.length,
             plan_generated_at: null,
           },
-          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days are exactly: ${availableDays.join(', ')}. Session times by day are exactly: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Use these times for the selected days. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions.`,
+          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days are exactly: ${availableDays.join(', ')}. Session times by day are exactly: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Use these times for the selected days. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions. Use plain, direct wording. Every session must contain executable details, not just a theme: include named drills or sub-steps, sets/repetitions/rounds and rest when appropriate, the order to do them, and a clear finish condition. For sport or martial-arts goals, match the user's stated level, build skills progressively, and do not prescribe unsupervised sparring or promise belt readiness; distinguish practice goals from formal instructor assessment. Make each day's session specific enough that the user can follow it without guessing.`,
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
           references,
@@ -1051,19 +1052,51 @@ export function GoalPlanner({
           </section>
           <section className="border border-vow-border p-5">
             <p className="vow-label mb-4">Schedule · {selectedDurationLabel}</p>
+            <p className="text-xs text-vow-muted -mt-2 mb-3">Select any session to open its step-by-step details and a matching video search.</p>
             <div className="divide-y divide-vow-border">
-              {plan.schedule.map((item, i) => (
-                <div key={`${item.week}-${item.day}-${i}`} className="py-3 flex gap-3">
-                  <span className="text-xs text-vow-muted w-12 shrink-0">W{item.week}</span>
-                  <span className="text-xs text-vow-muted w-20 shrink-0">{item.day}</span>
-                  <div>
-                    <p className="text-sm text-vow-ink font-medium">{item.task}</p>
-                    <p className="text-xs text-vow-muted mt-1">
-                      {item.duration_minutes} min · {item.target_metric}
-                    </p>
+              {plan.schedule.map((item, i) => {
+                const scheduleKey = `${item.week}-${item.day}-${i}`;
+                const expanded = expandedScheduleKey === scheduleKey;
+                const videoSearch = youtubeSearchReference(item.task, domain?.goal_type || 'goal-specific practice');
+                return (
+                  <div key={scheduleKey} className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedScheduleKey(expanded ? null : scheduleKey)}
+                      aria-expanded={expanded}
+                      className="w-full flex gap-3 text-left items-start hover:opacity-75"
+                    >
+                      <span className="text-xs text-vow-muted w-12 shrink-0 pt-0.5">W{item.week}</span>
+                      <span className="text-xs text-vow-muted w-20 shrink-0 pt-0.5">{item.day}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm text-vow-ink font-medium">{item.task}</span>
+                        <span className="block text-xs text-vow-muted mt-1">{item.duration_minutes} min · {item.target_metric}</span>
+                      </span>
+                      <span className="text-xs text-vow-muted shrink-0">{expanded ? '−' : '+'}</span>
+                    </button>
+                    {expanded && (
+                      <div className="ml-32 mt-3 space-y-3 border-l border-vow-border pl-4">
+                        <div>
+                          <p className="vow-label mb-1">What to do</p>
+                          <p className="text-sm leading-6 text-vow-ink">{item.purpose || item.task}</p>
+                        </div>
+                        <div>
+                          <p className="vow-label mb-1">How to measure it</p>
+                          <p className="text-sm leading-6 text-vow-muted">{item.target_metric || 'Complete the session and record what you practised.'}</p>
+                        </div>
+                        <p className="text-xs text-vow-muted">Planned time: {item.preferred_time} · {item.duration_minutes} minutes</p>
+                        <button
+                          type="button"
+                          onClick={() => void openPlanReference(videoSearch.url)}
+                          className="text-sm text-vow-ink underline underline-offset-4"
+                        >
+                          Find videos for this session
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
           <section className="border border-vow-border p-5">
