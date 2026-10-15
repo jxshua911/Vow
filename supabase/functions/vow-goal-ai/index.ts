@@ -782,7 +782,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
                 {
                   role: "system",
                   content:
-                    "Fallback provider mode: provider-side web research is unavailable on this path. Do not claim that web research was performed. Use only the supplied VOW knowledge and user context, and return the same valid JSON structure requested by the original prompt.",
+                    "Fallback provider mode: provider-side web research is unavailable on this path. Do not claim that web research was performed. Use the supplied research results, VOW knowledge, and user context; no additional provider-side browser search is available on this path. Do not claim extra research, and return the same valid JSON structure requested by the original prompt.",
                 },
               ]
             : messages;
