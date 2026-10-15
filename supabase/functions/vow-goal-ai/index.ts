@@ -1297,6 +1297,7 @@ Deno.serve(async (req) => {
         why_it_matters: str(g?.why_it_matters, 500),
         duration_weeks: w,
         available_days: ds,
+        schedule_times_enabled: g?.schedule_times_enabled === true,
         start_date: str(g?.start_date, 30),
         deadline: str(g?.deadline, 30),
       },
@@ -1483,7 +1484,7 @@ Deno.serve(async (req) => {
           ], "plan", researchRequired);
           if (retry?.clarification_needed !== true) {
             b = retry;
-            validationError = validatePlan(b, w, ds, validationContext);
+            validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true);
             console.log("[VOW AI] Plan quality retry completed", {
               validation_error: validationError || "passed",
             });
