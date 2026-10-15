@@ -44,14 +44,6 @@ CREATE POLICY "insert_own_session_actions" ON session_actions FOR INSERT
       WHERE s.id = session_actions.session_id
         AND s.user_id = auth.uid()
         AND s.goal_id = session_actions.goal_id
-    ) AND (
-      parent_action_id IS NULL OR EXISTS (
-        SELECT 1 FROM session_actions parent
-        WHERE parent.id = session_actions.parent_action_id
-          AND parent.session_id = session_actions.session_id
-          AND parent.goal_id = session_actions.goal_id
-          AND parent.user_id = auth.uid()
-      )
     )
   );
 
@@ -68,14 +60,6 @@ CREATE POLICY "update_own_session_actions" ON session_actions FOR UPDATE
       WHERE s.id = session_actions.session_id
         AND s.user_id = auth.uid()
         AND s.goal_id = session_actions.goal_id
-    ) AND (
-      parent_action_id IS NULL OR EXISTS (
-        SELECT 1 FROM session_actions parent
-        WHERE parent.id = session_actions.parent_action_id
-          AND parent.session_id = session_actions.session_id
-          AND parent.goal_id = session_actions.goal_id
-          AND parent.user_id = auth.uid()
-      )
     )
   );
 
@@ -87,6 +71,34 @@ CREATE POLICY "delete_own_session_actions" ON session_actions FOR DELETE
       WHERE s.id = session_actions.session_id AND s.user_id = auth.uid()
     )
   );
+
+
+-- Validate parent/child consistency without recursively invoking session_actions RLS.
+CREATE OR REPLACE FUNCTION validate_session_action_parent()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $
+BEGIN
+  IF NEW.parent_action_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM session_actions parent
+    WHERE parent.id = NEW.parent_action_id
+      AND parent.session_id = NEW.session_id
+      AND parent.goal_id = NEW.goal_id
+      AND parent.user_id = NEW.user_id
+  ) THEN
+    RAISE EXCEPTION 'Parent action must belong to the same session, goal, and user';
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS session_actions_validate_parent ON session_actions;
+CREATE TRIGGER session_actions_validate_parent
+  BEFORE INSERT OR UPDATE OF parent_action_id, session_id, goal_id, user_id
+  ON session_actions
+  FOR EACH ROW EXECUTE FUNCTION validate_session_action_parent();
 
 CREATE INDEX IF NOT EXISTS idx_session_actions_session_order
   ON session_actions(session_id, parent_action_id, sort_order);
