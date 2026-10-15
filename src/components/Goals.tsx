@@ -6,7 +6,7 @@ import { formatTime, formatDate, formatRelative } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
 import { GoalPlanner } from './GoalPlanner';
 import { GoalAI } from './GoalAI';
-import { cancelReminder, notificationId, syncUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelReminder, notificationId, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import { Capacitor } from '@capacitor/core';
 import { addSessionToNativeCalendar, deleteSessionFromNativeCalendar } from '@/lib/nativeCalendar';
 import { GoalResources } from './GoalResources';
@@ -326,7 +326,10 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       duration_minutes: combinedDuration,
       status: 'scheduled',
     } as Session;
-    await syncUpcomingSessionNotifications([combinedSession]);
+    await syncUserUpcomingSessionNotifications(session.user.id).catch((syncError) => {
+      calendarSyncWarning = true;
+      console.error('[VOW] Sessions merged but reminders could not be fully synchronized:', syncError);
+    });
     if (target.external_event_id && navigator.onLine) {
       const eventEnd = new Date(new Date(combinedScheduledAt).getTime() + combinedDuration * 60_000).toISOString();
       const { error: calendarUpdateError } = await supabase.functions.invoke('google-calendar-events', {
@@ -432,13 +435,10 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       if (historyError) console.error('[VOW] Schedule adjusted but move history could not be recorded:', historyError);
     }
     await cancelReminder(notificationId(editingSession.id));
-    await syncUpcomingSessionNotifications([{
-      ...editingSession,
-      scheduled_at: nextIso,
-      duration_minutes: nextDuration,
-      moved_count: editingSession.moved_count + (dateChanged ? 1 : 0),
-      status: 'scheduled',
-    } as Session]);
+    await syncUserUpcomingSessionNotifications(session.user.id).catch((syncError) => {
+      console.error('[VOW] Session moved but reminders could not be fully synchronized:', syncError);
+      setActionError('The session was rescheduled in VOW, but reminders could not be fully synchronized.');
+    });
     setEditingSession(null);
     await load();
   }
