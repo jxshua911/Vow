@@ -6,7 +6,7 @@ import { formatTime, formatDate, formatRelative } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
 import { GoalPlanner } from './GoalPlanner';
 import { GoalAI } from './GoalAI';
-import { cancelReminder, notificationId, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelActionRemindersForSession, cancelReminder, notificationId, syncSessionActionReminders, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import { Capacitor } from '@capacitor/core';
 import { addSessionToNativeCalendar, deleteSessionFromNativeCalendar } from '@/lib/nativeCalendar';
 import { GoalResources } from './GoalResources';
@@ -218,7 +218,10 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     const updates: Partial<Session> = { status, updated_at: new Date().toISOString() };
     if (status === 'completed') updates.completed_at = new Date().toISOString();
     const { error } = await supabase.from('sessions').update(updates).eq('id', sessId);
-    if (!error && status !== 'scheduled') await cancelReminder(notificationId(sessId));
+    if (!error && status !== 'scheduled') {
+      await cancelReminder(notificationId(sessId));
+      await cancelActionRemindersForSession(sessId);
+    }
     await load();
   }
 
@@ -242,6 +245,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       return;
     }
     await cancelReminder(notificationId(sess.id));
+    await cancelActionRemindersForSession(sess.id);
     if (Capacitor.isNativePlatform()) {
       try {
         await deleteSessionFromNativeCalendar(sess);
@@ -319,6 +323,8 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     }
     await cancelReminder(notificationId(source.id));
     await cancelReminder(notificationId(target.id));
+    await cancelActionRemindersForSession(source.id).catch((error) => { calendarSyncWarning = true; console.error('[VOW] Could not cancel source action reminders:', error); });
+    await syncSessionActionReminders(target.id, target.title).catch((error) => { calendarSyncWarning = true; console.error('[VOW] Could not resync combined action reminders:', error); });
     const combinedSession = {
       ...target,
       notes: combinedNotes,
