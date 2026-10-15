@@ -259,7 +259,13 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     setActionError(null);
     const combinedNotes = [...new Set([...(target.notes || '').split('\n'), ...(source.notes || '').split('\n')].map((line) => line.trim()).filter(Boolean))].join('\n');
     const combinedScheduledAt = target.scheduled_at;
-    const combinedDuration = Math.min(1440, source.duration_minutes + target.duration_minutes);
+    const combinedDuration = source.duration_minutes + target.duration_minutes;
+    if (combinedDuration > 1440) {
+      setActionError('These sessions together exceed VOW’s 24-hour session limit. Shorten one session before combining them.');
+      setMergeBusy(false);
+      return;
+    }
+    let calendarSyncWarning = false;
     const sourceActionsResult = await supabase.from('session_actions').select('id').eq('session_id', source.id).eq('user_id', session.user.id);
     if (sourceActionsResult.error) {
       console.error('[VOW] Could not inspect source actions before merge:', sourceActionsResult.error);
@@ -331,13 +337,14 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
           description: combinedNotes + `\\n\\n${combinedDuration} minute combined commitment from VOW.`,
         } },
       });
-      if (calendarUpdateError) console.error('[VOW] Sessions merged but Google Calendar target event could not be updated:', calendarUpdateError);
+      if (calendarUpdateError) { calendarSyncWarning = true; console.error('[VOW] Sessions merged but Google Calendar target event could not be updated:', calendarUpdateError); }
     }
     if (Capacitor.isNativePlatform()) {
       try {
         await deleteSessionFromNativeCalendar(target);
         await addSessionToNativeCalendar(combinedSession);
       } catch (calendarError) {
+        calendarSyncWarning = true;
         console.error('[VOW] Sessions merged but phone-calendar target event could not be updated:', calendarError);
       }
     }
@@ -345,6 +352,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       try {
         await deleteSessionFromNativeCalendar(source);
       } catch (calendarError) {
+        calendarSyncWarning = true;
         console.error('[VOW] Merged sessions but source phone-calendar event may remain:', calendarError);
       }
     }
@@ -353,11 +361,12 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: { action: 'delete', eventId: source.external_event_id },
       });
-      if (googleDeleteError) console.error('[VOW] Merged sessions but source Google Calendar event may remain:', googleDeleteError);
+      if (googleDeleteError) { calendarSyncWarning = true; console.error('[VOW] Merged sessions but source Google Calendar event may remain:', googleDeleteError); }
     }
     setMergingSession(null);
     setMergeTargetId('');
     setMergeBusy(false);
+    if (calendarSyncWarning) setActionError('Sessions were combined and saved, but a calendar event could not be synchronized. Check Google/phone calendar and reconnect permissions if needed.');
     await load();
   }
 
