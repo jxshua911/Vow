@@ -69,7 +69,7 @@ Deno.serve(async (request) => {
     const existing = await admin.from('support_submissions').select('id, created_at, delivery_status, delivery_id, user_id, name, email, issue, message').eq('client_request_id', requestId).maybeSingle();
     if (existing.error || !existing.data) {
       console.error('[VOW Support] Idempotent submission lookup failed.');
-      return json({ persisted: false, error: 'We couldn\\'t check your existing request. Please try again.' }, 500);
+      return json({ persisted: false, error: "We couldn't check your existing request. Please try again." }, 500);
     }
     const prior = existing.data;
     if (prior.user_id !== user.id || prior.name !== name || prior.email !== email || prior.issue !== issue || prior.message !== message) {
@@ -81,11 +81,11 @@ Deno.serve(async (request) => {
     submission = prior;
   } else {
     console.error('[VOW Support] Support submission insert failed; no email was sent.');
-    return json({ persisted: false, error: 'We couldn\\'t submit your request. Please try again.' }, 500);
+    return json({ persisted: false, error: "We couldn't submit your request. Please try again." }, 500);
   }
   if (!submission) {
     console.error('[VOW Support] Support submission was not available after insert.');
-    return json({ persisted: false, error: 'We couldn\\'t submit your request. Please try again.' }, 500);
+    return json({ persisted: false, error: "We couldn't submit your request. Please try again." }, 500);
   }
   const recordDelivery = async (values: Record<string, unknown>) => {
     const { error } = await admin.from('support_submissions').update(values).eq('id', submission.id);
