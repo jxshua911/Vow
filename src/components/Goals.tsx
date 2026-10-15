@@ -11,7 +11,7 @@ import { Capacitor } from '@capacitor/core';
 import { addSessionToNativeCalendar, deleteSessionFromNativeCalendar, replaceSessionInNativeCalendar } from '@/lib/nativeCalendar';
 import { GoalResources } from './GoalResources';
 import { SessionActions } from './SessionActions';
-import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Clock } from '@/lib/ui-icons';
+import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Clock, Calendar } from '@/lib/ui-icons';
 
 function getSessionVideoUrls(notes: string | null): string[] {
   return [...new Set((notes || '').split('\n').filter((line) => line.startsWith('Video: ')).flatMap((line) => {
