@@ -967,7 +967,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
   }
   if (w <= 16 && weekly.length < w) return "INSUFFICIENT_WEEKLY_SESSIONS";
 
-  const planned = schedule(b, w, ds, str(b?.start_date) || new Date().toISOString().slice(0, 10));
+  const planned = schedule(b, w, ds, str(b?.start_date) || new Date().toISOString().slice(0, 10), g?.schedule_times_enabled === true);
   if (planned.length !== w * ds.length) return "INCOMPLETE_SCHEDULE";
 
   const tasks = planned.map((x: any) => str(x.task, 350).toLowerCase()).filter(Boolean);
@@ -1004,7 +1004,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
   return null;
 }
 
-function schedule(b: any, w: number, ds: string[], startDate: string) {
+function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTimesEnabled = true) {
   const weekly = Array.isArray(b?.weekly_session_templates)
     ? b.weekly_session_templates
         .map((week: any) => ({
@@ -1028,7 +1028,7 @@ function schedule(b: any, w: number, ds: string[], startDate: string) {
     purpose: str(b?.success_metric, 350) || "Make measurable progress toward the milestone target.",
     target_metric: str(b?.success_metric, 180) || "Complete planned execution block",
     duration_minutes: 30,
-    preferred_time: "09:00",
+    preferred_time: null,
   }));
 
   const focus = Array.isArray(b?.weekly_focus) && b.weekly_focus.length
@@ -1067,10 +1067,10 @@ function schedule(b: any, w: number, ds: string[], startDate: string) {
         purpose: [str(template?.purpose, 350), f].filter(Boolean).join(" "),
         target_metric: str(template?.target_metric, 180) || str(b?.success_metric, 180) || "Complete the planned work",
         duration_minutes: Math.max(5, Math.min(240, Number(template?.duration_minutes) || 30)),
-        preferred_time: /^\d{1,2}:\d{2}$/.test(str(template?.preferred_time, 10))
-          ? template.preferred_time
-          : "09:00",
-        scheduled_at: d.toISOString(),
+        preferred_time: scheduleTimesEnabled
+          ? (/^\d{1,2}:\d{2}$/.test(str(template?.preferred_time, 10)) ? template.preferred_time : null)
+          : null,
+        scheduled_at: scheduleTimesEnabled ? d.toISOString() : null,
       });
     }
   }
@@ -1230,29 +1230,18 @@ Deno.serve(async (req) => {
     ]
       .filter(Boolean)
       .join(" ");
-    const { data: userGoals } = await client(req)
-      .from("goals")
-      .select("title, outcome, why_it_matters, created_at")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    const { data: userJournal } = await client(req)
-      .from("journal_entries")
-      .select("body, created_at, linked_goal_id")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false })
-      .limit(10);
-
-    const knowledge = await searchKnowledge(knowledgeQuery);
     const researchRequired =
-      mode !== "goal-clarify" &&
-      (domain?.needs_ai_research === true ||
-        detectAmbiguousTerms(message) ||
-        detectAmbiguousTerms(g?.outcome || ""));
-    const research = mode === "goal-plan"
-      ? await researchGoalFacts(str(g?.title || g?.outcome, 300), str(g?.why_it_matters, 500))
-      : [];
+      domain?.needs_ai_research === true ||
+      detectAmbiguousTerms(message) ||
+      detectAmbiguousTerms(g?.outcome || "");
+    const [goalsResult, journalResult, knowledge, research] = await Promise.all([
+      client(req).from("goals").select("title, outcome, why_it_matters, created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(5),
+      client(req).from("journal_entries").select("body, created_at, linked_goal_id").eq("user_id", uid).order("created_at", { ascending: false }).limit(10),
+      searchKnowledge(knowledgeQuery),
+      mode === "chat" ? Promise.resolve([]) : researchGoalFacts(str(g?.title || g?.outcome, 300), str(g?.why_it_matters, 500)),
+    ]);
+    const userGoals = goalsResult.data;
+    const userJournal = journalResult.data;
     const context = {
       goal: {
         title: str(g?.title || g?.outcome, 300),
@@ -1318,7 +1307,7 @@ Deno.serve(async (req) => {
           [
             {
               role: "system",
-              content: `You are VOW's specialist goal-discovery researcher. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Use the supplied VOW knowledge base, domain profile, previous goals, and recent journal context as your first planning reference. Use previous goals and journal entries only to personalise the plan when they are relevant to the current goal. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string,category:string,goal_type:string,classification_confidence:number}. Copy category and goal_type from the supplied domain profile when it is sufficiently specific; otherwise classify the goal accurately and use one supported category. Ask high-value questions that resolve the most important missing inputs for this exact domain. If AI research is required, you MUST use the built-in web_search tool before deciding what an ambiguous abbreviation, event, competition, slang term, or specialist phrase means. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
+              content: `You are VOW's specialist goal-discovery researcher. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Use the supplied VOW knowledge base, domain profile, previous goals, recent journal context, and research results as your first planning reference. Use previous goals and journal entries only to personalise the plan when they are relevant to the current goal. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string,category:string,goal_type:string,classification_confidence:number}. Copy category and goal_type from the supplied domain profile when it is sufficiently specific; otherwise classify the goal accurately and use one supported category. Ask high-value questions that resolve the most important missing inputs for this exact domain. Use the supplied research results to resolve named entities and ambiguous terms before asking questions. If research does not resolve an ambiguity that materially changes the plan, ask one concise, specific clarification instead of generic questions. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
             },
             { role: "user", content: JSON.stringify({ message, ...context }) },
           ],
@@ -1392,7 +1381,7 @@ Deno.serve(async (req) => {
       const planMessages = [
             {
               role: "system",
-              content: `You are VOW's expert planning and research engine. Use the supplied research results and cite their URLs in references when relevant. Treat catalogue page counts as edition-dependent estimates. If a public lookup is unavailable, proceed with a transparent assumption rather than pretending research happened. Never make the user supply facts that can reasonably be looked up, and never block a plan because the user cannot know a precise measurement in advance. For unknown personal baselines, choose a safe, adjustable starting estimate or include a short baseline-measuring activity in the first session. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base, domain profile, previous goals, and recent journal context are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. Use the supplied research results when available. If a specialist term remains ambiguous after lookup, avoid unsupported claims and build a cautious plan around the user's stated meaning or ask one concise clarification only when the ambiguity materially changes the plan. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. Only return clarification_needed:true when a genuinely essential personal choice or safety constraint makes planning inappropriate without an answer. Do not ask for searchable public facts, product/book specifications, nutrition labels, exact future performance, or measurements the user cannot reasonably know. Use assumptions and mark them clearly in assumptions[]. Use previous goals and recent journal entries as personal context when relevant, but never expose unrelated private details or assume that past goals must continue. Never fill missing personal context with boilerplate. Verify resource URLs with web_search: when suitable, include one direct, genuinely relevant YouTube video and one authoritative website for this exact goal and level. Do not invent titles or URLs; omit an unavailable resource rather than fabricate it. The app may add clearly labelled YouTube searches and app suggestions separately. Duration (${w} weeks) and available days (${ds.join(
+              content: `You are VOW's expert planning and research engine. Use the supplied research results and cite their URLs in references when relevant. Treat catalogue page counts as edition-dependent estimates. If a public lookup is unavailable, proceed with a transparent assumption rather than pretending research happened. Never make the user supply facts that can reasonably be looked up, and never block a plan because the user cannot know a precise measurement in advance. For unknown personal baselines, choose a safe, adjustable starting estimate or include a short baseline-measuring activity in the first session. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base, domain profile, previous goals, and recent journal context are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. Use the supplied research results when available. If a specialist term remains ambiguous after lookup, avoid unsupported claims and build a cautious plan around the user's stated meaning or ask one concise clarification only when the ambiguity materially changes the plan. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. Only return clarification_needed:true when a genuinely essential personal choice or safety constraint makes planning inappropriate without an answer. Do not ask for searchable public facts, product/book specifications, nutrition labels, exact future performance, or measurements the user cannot reasonably know. Use assumptions and mark them clearly in assumptions[]. Use previous goals and recent journal entries as personal context when relevant, but never expose unrelated private details or assume that past goals must continue. Never fill missing personal context with boilerplate. Verify resource URLs with web_search: when suitable, include one direct, genuinely relevant YouTube video and one authoritative website for this exact goal and level. Do not invent titles or URLs; omit an unavailable resource rather than fabricate it. The app may add clearly labelled YouTube searches and app suggestions separately. Clock times are optional: when goal.schedule_times_enabled is false, preferred_time must be null and no time of day may be invented. Research named products, vehicles, careers, qualifications, locations, events, and other specific entities instead of treating them as generic goals. For savings or purchase goals, identify the exact target item, research credible current price evidence where available, cite sources, calculate a transparent target and adjustable savings scenarios, and ask only about personal inputs such as currency, current savings, and feasible contribution. If prices vary or live evidence is unavailable, say so and show a labelled estimate rather than pretending to know an exact price. Duration (${w} weeks) and available days (${ds.join(
                 ", "
               )}) are HARD constraints. Follow-up answers are HARD personal context. Domain profile: ${JSON.stringify(domain)}. Return ONLY JSON with outcome, success_metric, baseline, assumptions, milestones (2-8 objects with title,description,week), weekly_session_templates (one object per week, each containing week and sessions; sessions must contain one concrete, distinct session for each selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), session_templates (fallback template per selected day with day,task,purpose,target_metric,duration_minutes,preferred_time), weekly_focus (exactly one string per week), progression, checkpoints (3-8), risks (3-8), fallback_rules (2-6), summary, references (0-4 objects with url,title,resource_type). Make the plan genuinely domain-specific. Do not invent specialist claims when the knowledge/research does not support them. Each week's sessions must advance that week's focus rather than repeating the same task. Sessions must be concrete enough that the user can execute them without guessing what "work on it" means. For skill-based physical activities, specify named drills and sub-steps, sets and repetitions or rounds, rest periods where appropriate, technique cues, and a clear finish condition. For beginner martial arts, progress from stance, balance, footwork and basic techniques to controlled combinations; prioritise qualified instructor feedback and supervised practice, never prescribe unsupervised sparring or guarantee formal belt readiness by a deadline. For cooking goals, specify actual recipe actions such as preparing ingredients, boiling and timing pasta, simmering sauce, tasting, or plating instead of vague cooking tasks. Every week must meaningfully progress toward the outcome.`,
             },
