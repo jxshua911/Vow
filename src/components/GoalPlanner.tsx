@@ -102,6 +102,11 @@ function customDurationWeeks(value: string, unit: DurationUnit): number | null {
   return Math.max(1, Math.ceil(days / 7));
 }
 
+function currentLocalTime(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
 function nextMonday() {
   const d = new Date();
   const day = d.getDay();
@@ -297,7 +302,7 @@ export function GoalPlanner({
   const draftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId ? ':' + resumeDraftId : ':new');
   const legacyDraftStorageKey = 'vow-goal-planner-draft:' + userId;
   const [why, setWhy] = useState(initialWhy);
-  const [durationWeeks, setDurationWeeks] = useState<number | null>(8);
+  const [durationWeeks, setDurationWeeks] = useState<number | null>(null);
   const [customDurationValue, setCustomDurationValue] = useState('');
   const [customDurationUnit, setCustomDurationUnit] = useState<DurationUnit>('months');
   const [availableDays, setAvailableDays] = useState<string[]>([]);
@@ -812,8 +817,8 @@ export function GoalPlanner({
         const w = Math.max(1, Math.min(selectedDurationWeeks || 1, week));
         const dayIndex = Math.max(0, DAYS.indexOf(day));
         const date = addDays(start, (w - 1) * 7 + dayIndex);
-        const match = /^(\d{1,2}):(\d{2})/.exec(sessionTimes[day] || preferredTime || '09:00');
-        date.setHours(Math.min(23, Number(match?.[1] || 9)), Math.min(59, Number(match?.[2] || 0)), 0, 0);
+        const match = /^(\d{1,2}):(\d{2})/.exec(sessionTimes[day] || preferredTime || currentLocalTime());
+        date.setHours(Math.min(23, Number(match?.[1] ?? new Date().getHours())), Math.min(59, Number(match?.[2] ?? new Date().getMinutes())), 0, 0);
         return date;
       }
 
@@ -1316,7 +1321,7 @@ export function GoalPlanner({
           <div className="space-y-3">
             {availableDays.map(day => <div key={day} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-vow-border pb-3 last:border-b-0 last:pb-0">
               <div><p className="text-sm text-vow-ink">{day}</p>{!sessionTimes[day] && <p className="text-[11px] text-vow-muted mt-1">Choose a time</p>}</div>
-              <TimeWheelPicker value={sessionTimes[day] || '09:00'} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={`${day} session time`} />
+              <TimeWheelPicker value={sessionTimes[day] || currentLocalTime()} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={`${day} session time`} />
             </div>)}
           </div>
         </div>}
