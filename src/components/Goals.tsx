@@ -432,7 +432,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     setActionError(null);
     const { error } = await supabase.from('goals').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', goalId).eq('user_id', session.user.id);
     if (error) { setActionError('VOW could not mark this goal complete. Please try again.'); return; }
-    await Promise.all(sessions.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at).getTime() > Date.now()).map(s => cancelReminder(notificationId(s.id))));
+    await Promise.all(sessions.filter(s => s.status === 'scheduled' && Boolean(s.scheduled_at) && new Date(s.scheduled_at as string).getTime() > Date.now()).map(s => cancelReminder(notificationId(s.id))));
     onBack();
   }
   async function deleteGoal() {
