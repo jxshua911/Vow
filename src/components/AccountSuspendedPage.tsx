@@ -23,9 +23,10 @@ export function AccountSuspendedPage({ onBack }: AccountSuspendedPageProps) {
         </div>
         <div className="border-l-2 border-vow-success bg-vow-bg/60 p-3">
           <p className="text-xs leading-5 text-vow-muted">
-            Your account status is checked before access is restored. Switching Google accounts will not change the status of a suspended account.
+            Signing in again will not clear this account restriction. If you believe the decision is incorrect, email VOW support to request a review.
           </p>
         </div>
+        <a href="mailto:support@vowglobal.online?subject=VOW%20account%20suspension%20review" className="block w-full rounded-lg border border-vow-border px-4 py-3 text-center text-sm font-medium text-vow-ink transition-colors hover:bg-vow-bg">Email VOW support</a>
         <button type="button" onClick={onBack} className="vow-btn-primary w-full justify-center">
           Back to sign in
         </button>
