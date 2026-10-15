@@ -157,17 +157,17 @@ export function UpgradePage() {
           <p className="text-xs text-vow-muted mb-5">Start planning</p>
           <div className="space-y-2.5">{freeBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
-        <div className="relative border border-vow-ink rounded-xl p-5 pt-16">
-          <div className="absolute top-2 right-2 z-10 max-w-[148px] rounded-md border-2 border-white bg-black px-3 py-2 text-center shadow-sm"><span className="block text-[10px] font-bold uppercase tracking-wider leading-tight text-white">Best value</span><span className="block mt-1 text-[11px] leading-tight text-gray-300">Save $19.88 per year</span></div>
+        <div className="relative border border-vow-ink rounded-xl p-5 pt-8">
+          <div className="absolute -top-3 right-3 z-10 rounded-full border border-vow-border bg-vow-ink px-3 py-1.5 text-center shadow-sm"><span className="block text-[11px] font-bold uppercase tracking-wide text-vow-bg">33% OFF</span></div>
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
-          <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? '$40' : '$4.99'}</div>
+          <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? '$39.99' : '$4.99'}</div>
           <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
         <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">$4.99 / month</span></button>
-        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">$40 / year</span></button>
+        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">$39.99 / year</span></button>
       </div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
