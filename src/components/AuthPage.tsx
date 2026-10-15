@@ -7,6 +7,7 @@ import { Mail, Lock, ArrowRight } from '@/lib/ui-icons';
 import { GoogleIcon } from './GoogleIcon';
 import { BrandLogo } from './BrandLogo';
 import { userFacingError } from '@/lib/userFacingError';
+import { AccountSuspendedPage } from './AccountSuspendedPage';
 
 type AuthMode = 'signin' | 'signup'; type AuthMethod = 'options' | 'email';
 async function isPasswordCompromised(password: string): Promise<boolean> {
@@ -57,11 +58,7 @@ export function AuthPage() {
   } catch (err) { handleAuthError(err); } }
   return <div className="min-h-screen bg-vow-bg flex flex-col items-center justify-center px-6 py-12"><div className="w-full max-w-sm">
     <div className="text-center mb-10"><BrandLogo className="mx-auto w-28 h-auto mb-6" /><p className="text-vow-muted text-sm tracking-wide">Commit. Schedule. Execute. Review. Adjust.</p></div>
-    {suspended ? <div className="border border-vow-border bg-vow-surface p-5 space-y-3" role="alert" aria-live="polite">
-      <h1 className="text-lg font-semibold text-vow-ink">Account temporarily suspended</h1>
-      <p className="text-sm text-vow-muted">Sign-in is currently unavailable for this account. If you believe this is a mistake, please contact VOW support for a review.</p>
-      <button type="button" onClick={() => { setSuspended(false); setLoading(false); setError(null); setMethod('options'); }} className="w-full border border-vow-border py-3 text-sm font-medium text-vow-ink">Back to sign in</button>
-    </div> : method === 'options' ? <div className="space-y-4">
+    {suspended ? <AccountSuspendedPage onBack={() => { setSuspended(false); setLoading(false); setError(null); setMethod('options'); }} /> : method === 'options' ? <div className="space-y-4">
       <button type="button" onClick={handleGoogle} disabled={loading} className="w-full flex items-center justify-center gap-3 border border-vow-border bg-vow-surface py-3.5 text-sm font-medium text-vow-ink hover:bg-vow-border transition-colors disabled:opacity-40"><GoogleIcon className="w-5 h-5" /> Continue with Google</button>
       <div className="flex items-center gap-4"><div className="h-px flex-1 bg-vow-border" /><span className="text-xs text-vow-muted">or</span><div className="h-px flex-1 bg-vow-border" /></div>
       <button type="button" onClick={() => { setError(null); setMessage(''); setMethod('email'); }} className="w-full flex items-center justify-center gap-3 border border-vow-border bg-vow-surface py-3.5 text-sm font-medium text-vow-ink hover:bg-vow-border transition-opacity"><Mail className="w-5 h-5 shrink-0" /> Continue with Email</button>
