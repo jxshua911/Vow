@@ -842,10 +842,10 @@ async function researchGoalFacts(goalTitle: string, why: string) {
   const sources: Array<{ source: string; title: string; summary: string; url: string }> = [];
   const fetchJson = async (url: string) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4500);
+    const timer = setTimeout(() => controller.abort(), 4000);
     try {
       const response = await fetch(url, {
-        headers: { "Accept": "application/json", "User-Agent": "VOW-AI/1.0 (goal planning research)" },
+        headers: { Accept: "application/json", "User-Agent": "VOW-AI/1.0 (goal planning research)" },
         signal: controller.signal,
       });
       if (!response.ok) return null;
@@ -857,34 +857,58 @@ async function researchGoalFacts(goalTitle: string, why: string) {
     }
   };
   const bookQuery = title.replace(/^.*?\b(?:read|finish|study|summarize|summarise)\s+(?:the\s+)?/i, "").trim();
-  if (/\b(read|book|novel|chapter|pages|atomic habits|monk who sold|monk with a ferrari)\b/i.test(title + " " + why) && bookQuery) {
-    const data = await fetchJson("https://openlibrary.org/search.json?title=" + encodeURIComponent(bookQuery) + "&limit=3&fields=title,author_name,first_publish_year,number_of_pages_median,key");
-    const docs = Array.isArray(data?.docs) ? data.docs.slice(0, 3) : [];
-    for (const doc of docs) {
-      const bookTitle = str(doc?.title, 180);
-      if (!bookTitle) continue;
-      const authors = Array.isArray(doc?.author_name) ? doc.author_name.slice(0, 3).map((x: unknown) => str(x, 80)).filter(Boolean) : [];
-      const facts = [
-        authors.length ? "Author(s): " + authors.join(", ") : "",
-        doc?.first_publish_year ? "First publication year: " + String(doc.first_publish_year) : "",
-        doc?.number_of_pages_median ? "Catalogue median page count: " + String(doc.number_of_pages_median) + " pages (edition-dependent estimate)" : "",
-      ].filter(Boolean);
-      sources.push({ source: "Open Library", title: bookTitle, summary: facts.join("; ") || "Catalogue record found; page count may vary by edition.", url: "https://openlibrary.org" + str(doc?.key, 160) });
-    }
-  }
+  const isBookGoal = /\b(read|book|novel|chapter|pages|atomic habits|monk who sold|monk with a ferrari)\b/i.test(title + " " + why);
+  const isNutritionGoal = /\b(nutrition|nutrients?|macros?|carbs?|carbohydrates?|protein|calories|calorie|food label|per 100g)\b/i.test(title + " " + why);
+  const jobs: Promise<unknown>[] = [];
+  if (isBookGoal && bookQuery) {
+    jobs.push(fetchJson("https://openlibrary.org/search.json?title=" + encodeURIComponent(bookQuery) + "&limit=3&fields=title,author_name,first_publish_year,number_of_pages_median,key"));
+  } else jobs.push(Promise.resolve(null));
   const query = title.replace(/^\s*(?:i want to|i want|want to|learn about|learn|read|study|train for|prepare for)\s+/i, "").trim();
-  if (query) {
-    const search = await fetchJson("https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(query) + "&format=json&utf8=1&srlimit=3");
-    const hits = Array.isArray(search?.query?.search) ? search.query.search.slice(0, 3) : [];
-    for (const hit of hits) {
-      const pageTitle = str(hit?.title, 180);
-      if (!pageTitle) continue;
-      const summary = await fetchJson("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(pageTitle.replace(/ /g, "_")));
-      const extract = str(summary?.extract, 900);
-      if (!extract) continue;
-      const pageUrl = typeof summary?.content_urls?.desktop?.page === "string" ? summary.content_urls.desktop.page : "https://en.wikipedia.org/wiki/" + encodeURIComponent(pageTitle.replace(/ /g, "_"));
-      sources.push({ source: "Wikipedia", title: pageTitle, summary: extract, url: pageUrl });
-    }
+  jobs.push(query
+    ? fetchJson("https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(query) + "&format=json&utf8=1&srlimit=2")
+    : Promise.resolve(null));
+  const foodQuery = title.replace(/^.*?\b(?:nutrition(?:al)? facts? for|carbs? in|carbohydrates? in|protein in|calories in|macros? for|track|calculate|count|eat)\s+/i, "").trim();
+  jobs.push(isNutritionGoal && foodQuery
+    ? fetchJson("https://world.openfoodfacts.org/cgi/search.pl?search_terms=" + encodeURIComponent(foodQuery) + "&search_simple=1&action=process&json=1&page_size=3&fields=product_name,brands,nutriments,code")
+    : Promise.resolve(null));
+  const [bookData, wikiData, foodData] = await Promise.all(jobs);
+  const docs = Array.isArray((bookData as any)?.docs) ? (bookData as any).docs.slice(0, 3) : [];
+  for (const doc of docs) {
+    const bookTitle = str(doc?.title, 180);
+    if (!bookTitle) continue;
+    const authors = Array.isArray(doc?.author_name) ? doc.author_name.slice(0, 3).map((x: unknown) => str(x, 80)).filter(Boolean) : [];
+    const facts = [
+      authors.length ? "Author(s): " + authors.join(", ") : "",
+      doc?.first_publish_year ? "First publication year: " + String(doc.first_publish_year) : "",
+      doc?.number_of_pages_median ? "Catalogue median page count: " + String(doc.number_of_pages_median) + " pages (edition-dependent estimate)" : "",
+    ].filter(Boolean);
+    const key = str(doc?.key, 160);
+    sources.push({ source: "Open Library", title: bookTitle, summary: facts.join("; ") || "Catalogue record found; page count may vary by edition.", url: key.startsWith("/") ? "https://openlibrary.org" + key : "https://openlibrary.org" });
+  }
+  const hits = Array.isArray((wikiData as any)?.query?.search) ? (wikiData as any).query.search.slice(0, 2) : [];
+  const summaries = await Promise.all(hits.map(async (hit: any) => {
+    const pageTitle = str(hit?.title, 180);
+    if (!pageTitle) return null;
+    const summary = await fetchJson("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(pageTitle.replace(/ /g, "_")));
+    const extract = str((summary as any)?.extract, 900);
+    if (!extract) return null;
+    const pageUrl = typeof (summary as any)?.content_urls?.desktop?.page === "string"
+      ? (summary as any).content_urls.desktop.page
+      : "https://en.wikipedia.org/wiki/" + encodeURIComponent(pageTitle.replace(/ /g, "_"));
+    return { source: "Wikipedia", title: pageTitle, summary: extract, url: pageUrl };
+  }));
+  sources.push(...summaries.filter((item): item is { source: string; title: string; summary: string; url: string } => Boolean(item)));
+  const products = Array.isArray((foodData as any)?.products) ? (foodData as any).products.slice(0, 3) : [];
+  for (const product of products) {
+    const productName = str(product?.product_name, 140);
+    const nutrients = product?.nutriments || {};
+    const facts = [
+      Number.isFinite(Number(nutrients.carbohydrates_100g)) ? "carbohydrates " + nutrients.carbohydrates_100g + " g/100 g" : "",
+      Number.isFinite(Number(nutrients.proteins_100g)) ? "protein " + nutrients.proteins_100g + " g/100 g" : "",
+      Number.isFinite(Number(nutrients["energy-kcal_100g"])) ? "energy " + nutrients["energy-kcal_100g"] + " kcal/100 g" : "",
+    ].filter(Boolean);
+    if (!productName || !facts.length) continue;
+    sources.push({ source: "Open Food Facts", title: productName, summary: "Label-reported values: " + facts.join("; ") + ". Values depend on the exact product and serving; verify the package label.", url: "https://world.openfoodfacts.org/product/" + str(product?.code, 40) });
   }
   const seen = new Set<string>();
   return sources.filter((item) => {
