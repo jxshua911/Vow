@@ -887,7 +887,7 @@ async function researchGoalFacts(goalTitle: string, why: string) {
   if (isBookGoal && bookQuery) {
     jobs.push(fetchJson("https://openlibrary.org/search.json?title=" + encodeURIComponent(bookQuery) + "&limit=3&fields=title,author_name,first_publish_year,number_of_pages_median,key"));
   } else jobs.push(Promise.resolve(null));
-  const query = title.replace(/^\s*(?:i want to|i want|want to|learn about|learn|read|study|train for|prepare for)\s+/i, "").trim();
+  const query = title.replace(/^\s*(?:i want to|i want|want to|save up to buy|save up for|save up to|buy|purchase|learn about|learn|read|study|train for|prepare for)\s+/i, "").trim();
   jobs.push(query
     ? fetchJson("https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(query) + "&format=json&utf8=1&srlimit=2")
     : Promise.resolve(null));
@@ -1284,7 +1284,9 @@ Deno.serve(async (req) => {
       client(req).from("goals").select("title, outcome, why_it_matters, created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(5),
       client(req).from("journal_entries").select("body, created_at, linked_goal_id").eq("user_id", uid).order("created_at", { ascending: false }).limit(10),
       searchKnowledge(knowledgeQuery),
-      mode === "chat" ? Promise.resolve([]) : researchGoalFacts(str(g?.title || g?.outcome, 300), str(g?.why_it_matters, 500)),
+      mode === "goal-plan" || researchRequired || /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/.test(str(g?.title || g?.outcome, 300))
+        ? researchGoalFacts(str(g?.title || g?.outcome, 300), str(g?.why_it_matters, 500))
+        : Promise.resolve([]),
     ]);
     const userGoals = goalsResult.data;
     const userJournal = journalResult.data;
