@@ -297,6 +297,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     } else {
       combinedScheduledAt = (latestTarget as Session).scheduled_at;
     }
+    const canSyncTargetCalendar = Boolean(latestTarget && !latestTargetError);
     const mergedTitle = (latestTarget as Session | null)?.title || target.title;
     await cancelReminder(notificationId(source.id));
     await cancelReminder(notificationId(target.id));
@@ -304,7 +305,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     await syncSessionActionReminders(target.id, mergedTitle).catch((error) => { calendarSyncWarning = true; console.error('[VOW] Could not resync combined action reminders:', error); });
     const combinedSession = {
       ...target,
-      ...(latestTarget as Session | null),
+      ...(latestTarget ? latestTarget as Session : {}),
       notes: combinedNotes,
       scheduled_at: combinedScheduledAt,
       duration_minutes: savedCombinedDuration,
@@ -314,7 +315,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       calendarSyncWarning = true;
       console.error('[VOW] Sessions merged but reminders could not be fully synchronized:', syncError);
     });
-    if (mergeRecord.target_external_event_id && navigator.onLine) {
+    if (canSyncTargetCalendar && mergeRecord.target_external_event_id && navigator.onLine) {
       const eventEnd = new Date(new Date(combinedScheduledAt).getTime() + savedCombinedDuration * 60_000).toISOString();
       const { error: calendarUpdateError } = await supabase.functions.invoke('google-calendar-events', {
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -326,7 +327,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       });
       if (calendarUpdateError) { calendarSyncWarning = true; console.error('[VOW] Sessions merged but Google Calendar target event could not be updated:', calendarUpdateError); }
     }
-    if (Capacitor.isNativePlatform()) {
+    if (Capacitor.isNativePlatform() && canSyncTargetCalendar) {
       try {
         await replaceSessionInNativeCalendar(target, combinedSession);
       } catch (calendarError) {
