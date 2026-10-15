@@ -7,8 +7,11 @@ const SYNCED_PREFIX = 'vow:native-calendar-session:';
 function isSynced(sessionId: string): boolean { return Boolean(localStorage.getItem(`${SYNCED_PREFIX}${sessionId}`)); }
 function markSynced(sessionId: string, eventId: string): void { localStorage.setItem(`${SYNCED_PREFIX}${sessionId}`, eventId); }
 function nativeTitle(session: Session): string {
-  const shortTitle = session.title.startsWith('Practice ·') ? session.title : 'Practice';
-  return `VOW · ${shortTitle}`;
+  if (session.title.startsWith('Practice ·') || session.title.includes(' · W')) return `VOW · ${session.title}`;
+  const lines = (session.notes || '').split('\\n');
+  const task = lines.find((line) => line.startsWith('Task: '))?.slice(6) || session.title;
+  const compact = task.trim().replace(/^(practice|practise|work on|complete|perform|train|study|review)\\s+/i, '').split(/\\s+/).slice(0, 5).join(' ').replace(/[.,:;]+$/, '');
+  return `VOW · ${(compact || 'Practice').slice(0, 40)}`;
 }
 function nativeDescription(session: Session): string {
   const lines = (session.notes || '').split('\n');
