@@ -121,12 +121,20 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       console.error('[VOW] Could not save action completion:', updateError);
       setError('Completion could not be saved. Please try again.');
     } else {
-      if (nextStatus === 'completed') {
-        await cancelReminder(notificationId(action.id));
-      } else if (action.scheduled_at && new Date(action.scheduled_at).getTime() > Date.now()) {
-        await scheduleReminder(notificationId(action.id), `VOW · ${action.title.slice(0, 48)}`, `Action for ${currentSession.title}`, new Date(action.scheduled_at), currentSession.id, 'action');
+      let reminderWarning = false;
+      try {
+        if (nextStatus === 'completed') {
+          await cancelReminder(notificationId(action.id));
+        } else if (action.scheduled_at && new Date(action.scheduled_at).getTime() > Date.now()) {
+          await scheduleReminder(notificationId(action.id), `VOW · ${action.title.slice(0, 48)}`, `Action for ${currentSession.title}`, new Date(action.scheduled_at), currentSession.id, 'action');
+        }
+      } catch (reminderError) {
+        reminderWarning = true;
+        console.error('[VOW] Action completion saved but its reminder could not be synchronized:', reminderError);
       }
-      setActions((existing) => existing.map((item) => item.id === action.id ? { ...item, status: nextStatus, completed_at: nextStatus === 'completed' ? new Date().toISOString() : null } : item));
+      const completedAt = nextStatus === 'completed' ? new Date().toISOString() : null;
+      setActions((existing) => existing.map((item) => item.id === action.id ? { ...item, status: nextStatus, completed_at: completedAt } : item));
+      if (reminderWarning) setError('The step was updated, but its reminder could not be synchronized. Check notification permissions.');
     }
     setBusyId(null);
   }
@@ -190,9 +198,19 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       setError('VOW could not save this step’s schedule. Please try again.');
       return;
     }
-    if (nextDate && action.status !== 'completed') await scheduleReminder(notificationId(action.id), `VOW · ${action.title.slice(0, 48)}`, `Action for ${currentSession.title}`, nextDate, currentSession.id, 'action');
-    else await cancelReminder(notificationId(action.id));
+    let reminderWarning = false;
+    try {
+      if (nextDate && action.status !== 'completed') {
+        await scheduleReminder(notificationId(action.id), `VOW · ${action.title.slice(0, 48)}`, `Action for ${currentSession.title}`, nextDate, currentSession.id, 'action');
+      } else {
+        await cancelReminder(notificationId(action.id));
+      }
+    } catch (reminderError) {
+      reminderWarning = true;
+      console.error('[VOW] Action schedule saved but its reminder could not be synchronized:', reminderError);
+    }
     setActions((existing) => existing.map((item) => item.id === action.id ? { ...item, scheduled_at: nextDate?.toISOString() || null } : item));
+    setError(reminderWarning ? 'The step schedule was saved, but its reminder could not be synchronized. Check notification permissions.' : null);
   }
 
   function renderAction(action: SessionAction, depth = 0) {
