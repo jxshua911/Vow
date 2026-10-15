@@ -1,13 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 :root,
 :root[data-theme='light'] {
-  --vow-bg: 247 247 245; --vow-ink: 17 17 17; --vow-muted: 107 107 107; --vow-border: 202 202 199; --vow-surface: 232 232 229; --vow-success: 107 107 107; --vow-gray: 128 128 128;
+  --vow-bg: 248 249 247; --vow-ink: 23 43 54; --vow-muted: 94 112 120; --vow-border: 205 216 216; --vow-surface: 232 240 238; --vow-success: 31 122 110; --vow-gray: 103 126 132;
   --vow-gray-50: 250 250 250; --vow-gray-100: 245 245 245; --vow-gray-200: 229 229 229; --vow-gray-300: 212 212 212; --vow-gray-400: 163 163 163; --vow-gray-500: 115 115 115; --vow-gray-600: 82 82 82; --vow-gray-700: 64 64 64; --vow-gray-800: 38 38 38; --vow-gray-900: 23 23 23; --vow-gray-950: 10 10 10;
   color-scheme: light;
 }
 :root[data-theme='dark'] {
-  --vow-bg: 17 17 17; --vow-ink: 247 247 245; --vow-muted: 173 173 173; --vow-border: 68 68 68; --vow-surface: 48 48 48; --vow-success: 173 173 173; --vow-gray: 173 173 173;
+  --vow-bg: 15 27 32; --vow-ink: 231 244 241; --vow-muted: 163 184 185; --vow-border: 55 78 82; --vow-surface: 28 46 49; --vow-success: 105 205 174; --vow-gray: 145 171 171;
   --vow-gray-50: 250 250 250; --vow-gray-100: 245 245 245; --vow-gray-200: 229 229 229; --vow-gray-300: 212 212 212; --vow-gray-400: 163 163 163; --vow-gray-500: 115 115 115; --vow-gray-600: 82 82 82; --vow-gray-700: 64 64 64; --vow-gray-800: 38 38 38; --vow-gray-900: 23 23 23; --vow-gray-950: 10 10 10;
   color-scheme: dark;
 }
@@ -18,7 +18,7 @@
 
 @layer base {
   html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: rgb(var(--vow-bg)); color-scheme: inherit; }
-  body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'Inter', system-ui, sans-serif; font-weight: 400; margin: 0; transition: background-color 180ms ease, color 180ms ease; }
+  body { background-color: rgb(var(--vow-bg)); color: rgb(var(--vow-ink)); font-family: 'DM Sans', system-ui, sans-serif; font-weight: 400; margin: 0; transition: background-color 180ms ease, color 180ms ease; }
   ::selection { background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); }
   input, textarea, select, button { font-family: inherit; }
   input, textarea, select { color-scheme: inherit; }
@@ -32,7 +32,7 @@
 }
 
 @layer utilities {
-  .vow-heading { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; letter-spacing: -0.02em; }
+  .vow-heading { font-family: 'Manrope', system-ui, sans-serif; font-weight: 750; letter-spacing: -0.035em; line-height: 1.12; }
   .vow-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgb(var(--vow-ink)); color: rgb(var(--vow-bg)); font-size: 0.8125rem; font-weight: 500; padding: 0.6875rem 1.25rem; transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease; }
   .vow-btn-primary:hover { background: rgb(var(--vow-gray-700)); opacity: 1; }
   .vow-btn-primary:active { background: rgb(var(--vow-gray-800)); transform: translateY(1px); }
@@ -49,7 +49,7 @@
   :root[data-theme='dark'] .vow-btn-soft:hover { background: rgb(var(--vow-gray-700)); border-color: rgb(var(--vow-gray-500)); }
   .vow-btn-soft:active { transform: translateY(1px); }
   .vow-btn-soft:active { transform: translateY(1px); }
-  .vow-card { background: rgb(var(--vow-surface)); border: 1px solid rgb(var(--vow-border)); }
+  .vow-card { background: rgb(var(--vow-surface)); border: 1px solid rgb(var(--vow-border)); border-radius: 0.85rem; box-shadow: 0 8px 24px rgb(20 52 58 / 0.04); }
   .vow-switch { position: relative; display: inline-flex; width: 46px; height: 26px; flex: 0 0 auto; align-items: center; padding: 3px; border: 1px solid rgb(var(--vow-muted)); border-radius: 999px; background: rgb(var(--vow-surface)); transition: background-color 150ms ease, border-color 150ms ease; }
   .vow-switch:focus-visible { outline: 2px solid rgb(var(--vow-ink)); outline-offset: 2px; }
   .vow-switch:disabled { opacity: .5; cursor: not-allowed; }
@@ -101,3 +101,10 @@ body,
   max-width: 100%;
   overflow-x: clip;
 }
+
+
+/* VOW 1.8 visual refresh: clearer typography, calmer teal contrast, softer surfaces. */
+.vow-input { border-radius: 0.55rem; }
+.vow-btn-primary, .vow-btn-ghost, .vow-btn-soft { border-radius: 0.55rem; }
+.vow-label { letter-spacing: 0.065em; }
+button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
