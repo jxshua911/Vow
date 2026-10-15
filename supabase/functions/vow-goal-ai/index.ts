@@ -931,7 +931,7 @@ function meaningfulTokens(text: string) {
   );
 }
 
-function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
+function validatePlan(b: any, w: number, ds: string[], goalContext = "", scheduleTimesEnabled = true) {
   const milestones = Array.isArray(b?.milestones) ? b.milestones : [];
   const focus = Array.isArray(b?.weekly_focus) ? b.weekly_focus : [];
   const weekly = Array.isArray(b?.weekly_session_templates) ? b.weekly_session_templates : [];
@@ -967,7 +967,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "") {
   }
   if (w <= 16 && weekly.length < w) return "INSUFFICIENT_WEEKLY_SESSIONS";
 
-  const planned = schedule(b, w, ds, str(b?.start_date) || new Date().toISOString().slice(0, 10), g?.schedule_times_enabled === true);
+  const planned = schedule(b, w, ds, str(b?.start_date) || new Date().toISOString().slice(0, 10), scheduleTimesEnabled);
   if (planned.length !== w * ds.length) return "INCOMPLETE_SCHEDULE";
 
   const tasks = planned.map((x: any) => str(x.task, 350).toLowerCase()).filter(Boolean);
@@ -1419,7 +1419,7 @@ Deno.serve(async (req) => {
       const validationContext = [str(g?.title || g?.outcome, 500), str(g?.why_it_matters, 300), message]
         .filter(Boolean)
         .join(" ");
-      let validationError = validatePlan(b, w, ds, validationContext);
+      let validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true);
       if (validationError === "GENERIC_SESSION_TASK" || validationError === "REPETITIVE_SCHEDULE") {
         console.warn("[VOW AI] Plan failed quality validation; retrying once with corrective instructions", {
           validation_error: validationError,
