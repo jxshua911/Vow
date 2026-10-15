@@ -50,7 +50,7 @@ export function NativeCalendarSync() {
   }, [userId]);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !userId || !enabled || dismissed) return;
+    if (!Capacitor.isNativePlatform() || !userId || !enabled) return;
     if (skipNextEffectSync.current) {
       skipNextEffectSync.current = false;
       return;
@@ -78,7 +78,7 @@ export function NativeCalendarSync() {
     }
     void sync();
     return () => { cancelled = true; };
-  }, [enabled, userId, accountEmail, dismissed, dismissAfterSuccess]);
+  }, [enabled, userId, accountEmail, dismissAfterSuccess]);
 
   if (!Capacitor.isNativePlatform() || !session || !userId || dismissedUserId !== userId || dismissed) return null;
 
