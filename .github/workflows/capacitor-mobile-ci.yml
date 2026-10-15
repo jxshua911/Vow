@@ -1,0 +1,36 @@
+name: Capacitor Mobile CI
+
+on:
+  push:
+    branches:
+      - capacitor-mobile
+  pull_request:
+    branches:
+      - capacitor-mobile
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capacitor-mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Build production app
+        run: npm run build
