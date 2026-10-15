@@ -74,13 +74,23 @@ export async function restorePremium() {
   if (error || !user) throw new Error('UNAUTHORIZED');
 
   const appAccountToken = await accountToken(user.id);
-  await NativePurchases.restorePurchases();
-
-  const { purchases } = await NativePurchases.getPurchases({
-    productType: PURCHASE_TYPE.SUBS,
-    appAccountToken,
-    onlyCurrentEntitlements: true,
-  });
+  let purchases;
+  try {
+    await NativePurchases.restorePurchases();
+    const result = await NativePurchases.getPurchases({
+      productType: PURCHASE_TYPE.SUBS,
+      appAccountToken,
+      onlyCurrentEntitlements: true,
+    });
+    purchases = result.purchases;
+  } catch (error) {
+    console.warn('[VOW] Google Play purchase restore failed:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (/billing|connect|network|service|unavailable|timeout|store/i.test(message)) {
+      throw new Error('PLAY_STORE_UNAVAILABLE');
+    }
+    throw new Error('PLAY_STORE_RESTORE_FAILED');
+  }
 
   const purchase = purchases.find(
     (item) =>
