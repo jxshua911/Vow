@@ -56,8 +56,8 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
     let rows = (data || []) as SessionAction[];
     // One-time, idempotent conversion of legacy numbered steps into persistent actions.
     if (rows.length === 0 && !readOnly) {
-      const legacySteps = (currentSession.notes || '').split('\\n')
-        .map((line) => line.match(/^Step \\d+: (.+)$/)?.[1]?.trim())
+      const legacySteps = (currentSession.notes || '').split('\n')
+        .map((line) => line.match(/^Step \d+: (.+)$/)?.[1]?.trim())
         .filter((step): step is string => Boolean(step));
       if (legacySteps.length > 0) {
         const inserts = legacySteps.map((title, index) => ({
