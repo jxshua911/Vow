@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Session, SessionAction } from '@/types/database';
+import { cancelReminder, notificationId, scheduleReminder } from '@/lib/notifications';
 
 interface SessionActionsProps {
   session: Session;
