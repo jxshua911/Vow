@@ -305,13 +305,34 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     }
     await cancelReminder(notificationId(source.id));
     await cancelReminder(notificationId(target.id));
-    await syncUpcomingSessionNotifications([{
+    const combinedSession = {
       ...target,
       notes: combinedNotes,
       scheduled_at: combinedScheduledAt,
       duration_minutes: combinedDuration,
       status: 'scheduled',
-    } as Session]);
+    } as Session;
+    await syncUpcomingSessionNotifications([combinedSession]);
+    if (target.external_event_id && navigator.onLine) {
+      const eventEnd = new Date(new Date(combinedScheduledAt).getTime() + combinedDuration * 60_000).toISOString();
+      const { error: calendarUpdateError } = await supabase.functions.invoke('google-calendar-events', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: { action: 'update', eventId: target.external_event_id, event: {
+          start: { dateTime: combinedScheduledAt }, end: { dateTime: eventEnd },
+          summary: `VOW · ${target.title}`,
+          description: combinedNotes + `\\n\\n${combinedDuration} minute combined commitment from VOW.`,
+        } },
+      });
+      if (calendarUpdateError) console.error('[VOW] Sessions merged but Google Calendar target event could not be updated:', calendarUpdateError);
+    }
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await deleteSessionFromNativeCalendar(target);
+        await addSessionToNativeCalendar(combinedSession);
+      } catch (calendarError) {
+        console.error('[VOW] Sessions merged but phone-calendar target event could not be updated:', calendarError);
+      }
+    }
     if (Capacitor.isNativePlatform()) {
       try {
         await deleteSessionFromNativeCalendar(source);
