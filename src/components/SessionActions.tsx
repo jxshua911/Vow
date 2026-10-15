@@ -177,6 +177,10 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       setError('Choose a valid date and time.');
       return;
     }
+    if (nextDate && nextDate.getTime() <= Date.now()) {
+      setError('Choose a future date and time so VOW can remind you before the step.');
+      return;
+    }
     const { error: updateError } = await supabase.from('session_actions').update({
       scheduled_at: nextDate ? nextDate.toISOString() : null,
       updated_at: new Date().toISOString(),
