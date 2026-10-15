@@ -101,9 +101,3 @@ body,
   max-width: 100%;
   overflow-x: clip;
 }
-
-*,
-*::before,
-*::after {
-  min-width: 0;
-}
