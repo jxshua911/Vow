@@ -54,28 +54,59 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
     }
 
     let rows = (data || []) as SessionAction[];
-    // One-time, idempotent conversion of legacy numbered steps into persistent actions.
+    // One-time conversion: the session task is the parent action and its generated
+    // steps become editable child actions. This preserves the hierarchy instead
+    // of flattening every substep into a separate top-level activity.
     if (rows.length === 0 && !readOnly) {
-      const legacySteps = (currentSession.notes || '').split('\n')
+      const noteLines = (currentSession.notes || '').split('\n');
+      const taskTitle = noteLines.find((line) => line.startsWith('Task: '))?.slice(6).trim() || currentSession.title;
+      const purpose = noteLines.find((line) => line.startsWith('Purpose: '))?.slice(9).trim();
+      const target = noteLines.find((line) => line.startsWith('Target: '))?.slice(8).trim();
+      const rawSteps = noteLines
         .map((line) => line.match(/^Step \d+: (.+)$/)?.[1]?.trim())
         .filter((step): step is string => Boolean(step));
-      if (legacySteps.length > 0) {
-        const inserts = legacySteps.map((title, index) => ({
+      const childSteps = rawSteps.filter((step) =>
+        step !== taskTitle && step !== purpose && step !== target && !/^finish when:/i.test(step)
+      );
+      const instructions = [purpose, target ? 'Finish when: ' + target : null].filter(Boolean).join('\n') || null;
+      const { data: parent, error: parentError } = await supabase
+        .from('session_actions')
+        .insert({
           goal_id: currentSession.goal_id,
           session_id: currentSession.id,
           user_id: authSession.user.id,
-          title,
-          sort_order: index,
-        }));
-        const { data: seeded, error: seedError } = await supabase
-          .from('session_actions')
-          .insert(inserts)
-          .select('*');
-        if (seedError) {
-          console.error('[VOW] Could not migrate legacy session steps:', seedError);
-          setError('This session’s steps could not be saved yet.');
-        } else {
-          rows = (seeded || []) as SessionAction[];
+          parent_action_id: null,
+          title: taskTitle,
+          instructions,
+          duration_minutes: currentSession.duration_minutes,
+          sort_order: 0,
+        })
+        .select('*')
+        .single();
+      if (parentError || !parent) {
+        console.error('[VOW] Could not convert the session plan into actions:', parentError);
+        setError('This session’s steps could not be saved yet.');
+      } else {
+        rows = [parent as SessionAction];
+        if (childSteps.length > 0) {
+          const inserts = childSteps.map((title, index) => ({
+            goal_id: currentSession.goal_id,
+            session_id: currentSession.id,
+            user_id: authSession.user.id,
+            parent_action_id: parent.id,
+            title,
+            sort_order: index,
+          }));
+          const { data: children, error: childError } = await supabase
+            .from('session_actions')
+            .insert(inserts)
+            .select('*');
+          if (childError) {
+            console.error('[VOW] Could not save generated child steps:', childError);
+            setError('The main session action was saved, but some substeps could not be saved. Please retry.');
+          } else {
+            rows = [parent as SessionAction, ...((children || []) as SessionAction[])];
+          }
         }
       }
     }
