@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasMeasurableEvidence, validateCategorySpecificDetail } from '../supabase/functions/vow-goal-ai/planValidation.ts';
+import { hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from '../supabase/functions/vow-goal-ai/planValidation.ts';
 
 test('recognises percentage measurements without requiring a word boundary after percent', () => {
   assert.equal(hasMeasurableEvidence('Increase weekly savings by 15%'), true);
@@ -40,4 +40,23 @@ test('short plans and unknown categories are not rejected by the category matrix
 
 test('a specific category is rejected only when the whole planned detail lacks its signals', () => {
   assert.equal(validateCategorySpecificDetail('fitness', 'Review quarterly ledger entries', 8), 'CATEGORY_DETAIL_FITNESS');
+});
+
+
+test('accepts a complete grouped action tree with instructions, measurements and nested steps', () => {
+  const actions = [
+    { title: 'Biceps curls', instructions: 'Keep elbows close and lower under control.', sets: 3, reps: '10–12', rest_seconds: 60, substeps: ['Choose a manageable load', 'Curl without swinging', 'Lower for two seconds'] },
+    { title: 'Triceps extensions', instructions: 'Keep upper arms steady throughout each repetition.', sets: 3, reps: '10', rest_seconds: 60, substeps: ['Set up safely', 'Extend smoothly', 'Record completed repetitions'] },
+    { title: 'Shoulder press', instructions: 'Use a comfortable range and stop if painful.', duration_minutes: 8, substeps: ['Warm up shoulders', 'Press with controlled form', 'Record load and repetitions'] },
+  ];
+  assert.equal(hasCompleteActionTree(actions), true);
+});
+
+test('rejects flat or incomplete action trees that cannot guide a session', () => {
+  assert.equal(hasCompleteActionTree(['Biceps', 'Triceps', 'Shoulders']), false);
+  assert.equal(hasCompleteActionTree([
+    { title: 'Biceps curls', instructions: 'Do the exercise', sets: 3, reps: '10', substeps: ['Curl'] },
+    { title: 'Triceps extensions', instructions: 'Do the exercise', sets: 3, reps: '10', substeps: ['Extend'] },
+    { title: 'Shoulder press', instructions: 'Do the exercise', sets: 3, reps: '10', substeps: ['Press'] },
+  ]), false);
 });
