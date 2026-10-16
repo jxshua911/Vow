@@ -214,7 +214,7 @@ function normalizePlan(
       preferred_time: /^\d{1,2}:\d{2}$/.test(String(item?.preferred_time ?? '')) ? String(item.preferred_time).trim().slice(0, 8) : null,
       video_url: (() => { const url = String(item?.video_url ?? '').trim().slice(0, 1000); return isYoutubeUrl(url) ? url : ''; })(),
       substeps: Array.isArray(item?.substeps) ? item.substeps.map((step: unknown) => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 12) : [],
-      actions: Array.isArray(item?.actions) ? item.actions.slice(0, 8).map((action: any) => ({
+      actions: Array.isArray(item?.actions) ? item.actions.slice(0, 8).map((action) => ({
         title: String(action?.title ?? action?.name ?? '').trim().slice(0, 160),
         instructions: String(action?.instructions ?? action?.purpose ?? '').trim().slice(0, 500) || undefined,
         sets: Number.isFinite(Number(action?.sets)) && Number(action.sets) > 0 ? Math.min(100, Math.round(Number(action.sets))) : null,
