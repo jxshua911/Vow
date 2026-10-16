@@ -46,7 +46,8 @@ export function hasCompleteActionTree(actions: unknown): boolean {
       && action.substeps.length <= 5
       && action.substeps.every((step) => typeof step === 'string' && step.trim().length >= 3);
     const sets = Number.isFinite(Number(action.sets)) && Number(action.sets) > 0;
-    const reps = typeof action.reps === 'string' && action.reps.trim().length > 0;
+    const reps = (typeof action.reps === 'string' && action.reps.trim().length > 0)
+      || (Number.isFinite(Number(action.reps)) && Number(action.reps) > 0);
     const duration = Number.isFinite(Number(action.duration_minutes)) && Number(action.duration_minutes) > 0;
     return title && instructions && substeps && ((sets && reps) || duration);
   });
