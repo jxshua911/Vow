@@ -28,6 +28,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   const [childTitle, setChildTitle] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
   const [editInstructions, setEditInstructions] = useState('');
   const [editDuration, setEditDuration] = useState('');
   const [editSets, setEditSets] = useState('');
@@ -251,6 +252,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
 
   function beginEditAction(action: SessionAction) {
     setEditingActionId(action.id);
+    setEditTitle(action.title);
     setEditInstructions(action.instructions || '');
     setEditDuration(action.duration_minutes == null ? '' : String(action.duration_minutes));
     setEditSets(action.sets == null ? '' : String(action.sets));
@@ -260,6 +262,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
 
   async function saveActionDetails(action: SessionAction) {
     if (!authSession?.user?.id || readOnly) return;
+    if (!editTitle.trim()) { setError('Give this action a clear name before saving.'); return; }
     const duration = editDuration.trim() ? Number(editDuration) : null;
     const sets = editSets.trim() ? Number(editSets) : null;
     const rest = editRest.trim() ? Number(editRest) : null;
@@ -270,6 +273,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       return;
     }
     const patch = {
+      title: editTitle.trim().slice(0, 300),
       instructions: editInstructions.trim() || null,
       duration_minutes: duration,
       sets,
@@ -387,6 +391,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
             {action.scheduled_at && <button type="button" className="text-xs underline underline-offset-2 text-vow-muted" onClick={() => void scheduleAction(action, '')}>Use session time</button>}
           </div>}
           {editingActionId === action.id && !readOnly && <form className="grid grid-cols-2 gap-2 mt-3" onSubmit={(event) => { event.preventDefault(); void saveActionDetails(action); }}>
+            <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} placeholder="Action name" className="col-span-2 border border-vow-border bg-transparent px-3 py-2 text-xs text-vow-ink" maxLength={300} />
             <textarea value={editInstructions} onChange={(event) => setEditInstructions(event.target.value)} placeholder="Instructions" className="col-span-2 border border-vow-border bg-transparent px-3 py-2 text-xs text-vow-ink" rows={3} maxLength={2000} />
             <input type="number" min="0" max="1440" value={editDuration} onChange={(event) => setEditDuration(event.target.value)} placeholder="Minutes" className="border border-vow-border bg-transparent px-2 py-2 text-xs text-vow-ink" />
             <input type="number" min="1" max="1000" value={editSets} onChange={(event) => setEditSets(event.target.value)} placeholder="Sets" className="border border-vow-border bg-transparent px-2 py-2 text-xs text-vow-ink" />
