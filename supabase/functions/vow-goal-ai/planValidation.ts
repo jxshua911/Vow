@@ -32,3 +32,22 @@ export function validateCategorySpecificDetail(
   if (!signal || plannedSessionCount < 3 || signal.test(detailText)) return null;
   return 'CATEGORY_DETAIL_' + normalized.toUpperCase();
 }
+
+
+export function hasCompleteActionTree(actions: unknown): boolean {
+  if (!Array.isArray(actions) || actions.length < 3 || actions.length > 6) return false;
+  return actions.every((value) => {
+    if (!value || typeof value !== 'object') return false;
+    const action = value as Record<string, unknown>;
+    const title = typeof action.title === 'string' && action.title.trim().length >= 2;
+    const instructions = typeof action.instructions === 'string' && action.instructions.trim().length >= 8;
+    const substeps = Array.isArray(action.substeps)
+      && action.substeps.length >= 2
+      && action.substeps.length <= 5
+      && action.substeps.every((step) => typeof step === 'string' && step.trim().length >= 3);
+    const sets = Number.isFinite(Number(action.sets)) && Number(action.sets) > 0;
+    const reps = typeof action.reps === 'string' && action.reps.trim().length > 0;
+    const duration = Number.isFinite(Number(action.duration_minutes)) && Number(action.duration_minutes) > 0;
+    return title && instructions && substeps && ((sets && reps) || duration);
+  });
+}
