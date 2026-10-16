@@ -1056,6 +1056,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "", schedul
     str(item?.task, 350),
     str(item?.purpose, 250),
     ...(Array.isArray(item?.substeps) ? item.substeps.map((step: any) => str(step, 250)) : []),
+    ...(Array.isArray(item?.actions) ? item.actions.flatMap((action: any) => [str(action?.title, 160), str(action?.instructions, 250), ...(Array.isArray(action?.substeps) ? action.substeps.map((step: any) => str(step, 200)) : [])]) : []),
   ].join(" ")).join(" ").toLowerCase();
   const categoryValidationError = validateCategorySpecificDetail(normalizedCategory, detailText, planned.length);
   if (categoryValidationError) return categoryValidationError;
@@ -1125,6 +1126,15 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
         purpose: [str(template?.purpose, 350), f].filter(Boolean).join(" "),
         target_metric: str(template?.target_metric, 180) || str(b?.success_metric, 180) || "Complete the planned work",
         duration_minutes: Math.max(5, Math.min(240, Number(template?.duration_minutes) || 30)),
+        actions: Array.isArray(template?.actions) ? template.actions.slice(0, 8).map((action: any) => ({
+          title: str(action?.title || action?.name, 160),
+          instructions: str(action?.instructions || action?.purpose, 500),
+          sets: Number.isFinite(Number(action?.sets)) && Number(action.sets) > 0 ? Math.min(100, Math.round(Number(action.sets))) : null,
+          reps: action?.reps == null ? null : str(action.reps, 80),
+          duration_minutes: Number.isFinite(Number(action?.duration_minutes)) && Number(action.duration_minutes) > 0 ? Math.min(240, Math.round(Number(action.duration_minutes))) : null,
+          rest_seconds: Number.isFinite(Number(action?.rest_seconds)) && Number(action.rest_seconds) >= 0 ? Math.min(3600, Math.round(Number(action.rest_seconds))) : null,
+          substeps: Array.isArray(action?.substeps) ? action.substeps.map((step: any) => str(step, 300)).filter(Boolean).slice(0, 8) : [],
+        })).filter((action: any) => action.title) : [],
         preferred_time: scheduleTimesEnabled
           ? (/^\d{1,2}:\d{2}$/.test(str(template?.preferred_time, 10)) ? template.preferred_time : null)
           : null,
