@@ -9,6 +9,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "test": "node --test tests/planExecution.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

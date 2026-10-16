@@ -27,6 +27,8 @@ test('no timeframe still materialises work without creating a deadline', () => {
 });
 
 test('existing occupied slots are respected', () => {
-  const items = buildInitialExecutionItems([step('Next action', 60)], null, [{ scheduledAt: '2026-09-14T09:00:00.000Z', durationMinutes: 60 }], new Date('2026-09-14T08:00:00Z'));
+  const now = new Date(2026, 8, 14, 8, 0, 0);
+  const occupiedSlot = new Date(2026, 8, 14, 9, 0, 0).toISOString();
+  const items = buildInitialExecutionItems([step('Next action', 60)], null, [{ scheduledAt: occupiedSlot, durationMinutes: 60 }], now);
   assert.equal(new Date(items[0].scheduled_at).getHours(), 10);
 });

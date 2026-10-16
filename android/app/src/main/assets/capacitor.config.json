@@ -4,10 +4,11 @@
 	"webDir": "dist",
 	"plugins": {
 		"SplashScreen": {
-			"launchShowDuration": 0,
-			"launchAutoHide": true,
+			"launchShowDuration": 1400,
+			"launchAutoHide": false,
 			"androidScaleType": "CENTER_INSIDE",
 			"showSpinner": false,
+			"launchFadeOutDuration": 180,
 			"splashFullScreen": true,
 			"splashImmersive": true
 		},

@@ -231,7 +231,7 @@ function AppContent() {
     };
     window.addEventListener('online', reconcileOfflineState);
     return () => window.removeEventListener('online', reconcileOfflineState);
-  }, [session?.user.id]);
+  }, [session]);
 
   useEffect(() => {
     if (!session) return;
