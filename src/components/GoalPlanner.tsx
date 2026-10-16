@@ -222,7 +222,7 @@ function normalizePlan(
         duration_minutes: Number.isFinite(Number(action?.duration_minutes)) && Number(action.duration_minutes) > 0 ? Math.min(240, Math.round(Number(action.duration_minutes))) : null,
         rest_seconds: Number.isFinite(Number(action?.rest_seconds)) && Number(action.rest_seconds) >= 0 ? Math.min(3600, Math.round(Number(action.rest_seconds))) : null,
         substeps: Array.isArray(action?.substeps) ? action.substeps.map((step: unknown) => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 8) : [],
-      })).filter((action: PlanAction) => action.title),
+      })).filter((action: PlanAction) => action.title) : [],
     }))
     .filter(item => item.task);
   if (!schedule.length || !milestones.length) return null;
