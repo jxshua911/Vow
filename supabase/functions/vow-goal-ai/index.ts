@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { hasMeasurableEvidence, validateCategorySpecificDetail } from "./planValidation.ts";
+import { hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from "./planValidation.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -1018,6 +1018,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "", schedul
 
   const planned = schedule(b, w, ds, str(b?.start_date) || new Date().toISOString().slice(0, 10), scheduleTimesEnabled);
   if (planned.length !== w * ds.length) return "INCOMPLETE_SCHEDULE";
+  if (planned.some((item: any) => !hasCompleteActionTree(item.actions))) return "INSUFFICIENT_ACTION_TREE";
 
   const tasks = planned.map((x: any) => str(x.task, 350).toLowerCase()).filter(Boolean);
   const unique = new Set(tasks);
@@ -1495,7 +1496,7 @@ Deno.serve(async (req) => {
         .filter(Boolean)
         .join(" ");
       let validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());
-      if (validationError === "GENERIC_SESSION_TASK" || validationError === "REPETITIVE_SCHEDULE" || validationError.startsWith("CATEGORY_DETAIL_")) {
+      if (validationError === "GENERIC_SESSION_TASK" || validationError === "REPETITIVE_SCHEDULE" || validationError.startsWith("CATEGORY_DETAIL_") || validationError === "INSUFFICIENT_ACTION_TREE") {
         console.warn("[VOW AI] Plan failed quality validation; retrying once with corrective instructions", {
           validation_error: validationError,
         });
@@ -1505,7 +1506,7 @@ Deno.serve(async (req) => {
             { role: "assistant", content: JSON.stringify(b) },
             {
               role: "user",
-              content: `Rewrite the complete plan JSON. The previous draft failed VOW's quality check: ${validationError}. Keep the same goal, duration, selected days, and user answers. Every scheduled session task must be concrete, distinct, domain-specific, and at least six words long. Never use generic tasks such as "work on your goal", "practise more", "make progress", or "review the topic". For cooking goals, name a real recipe action such as ingredient preparation, boiling and timing pasta, simmering sauce, tasting, or plating; do not just say “make dinner”. For kickboxing, name the specific drill, technique, round structure, safety focus, or measurable skill; adapt examples to the actual goal. Make each week progress from the previous week. Preserve every required JSON field and return JSON only.`,
+              content: `Rewrite the complete plan JSON. The previous draft failed VOW's quality check: ${validationError}. Keep the same goal, duration, selected days, and user answers. Every scheduled session task must be concrete, distinct, domain-specific, and at least six words long. Every session must contain 3–6 named actions, each with instructions, sets and reps or a duration, and 2–5 concrete ordered substeps. Never use generic tasks such as "work on your goal", "practise more", "make progress", or "review the topic". For cooking goals, name a real recipe action such as ingredient preparation, boiling and timing pasta, simmering sauce, tasting, or plating; do not just say “make dinner”. For kickboxing, name the specific drill, technique, round structure, safety focus, or measurable skill; adapt examples to the actual goal. Make each week progress from the previous week. Preserve every required JSON field and return JSON only.`,
             },
           ], "plan", researchRequired);
           if (retry?.clarification_needed !== true) {
