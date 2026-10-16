@@ -43,7 +43,7 @@ type SavedPlannerDraft = {
   plan?: Plan | null;
   draftGoalId?: string | null;
 };
-type PlanAction = { title: string; instructions?: string; sets?: number | null; reps?: string | null; duration_minutes?: number | null; rest_seconds?: number | null; substeps?: string[] };
+type PlanAction = { title: string; name?: string; purpose?: string; instructions?: string; sets?: number | null; reps?: string | null; duration_minutes?: number | null; rest_seconds?: number | null; substeps?: string[] };
 type PlanItem = {
   week: number;
   day: string;
