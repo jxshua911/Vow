@@ -33,6 +33,7 @@ type SavedPlannerDraft = {
   availableDays?: string[];
   sessionTimes?: Record<string, string>;
   scheduleTimesEnabled?: boolean;
+  scheduleMode?: 'timed' | 'flexible-day' | 'unscheduled';
   clarification?: Clarification | null;
   isPlanFollowup?: boolean;
   answers?: string[];
@@ -320,7 +321,8 @@ export function GoalPlanner({
   const [customDurationUnit, setCustomDurationUnit] = useState<DurationUnit>('months');
   const [availableDays, setAvailableDays] = useState<string[]>([]);
   const [sessionTimes, setSessionTimes] = useState<Record<string, string>>({});
-  const [scheduleTimesEnabled, setScheduleTimesEnabled] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState<'timed' | 'flexible-day' | 'unscheduled'>('flexible-day');
+  const scheduleTimesEnabled = scheduleMode === 'timed';
   const [domain, setDomain] = useState<GoalDomain | null>(null);
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [isPlanFollowup, setIsPlanFollowup] = useState(false);
@@ -397,6 +399,8 @@ export function GoalPlanner({
           if (savedDraft.customDurationUnit) setCustomDurationUnit(savedDraft.customDurationUnit);
           if (Array.isArray(savedDraft.availableDays)) setAvailableDays(savedDraft.availableDays);
           if (savedDraft.sessionTimes) setSessionTimes(savedDraft.sessionTimes);
+          if (savedDraft.scheduleMode) setScheduleMode(savedDraft.scheduleMode);
+          else if (typeof savedDraft.scheduleTimesEnabled === 'boolean') setScheduleMode(savedDraft.scheduleTimesEnabled ? 'timed' : 'flexible-day');
           if (savedDraft.clarification) setClarification(savedDraft.clarification);
           if (typeof savedDraft.isPlanFollowup === 'boolean') setIsPlanFollowup(savedDraft.isPlanFollowup);
           if (Array.isArray(savedDraft.answers)) setAnswers(savedDraft.answers);
@@ -499,6 +503,7 @@ export function GoalPlanner({
         customDurationUnit,
         availableDays,
         sessionTimes,
+        scheduleMode,
         clarification,
         isPlanFollowup,
         answers,
@@ -519,6 +524,7 @@ export function GoalPlanner({
     customDurationUnit,
     availableDays,
     sessionTimes,
+    scheduleMode,
     clarification,
     isPlanFollowup,
     answers,
@@ -899,7 +905,7 @@ export function GoalPlanner({
         return {
           plan_version: 1,
           week_number: Math.max(1, Math.min(selectedDurationWeeks || 1, item.week)),
-          day_of_week: item.day,
+          day_of_week: scheduleMode === 'unscheduled' ? null : item.day,
           scheduled_at: date?.toISOString() ?? null,
           task: item.task,
           purpose: item.purpose?.trim() || `Complete the scheduled task and build consistency toward “${rawInput.trim()}”.`,
@@ -917,6 +923,7 @@ export function GoalPlanner({
         );
         return {
           title: conciseSessionTitle(item.task, item.week),
+          day_of_week: scheduleMode === 'unscheduled' ? null : item.day,
           scheduled_at: date?.toISOString() ?? null,
           duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
           status: 'scheduled',
@@ -1342,19 +1349,26 @@ export function GoalPlanner({
         </div>
 
         {availableDays.length > 0 && <div className="bg-vow-gray/10 border border-vow-border p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div><label className="vow-label block mb-1">Session times</label><p className="text-xs text-vow-muted">Optional. Your plan works without clock times.</p></div>
-            <button type="button" role="switch" aria-checked={scheduleTimesEnabled} onClick={() => setScheduleTimesEnabled(enabled => !enabled)} className={scheduleTimesEnabled ? 'shrink-0 border px-3 py-2 text-xs font-medium bg-vow-ink text-vow-bg border-vow-ink' : 'shrink-0 border px-3 py-2 text-xs font-medium border-vow-border text-vow-ink'}>
-              {scheduleTimesEnabled ? 'Times on' : 'Add times'}
-            </button>
+          <label className="vow-label block mb-3">How should VOW schedule your sessions?</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {([
+              { value: 'timed', title: 'Timed', detail: 'Set a day and clock time.' },
+              { value: 'flexible-day', title: 'Flexible day', detail: 'Keep the day, choose the time later.' },
+              { value: 'unscheduled', title: 'Unscheduled', detail: 'Leave sessions in your queue.' },
+            ] as const).map(option => <button key={option.value} type="button" aria-pressed={scheduleMode === option.value} onClick={() => setScheduleMode(option.value)} className={scheduleMode === option.value ? 'border border-vow-ink bg-vow-ink text-vow-bg p-3 text-left' : 'border border-vow-border text-vow-ink p-3 text-left hover:border-vow-ink'}>
+              <span className="block text-sm font-medium">{option.title}</span>
+              <span className="block text-[11px] mt-1 opacity-75">{option.detail}</span>
+            </button>)}
           </div>
           {scheduleTimesEnabled && <div className="space-y-3 mt-4">
             {availableDays.map(day => <div key={day} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-vow-border pb-3 last:border-b-0 last:pb-0">
               <div><p className="text-sm text-vow-ink">{day}</p>{!sessionTimes[day] && <p className="text-[11px] text-vow-muted mt-1">Choose a reminder time</p>}</div>
               <TimeWheelPicker value={sessionTimes[day] || currentLocalTime()} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={day + ' session time'} />
             </div>)}
-            <p className="text-xs text-vow-muted">Choose times only if you want a timed schedule or reminders. You can change them later.</p>
+            <p className="text-xs text-vow-muted">Times can be changed later. VOW will only create reminders for timed sessions.</p>
           </div>}
+          {scheduleMode === 'flexible-day' && <p className="text-xs text-vow-muted mt-3">VOW keeps each session on its selected weekday without setting a clock time or reminder.</p>}
+          {scheduleMode === 'unscheduled' && <p className="text-xs text-vow-muted mt-3">Sessions will be saved without a weekday or clock time, ready for you to schedule when it suits you.</p>}
         </div>}
 
         {error && (
