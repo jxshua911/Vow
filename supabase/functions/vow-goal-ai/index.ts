@@ -1127,6 +1127,7 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
         purpose: [str(template?.purpose, 350), f].filter(Boolean).join(" "),
         target_metric: str(template?.target_metric, 180) || str(b?.success_metric, 180) || "Complete the planned work",
         duration_minutes: Math.max(5, Math.min(240, Number(template?.duration_minutes) || 30)),
+        substeps: Array.isArray(template?.substeps) ? template.substeps.map((step: any) => str(step, 300)).filter(Boolean).slice(0, 12) : [],
         actions: Array.isArray(template?.actions) ? template.actions.slice(0, 8).map((action: any) => ({
           title: str(action?.title || action?.name, 160),
           instructions: str(action?.instructions || action?.purpose, 500),
