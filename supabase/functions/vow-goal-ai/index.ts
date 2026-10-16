@@ -1495,7 +1495,7 @@ Deno.serve(async (req) => {
         .filter(Boolean)
         .join(" ");
       let validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());
-      if (validationError === "GENERIC_SESSION_TASK" || validationError === "REPETITIVE_SCHEDULE") {
+      if (validationError === "GENERIC_SESSION_TASK" || validationError === "REPETITIVE_SCHEDULE" || validationError.startsWith("CATEGORY_DETAIL_")) {
         console.warn("[VOW AI] Plan failed quality validation; retrying once with corrective instructions", {
           validation_error: validationError,
         });
