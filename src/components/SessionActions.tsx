@@ -213,6 +213,40 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
     setError(reminderWarning ? 'The step schedule was saved, but its reminder could not be synchronized. Check notification permissions.' : null);
   }
 
+  async function moveAction(action: SessionAction, direction: -1 | 1) {
+    if (readOnly || !authSession?.user?.id || busyId) return;
+    const siblings = actions
+      .filter((item) => item.parent_action_id === action.parent_action_id)
+      .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+    const index = siblings.findIndex((item) => item.id === action.id);
+    const target = siblings[index + direction];
+    if (index < 0 || !target) return;
+
+    const previous = actions;
+    const reordered = [...siblings];
+    [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]];
+    const orderById = new Map(reordered.map((item, order) => [item.id, order]));
+    setActions((existing) => existing.map((item) => orderById.has(item.id)
+      ? { ...item, sort_order: orderById.get(item.id)! }
+      : item));
+    setBusyId(action.id);
+    setError(null);
+
+    const updates = await Promise.all(reordered
+      .filter((item, order) => item.sort_order !== order)
+      .map((item) => supabase.from('session_actions')
+        .update({ sort_order: orderById.get(item.id), updated_at: new Date().toISOString() })
+        .eq('id', item.id)
+        .eq('user_id', authSession.user.id)));
+    const failed = updates.some((result) => result.error);
+    if (failed) {
+      console.error('[VOW] Could not persist session action order:', updates.find((result) => result.error)?.error);
+      setActions(previous);
+      setError('The step order could not be saved. Your previous order has been restored.');
+    }
+    setBusyId(null);
+  }
+
   function renderAction(action: SessionAction, depth = 0) {
     const children = actions.filter((item) => item.parent_action_id === action.id);
     const expanded = expandedId === action.id;
@@ -225,6 +259,15 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
           {action.instructions && <p className="text-xs text-vow-muted mt-2 whitespace-pre-wrap break-words">{action.instructions}</p>}
           {action.scheduled_at && <p className="text-xs text-vow-muted mt-1">Step scheduled: {new Date(action.scheduled_at).toLocaleString()}</p>}
           {!readOnly && <div className="flex flex-wrap gap-2 mt-2">
+            {(() => {
+              const siblings = actions.filter((item) => item.parent_action_id === action.parent_action_id)
+                .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+              const index = siblings.findIndex((item) => item.id === action.id);
+              return <>
+                <button type="button" aria-label={`Move ${action.title} up`} title="Move up" disabled={index <= 0 || busyId !== null} className="text-xs underline underline-offset-2 text-vow-muted disabled:opacity-30" onClick={() => void moveAction(action, -1)}>Move up</button>
+                <button type="button" aria-label={`Move ${action.title} down`} title="Move down" disabled={index < 0 || index >= siblings.length - 1 || busyId !== null} className="text-xs underline underline-offset-2 text-vow-muted disabled:opacity-30" onClick={() => void moveAction(action, 1)}>Move down</button>
+              </>;
+            })()}
             <button type="button" className="text-xs underline underline-offset-2 text-vow-muted" onClick={() => { setExpandedId(expanded ? null : action.id); setChildTitle(''); }}>{expanded ? 'Close substeps' : 'Add substep'}</button>
             <button type="button" className="text-xs underline underline-offset-2 text-vow-muted" onClick={() => beginEditAction(action)}>Edit details</button>
             <label className="text-xs underline underline-offset-2 text-vow-muted cursor-pointer">
