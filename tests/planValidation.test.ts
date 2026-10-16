@@ -39,5 +39,5 @@ test('short plans and unknown categories are not rejected by the category matrix
 });
 
 test('a specific category is rejected only when the whole planned detail lacks its signals', () => {
-  assert.equal(validateCategorySpecificDetail('fitness', 'Set a budget and track spending', 8), 'CATEGORY_DETAIL_FITNESS');
+  assert.equal(validateCategorySpecificDetail('fitness', 'Review quarterly ledger entries', 8), 'CATEGORY_DETAIL_FITNESS');
 });
