@@ -979,7 +979,7 @@ function meaningfulTokens(text: string) {
   );
 }
 
-function validatePlan(b: any, w: number, ds: string[], goalContext = "", scheduleTimesEnabled = true) {
+function validatePlan(b: any, w: number, ds: string[], goalContext = "", scheduleTimesEnabled = true, category = "") {
   const milestones = Array.isArray(b?.milestones) ? b.milestones : [];
   const focus = Array.isArray(b?.weekly_focus) ? b.weekly_focus : [];
   const weekly = Array.isArray(b?.weekly_session_templates) ? b.weekly_session_templates : [];
@@ -1049,6 +1049,26 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "", schedul
     else if (!hasConcreteVerb && !hasMeasure) weakSpecificity++;
   }
   if (planned.length && weakSpecificity / planned.length > 0.6) return "GENERIC_SESSION_TASK";
+
+  // Category-specific checks prevent a structurally valid schedule from passing
+  // when its tasks do not actually teach or practise the requested domain.
+  const normalizedCategory = String(category || b?.category || "").toLowerCase();
+  const detailText = planned.map((item: any) => [
+    str(item?.task, 350),
+    str(item?.purpose, 250),
+    ...(Array.isArray(item?.substeps) ? item.substeps.map((step: any) => str(step, 250)) : []),
+  ].join(" ")).join(" ").toLowerCase();
+  const categorySignals: Record<string, RegExp> = {
+    fitness: /\b(run|walk|cycle|swim|lift|squat|push.?up|pull.?up|plank|exercise|workout|training|mobility|stretch|reps?|sets?|pace|distance|form|technique|rest|rounds?)\b/i,
+    study: /\b(solve|problem|exercise|read|chapter|revise|revision|recall|flashcards?|quiz|test|essay|summari[sz]e|explain|derive|calculate|practice|practise|questions?|notes?)\b/i,
+    financial: /\b(budget|save|saving|expense|spend|income|cost|price|money|account|deposit|transfer|debt|payment|transaction|invest|financial|currency|track)\b/i,
+    business: /\b(customer|client|market|competitor|offer|product|service|sales?|revenue|pricing|interview|validate|prototype|launch|distribution|audience|conversion|business|pitch|outreach)\b/i,
+    skill: /\b(practice|practise|drill|rehearse|build|create|draw|write|code|debug|compose|perform|record|edit|design|test|feedback|technique|exercise|project|lesson)\b/i,
+  };
+  const signal = categorySignals[normalizedCategory];
+  if (signal && planned.length >= 3 && !signal.test(detailText)) {
+    return `CATEGORY_DETAIL_${normalizedCategory.toUpperCase()}`;
+  }
   return null;
 }
 
@@ -1474,7 +1494,7 @@ Deno.serve(async (req) => {
       const validationContext = [str(g?.title || g?.outcome, 500), str(g?.why_it_matters, 300), message]
         .filter(Boolean)
         .join(" ");
-      let validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true);
+      let validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());
       if (validationError === "GENERIC_SESSION_TASK" || validationError === "REPETITIVE_SCHEDULE") {
         console.warn("[VOW AI] Plan failed quality validation; retrying once with corrective instructions", {
           validation_error: validationError,
@@ -1490,7 +1510,7 @@ Deno.serve(async (req) => {
           ], "plan", researchRequired);
           if (retry?.clarification_needed !== true) {
             b = retry;
-            validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true);
+            validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());
             console.log("[VOW AI] Plan quality retry completed", {
               validation_error: validationError || "passed",
             });
