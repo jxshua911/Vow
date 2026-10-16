@@ -1,10 +1,21 @@
 export const CLARIFICATION_SKIP = '__VOW_SKIP_USE_ASSUMPTION__';
 
 export function normalizeClarificationQuestion(question: string): string {
+  const synonyms: Record<string, string> = {
+    currently: 'current',
+    level: 'experience',
+    ability: 'experience',
+    background: 'experience',
+    schedule: 'availability',
+    available: 'availability',
+    days: 'day',
+    goals: 'goal',
+  };
   return question.toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter((word) => word.length > 2 && !['what', 'which', 'would', 'could', 'your', 'you', 'the', 'for', 'with', 'about', 'does', 'have', 'are', 'can'].includes(word))
+    .map((word) => synonyms[word] || word)
     .sort()
     .join(' ');
 }
