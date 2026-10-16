@@ -20,17 +20,17 @@ test('learning and study aliases require learning actions', () => {
 
 test('money and financial aliases require financial actions', () => {
   assert.equal(validateCategorySpecificDetail('money', 'Track expenses and update the monthly budget', 8), null);
-  assert.equal(validateCategorySpecificDetail('financial', 'Generic progress with no money task details', 8), 'CATEGORY_DETAIL_FINANCIAL');
+  assert.equal(validateCategorySpecificDetail('financial', 'Generic progress with no relevant task detail', 8), 'CATEGORY_DETAIL_FINANCIAL');
 });
 
 test('career and business aliases require business actions', () => {
   assert.equal(validateCategorySpecificDetail('career', 'Interview five potential customers and validate pricing', 8), null);
-  assert.equal(validateCategorySpecificDetail('business', 'Generic progress with no customer or product action', 8), 'CATEGORY_DETAIL_BUSINESS');
+  assert.equal(validateCategorySpecificDetail('business', 'Generic progress with no relevant task detail', 8), 'CATEGORY_DETAIL_BUSINESS');
 });
 
 test('creative and skill aliases require practice or production actions', () => {
   assert.equal(validateCategorySpecificDetail('creative', 'Draw studies and revise technique using feedback', 8), null);
-  assert.equal(validateCategorySpecificDetail('skill', 'Generic progress without practice or a concrete task', 8), 'CATEGORY_DETAIL_SKILL');
+  assert.equal(validateCategorySpecificDetail('skill', 'Generic progress with no relevant task detail', 8), 'CATEGORY_DETAIL_SKILL');
 });
 
 test('short plans and unknown categories are not rejected by the category matrix', () => {
