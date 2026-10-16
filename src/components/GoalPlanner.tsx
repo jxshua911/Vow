@@ -936,7 +936,7 @@ export function GoalPlanner({
           status: 'scheduled',
           milestone_sort_order: milestoneIndex,
           notes: [
-            `Plan day: Week ${item.week}, ${item.day}`,
+            scheduleMode === 'unscheduled' ? `Plan cadence: Week ${item.week}` : `Plan day: Week ${item.week}, ${item.day}`,
             `Task: ${item.task}`,
             item.purpose ? `Purpose: ${item.purpose}` : null,
             item.target_metric ? `Target: ${item.target_metric}` : null,
