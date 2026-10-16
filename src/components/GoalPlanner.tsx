@@ -43,6 +43,7 @@ type SavedPlannerDraft = {
   plan?: Plan | null;
   draftGoalId?: string | null;
 };
+type PlanAction = { title: string; instructions?: string; sets?: number | null; reps?: string | null; duration_minutes?: number | null; rest_seconds?: number | null; substeps?: string[] };
 type PlanItem = {
   week: number;
   day: string;
@@ -54,6 +55,7 @@ type PlanItem = {
   scheduled_at?: string | null;
   video_url?: string;
   substeps?: string[];
+  actions?: PlanAction[];
 };
 type PlanReference = {
   url: string;
@@ -212,6 +214,15 @@ function normalizePlan(
       preferred_time: /^\d{1,2}:\d{2}$/.test(String(item?.preferred_time ?? '')) ? String(item.preferred_time).trim().slice(0, 8) : null,
       video_url: (() => { const url = String(item?.video_url ?? '').trim().slice(0, 1000); return isYoutubeUrl(url) ? url : ''; })(),
       substeps: Array.isArray(item?.substeps) ? item.substeps.map((step: unknown) => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 12) : [],
+      actions: Array.isArray(item?.actions) ? item.actions.slice(0, 8).map((action: any) => ({
+        title: String(action?.title ?? action?.name ?? '').trim().slice(0, 160),
+        instructions: String(action?.instructions ?? action?.purpose ?? '').trim().slice(0, 500) || undefined,
+        sets: Number.isFinite(Number(action?.sets)) && Number(action.sets) > 0 ? Math.min(100, Math.round(Number(action.sets))) : null,
+        reps: action?.reps == null ? null : String(action.reps).trim().slice(0, 80),
+        duration_minutes: Number.isFinite(Number(action?.duration_minutes)) && Number(action.duration_minutes) > 0 ? Math.min(240, Math.round(Number(action.duration_minutes))) : null,
+        rest_seconds: Number.isFinite(Number(action?.rest_seconds)) && Number(action.rest_seconds) >= 0 ? Math.min(3600, Math.round(Number(action.rest_seconds))) : null,
+        substeps: Array.isArray(action?.substeps) ? action.substeps.map((step: unknown) => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 8) : [],
+      })).filter((action: PlanAction) => action.title),
     }))
     .filter(item => item.task);
   if (!schedule.length || !milestones.length) return null;
@@ -946,6 +957,7 @@ export function GoalPlanner({
             `Task: ${item.task}`,
             item.purpose ? `Purpose: ${item.purpose}` : null,
             item.target_metric ? `Target: ${item.target_metric}` : null,
+            item.actions?.length ? `Action tree: ${JSON.stringify(item.actions)}` : null,
             ...((item.substeps?.length ? item.substeps : [item.task, item.purpose, item.target_metric ? `Finish when: ${item.target_metric}` : 'Finish by recording what you completed and what needs more practice.']).map((step, index) => `Step ${index + 1}: ${step}`)),
             item.video_url ? `Video: ${item.video_url}` : null
           ].filter(Boolean).join('\n') || null,
