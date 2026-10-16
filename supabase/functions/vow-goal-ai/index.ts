@@ -1042,7 +1042,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "", schedul
     const overlapsContext = [...taskTokens].some((token) => contextTokens.has(token));
     // Sets x reps notation ("4x30s", "5x4", "6x2") is a genuine measure even
     // though no unit word follows the numbers.
-    const hasMeasure = /\b\d+(?:[.,]\d+)?\s*(?:%|minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\b/i.test(task) ||
+    const hasMeasure = /\\b\\d+(?:[.,]\\d+)?\\s*%/i.test(task) || /\\b\\d+(?:[.,]\\d+)?\\s*(?:minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\\b/i.test(task) ||
       /\b\d+\s*[x×]\s*\d+/i.test(task);
     const hasConcreteVerb = /\b(analy[sz]e|build|calculate|complete|create|draft|edit|film|identify|measure|mix|outline|perform|record|solve|write|draw|bake|knead|shape|letter|paint|run|cycle|swim|lift|code|debug|test|revise|compare|read|summari[sz]e|translate|memorise|memorize|recite|drill|trace|copy|compose|schedule|plan|track|time|score|review|hold|holds|land|lands|landing|attempt|attempts|stretch|stretches|rehearse|spar|shadowbox|warm|cool|make|makes|making|cook|cooks|cooking|boil|boils|boiling|chop|chops|chopping|dice|dices|dicing|simmer|simmers|simmering|stir|stirs|stirring|season|seasons|seasoning|drain|drains|toss|tosses|taste|tastes|plate|plates|serve|serves|prepare|prepares|preparing|saute|sauté|roast|roasts|grill|grills|whisk|whisks|combine|combines|peel|peels|grate|grates|fold|folds|blend|blends|pour|pours|heat|heats|rinse|rinses|shred|shreds)\b/i.test(task);
     if (!overlapsContext && !hasMeasure) weakSpecificity++;
