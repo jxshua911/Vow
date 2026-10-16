@@ -1065,7 +1065,8 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "", schedul
     business: /\b(customer|client|market|competitor|offer|product|service|sales?|revenue|pricing|interview|validate|prototype|launch|distribution|audience|conversion|business|pitch|outreach)\b/i,
     skill: /\b(practice|practise|drill|rehearse|build|create|draw|write|code|debug|compose|perform|record|edit|design|test|feedback|technique|exercise|project|lesson)\b/i,
   };
-  const signal = categorySignals[normalizedCategory];
+  const categoryAlias: Record<string, string> = { learning: "study", money: "financial", career: "business", creative: "skill", health: "fitness", personal: "skill" };
+  const signal = categorySignals[categoryAlias[normalizedCategory] || normalizedCategory];
   if (signal && planned.length >= 3 && !signal.test(detailText)) {
     return `CATEGORY_DETAIL_${normalizedCategory.toUpperCase()}`;
   }
