@@ -1532,6 +1532,10 @@ Deno.serve(async (req) => {
             ? "generic_plan_blocked"
             : validationError === "REPETITIVE_SCHEDULE"
             ? "repetitive_plan_blocked"
+            : validationError.startsWith("CATEGORY_DETAIL_")
+            ? "category_detail_blocked"
+            : validationError === "INSUFFICIENT_ACTION_TREE"
+            ? "action_tree_blocked"
             : "plan_quality_blocked";
         await recordQualityAlert(
           req,
