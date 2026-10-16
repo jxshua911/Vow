@@ -192,7 +192,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
     }
     setActions(rows);
     setLoading(false);
-  }, [authSession?.user?.id, currentSession.id, currentSession.goal_id, currentSession.notes, readOnly]);
+  }, [authSession?.user?.id, currentSession.id, currentSession.goal_id, currentSession.notes, currentSession.title, currentSession.duration_minutes, readOnly]);
 
   useEffect(() => { void loadActions(); }, [loadActions]);
 
