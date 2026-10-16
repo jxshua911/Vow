@@ -9,8 +9,6 @@ const CATEGORY_ALIASES: Record<string, string> = {
   money: 'financial',
   career: 'business',
   creative: 'skill',
-  health: 'fitness',
-  personal: 'skill',
 };
 
 const CATEGORY_SIGNALS: Record<string, RegExp> = {
