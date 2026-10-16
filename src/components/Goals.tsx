@@ -364,7 +364,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     const noteDay = /Plan day: Week \d+, ([A-Za-z]+)/.exec(sess.notes || '')?.[1];
     const day = sess.day_of_week || noteDay || 'Monday';
     setEditingSession(sess);
-    setEditTimingMode(sess.scheduled_at ? 'timed' : sess.day_of_week ? 'flexible-day' : 'unscheduled');
+    setEditTimingMode(sess.scheduled_at ? 'timed' : (sess.day_of_week || noteDay) ? 'flexible-day' : 'unscheduled');
     setEditDayOfWeek(sessionDays.includes(day) ? day : 'Monday');
     if (sess.scheduled_at) {
       const localDate = new Date(sess.scheduled_at);
