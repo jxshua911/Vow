@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { hasMeasurableEvidence, validateCategorySpecificDetail } from "./planValidation.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -1042,34 +1043,22 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "", schedul
     const overlapsContext = [...taskTokens].some((token) => contextTokens.has(token));
     // Sets x reps notation ("4x30s", "5x4", "6x2") is a genuine measure even
     // though no unit word follows the numbers.
-    const hasMeasure = /\b\d+(?:[.,]\d+)?\s*%/i.test(task) || /\b\d+(?:[.,]\d+)?\s*(?:minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\b/i.test(task) ||
-      /\b\d+\s*[x×]\s*\d+/i.test(task);
+    const hasMeasure = hasMeasurableEvidence(task);
     const hasConcreteVerb = /\b(analy[sz]e|build|calculate|complete|create|draft|edit|film|identify|measure|mix|outline|perform|record|solve|write|draw|bake|knead|shape|letter|paint|run|cycle|swim|lift|code|debug|test|revise|compare|read|summari[sz]e|translate|memorise|memorize|recite|drill|trace|copy|compose|schedule|plan|track|time|score|review|hold|holds|land|lands|landing|attempt|attempts|stretch|stretches|rehearse|spar|shadowbox|warm|cool|make|makes|making|cook|cooks|cooking|boil|boils|boiling|chop|chops|chopping|dice|dices|dicing|simmer|simmers|simmering|stir|stirs|stirring|season|seasons|seasoning|drain|drains|toss|tosses|taste|tastes|plate|plates|serve|serves|prepare|prepares|preparing|saute|sauté|roast|roasts|grill|grills|whisk|whisks|combine|combines|peel|peels|grate|grates|fold|folds|blend|blends|pour|pours|heat|heats|rinse|rinses|shred|shreds)\b/i.test(task);
     if (!overlapsContext && !hasMeasure) weakSpecificity++;
     else if (!hasConcreteVerb && !hasMeasure) weakSpecificity++;
   }
   if (planned.length && weakSpecificity / planned.length > 0.6) return "GENERIC_SESSION_TASK";
 
-  // Category-specific checks prevent a structurally valid schedule from passing
-  // when its tasks do not actually teach or practise the requested domain.
+  // A valid-looking schedule must still contain actions from the goal's domain.
   const normalizedCategory = String(category || b?.category || "").toLowerCase();
   const detailText = planned.map((item: any) => [
     str(item?.task, 350),
     str(item?.purpose, 250),
     ...(Array.isArray(item?.substeps) ? item.substeps.map((step: any) => str(step, 250)) : []),
   ].join(" ")).join(" ").toLowerCase();
-  const categorySignals: Record<string, RegExp> = {
-    fitness: /\b(run|walk|cycle|swim|lift|squat|push.?up|pull.?up|plank|exercise|workout|training|mobility|stretch|reps?|sets?|pace|distance|form|technique|rest|rounds?)\b/i,
-    study: /\b(solve|problem|exercise|read|chapter|revise|revision|recall|flashcards?|quiz|test|essay|summari[sz]e|explain|derive|calculate|practice|practise|questions?|notes?)\b/i,
-    financial: /\b(budget|save|saving|expense|spend|income|cost|price|money|account|deposit|transfer|debt|payment|transaction|invest|financial|currency|track)\b/i,
-    business: /\b(customer|client|market|competitor|offer|product|service|sales?|revenue|pricing|interview|validate|prototype|launch|distribution|audience|conversion|business|pitch|outreach)\b/i,
-    skill: /\b(practice|practise|drill|rehearse|build|create|draw|write|code|debug|compose|perform|record|edit|design|test|feedback|technique|exercise|project|lesson)\b/i,
-  };
-  const categoryAlias: Record<string, string> = { learning: "study", money: "financial", career: "business", creative: "skill", health: "fitness", personal: "skill" };
-  const signal = categorySignals[categoryAlias[normalizedCategory] || normalizedCategory];
-  if (signal && planned.length >= 3 && !signal.test(detailText)) {
-    return `CATEGORY_DETAIL_${normalizedCategory.toUpperCase()}`;
-  }
+  const categoryValidationError = validateCategorySpecificDetail(normalizedCategory, detailText, planned.length);
+  if (categoryValidationError) return categoryValidationError;
   return null;
 }
 
