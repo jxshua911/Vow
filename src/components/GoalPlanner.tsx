@@ -14,6 +14,7 @@ import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadil
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
 import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
+import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, reuseClarificationAnswers } from '@/lib/clarification';
 
 type Clarification = {
   questions: string[];
@@ -34,6 +35,7 @@ type SavedPlannerDraft = {
   sessionTimes?: Record<string, string>;
   scheduleTimesEnabled?: boolean;
   scheduleMode?: 'timed' | 'flexible-day' | 'unscheduled';
+  answerHistory?: Record<string, string>;
   clarification?: Clarification | null;
   isPlanFollowup?: boolean;
   answers?: string[];
@@ -327,6 +329,7 @@ export function GoalPlanner({
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [isPlanFollowup, setIsPlanFollowup] = useState(false);
   const [answers, setAnswers] = useState<string[]>([]);
+  const [answerHistory, setAnswerHistory] = useState<Record<string, string>>({});
   const [plan, setPlan] = useState<Plan | null>(null);
   const [draftGoalId, setDraftGoalId] = useState<string | null>(resumeDraftId || null);
   const activeDraftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId || draftGoalId ? ':' + (resumeDraftId || draftGoalId) : ':new');
@@ -402,6 +405,7 @@ export function GoalPlanner({
           if (savedDraft.scheduleMode) setScheduleMode(savedDraft.scheduleMode);
           else if (typeof savedDraft.scheduleTimesEnabled === 'boolean') setScheduleMode(savedDraft.scheduleTimesEnabled ? 'timed' : 'flexible-day');
           if (savedDraft.clarification) setClarification(savedDraft.clarification);
+          if (savedDraft.answerHistory) setAnswerHistory(savedDraft.answerHistory);
           if (typeof savedDraft.isPlanFollowup === 'boolean') setIsPlanFollowup(savedDraft.isPlanFollowup);
           if (Array.isArray(savedDraft.answers)) setAnswers(savedDraft.answers);
           if (savedDraft.domain) setDomain(savedDraft.domain);
@@ -505,6 +509,7 @@ export function GoalPlanner({
         sessionTimes,
         scheduleMode,
         clarification,
+        answerHistory,
         isPlanFollowup,
         answers,
         domain,
@@ -526,6 +531,7 @@ export function GoalPlanner({
     sessionTimes,
     scheduleMode,
     clarification,
+    answerHistory,
     isPlanFollowup,
     answers,
     domain,
@@ -748,10 +754,9 @@ export function GoalPlanner({
         }
         return;
       }
-      const clean = answers.map((answer) => {
-        const value = String(answer ?? '').trim();
-        return value || 'Not sure — use a reasonable estimate and state the assumption.';
-      });
+      const nextAnswerHistory = rememberClarificationAnswers(answerHistory, clarification.questions, answers);
+      setAnswerHistory(nextAnswerHistory);
+      const clean = answers.map(answerForPlanning);
       const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
       const unresolved = clean.filter((answer) => unknown.test(answer)).length;
       console.log('[VOW] Clarification answers:', { answers, clean, unresolved });
@@ -1253,12 +1258,18 @@ export function GoalPlanner({
             <div key={`${index}-${question}`}>
               <label className="vow-label block mb-2">{question}</label>
               <textarea
-                value={answers[index] || ''}
+                value={answers[index] === CLARIFICATION_SKIP ? '' : (answers[index] || '')}
                 onChange={e => setAnswers(x => x.map((a, i) => (i === index ? e.target.value : a)))}
                 rows={3}
                 className="vow-input resize-none"
                 placeholder="Your answer…"
               />
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-[11px] text-vow-muted">{answers[index] === CLARIFICATION_SKIP ? 'Skipped — VOW will state and use an adjustable assumption.' : 'Answer only if you know; you can skip this.'}</p>
+                <button type="button" onClick={() => setAnswers(x => x.map((a, i) => i === index ? (a === CLARIFICATION_SKIP ? '' : CLARIFICATION_SKIP) : a))} className="text-xs text-vow-ink underline underline-offset-4">
+                  {answers[index] === CLARIFICATION_SKIP ? 'Undo skip' : 'Skip question'}
+                </button>
+              </div>
             </div>
           ))}
           {error && (
