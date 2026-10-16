@@ -32,6 +32,8 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Test
+        run: npm test
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -91,8 +93,8 @@ jobs:
       - name: Assemble VOW production release APK
         working-directory: android
         env:
-          VOW_VERSION_CODE: "20"
-          VOW_VERSION_NAME: "1.8.0"
+          VOW_VERSION_CODE: "21"
+          VOW_VERSION_NAME: "1.8.1"
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace
@@ -104,7 +106,7 @@ jobs:
       - name: Upload VOW production release APK
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.8.0 Production CI
+          name: VOW APK 1.8.1 Production CI
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
