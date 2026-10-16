@@ -702,7 +702,7 @@ export function GoalPlanner({
       const goalId = await ensureDraft(goalDomain);
       setClarification(next);
       setIsPlanFollowup(false);
-      setAnswers(next.questions.map(() => ''));
+      setAnswers(reuseClarificationAnswers(next.questions, answerHistory));
       const { error: ae } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
       if (ae) throw ae;
       const { error: ie } = await supabase.from('goal_clarification_answers').insert(
@@ -803,7 +803,7 @@ export function GoalPlanner({
         const followUp = data.structured as Clarification;
         setClarification(followUp);
         setIsPlanFollowup(true);
-        setAnswers(followUp.questions.map(() => ''));
+        setAnswers(reuseClarificationAnswers(followUp.questions, nextAnswerHistory));
         setError('VOW needs a bit more detail before it can build a reliable plan — please answer the follow-up below.');
         return;
       }
