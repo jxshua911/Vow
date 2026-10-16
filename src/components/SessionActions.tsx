@@ -4,6 +4,8 @@ import { useAuth } from '@/lib/auth';
 import type { Session, SessionAction } from '@/types/database';
 import { cancelReminder, notificationId, scheduleReminder } from '@/lib/notifications';
 
+type PlannedActionSeed = { title: string; instructions?: string; sets?: number | null; reps?: string | null; duration_minutes?: number | null; rest_seconds?: number | null; substeps: string[] };
+
 interface SessionActionsProps {
   session: Session;
   readOnly?: boolean;
@@ -54,18 +56,46 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
     }
 
     let rows = (data || []) as SessionAction[];
-    // One-time conversion: the session task is the parent action and its generated
-    // steps become editable child actions. This preserves the hierarchy instead
-    // of flattening every substep into a separate top-level activity.
+    // One-time conversion: preserve the generated action tree as a parent task,
+    // named actions, and nested substeps with their structured training details.
     if (rows.length === 0 && !readOnly) {
       const noteLines = (currentSession.notes || '').split('\n');
       const taskTitle = noteLines.find((line) => line.startsWith('Task: '))?.slice(6).trim() || currentSession.title;
       const purpose = noteLines.find((line) => line.startsWith('Purpose: '))?.slice(9).trim();
       const target = noteLines.find((line) => line.startsWith('Target: '))?.slice(8).trim();
+      const actionTreeLine = noteLines.find((line) => line.startsWith('Action tree: '))?.slice('Action tree: '.length);
+      let actionTree: PlannedActionSeed[] = [];
+      try {
+        const parsed: unknown = JSON.parse(actionTreeLine || '[]');
+        if (Array.isArray(parsed)) {
+          actionTree = parsed.flatMap((value): PlannedActionSeed[] => {
+            if (!value || typeof value !== 'object') return [];
+            const record = value as Record<string, unknown>;
+            if (typeof record.title !== 'string' || !record.title.trim()) return [];
+            const substeps = Array.isArray(record.substeps)
+              ? record.substeps.filter((step): step is string => typeof step === 'string' && Boolean(step.trim())).map((step) => step.trim()).slice(0, 8)
+              : [];
+            const sets = Number(record.sets);
+            const duration = Number(record.duration_minutes);
+            const rest = Number(record.rest_seconds);
+            return [{
+              title: record.title.trim().slice(0, 160),
+              instructions: typeof record.instructions === 'string' ? record.instructions.trim().slice(0, 500) : undefined,
+              sets: Number.isFinite(sets) && sets > 0 ? Math.min(100, Math.round(sets)) : null,
+              reps: typeof record.reps === 'string' ? record.reps.trim().slice(0, 80) : null,
+              duration_minutes: Number.isFinite(duration) && duration > 0 ? Math.min(240, Math.round(duration)) : null,
+              rest_seconds: Number.isFinite(rest) && rest >= 0 ? Math.min(3600, Math.round(rest)) : null,
+              substeps,
+            }];
+          }).slice(0, 8);
+        }
+      } catch {
+        // Older notes contain no structured action tree; fall back to numbered steps below.
+      }
       const rawSteps = noteLines
         .map((line) => line.match(/^Step \d+: (.+)$/)?.[1]?.trim())
         .filter((step): step is string => Boolean(step));
-      const childSteps = rawSteps.filter((step) =>
+      const childSteps = actionTree.length > 0 ? [] : rawSteps.filter((step) =>
         step !== taskTitle && step !== purpose && step !== target && !/^finish when:/i.test(step)
       );
       const instructions = [purpose, target ? 'Finish when: ' + target : null].filter(Boolean).join('\n') || null;
@@ -88,7 +118,56 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
         setError('This session’s steps could not be saved yet.');
       } else {
         rows = [parent as SessionAction];
-        if (childSteps.length > 0) {
+        if (actionTree.length > 0) {
+          const inserts = actionTree.map((action, index) => ({
+            goal_id: currentSession.goal_id,
+            session_id: currentSession.id,
+            user_id: authSession.user.id,
+            parent_action_id: parent.id,
+            title: action.title,
+            instructions: action.instructions || null,
+            sets: action.sets ?? null,
+            reps: action.reps ?? null,
+            duration_minutes: action.duration_minutes ?? null,
+            rest_seconds: action.rest_seconds ?? null,
+            sort_order: index,
+          }));
+          const { data: children, error: childError } = await supabase
+            .from('session_actions')
+            .insert(inserts)
+            .select('*')
+            .order('sort_order', { ascending: true });
+          if (childError) {
+            console.error('[VOW] Could not save generated actions:', childError);
+            setError('The main session was saved, but some actions could not be saved. Add the missing actions in the session editor.');
+          } else {
+            const childRows = (children || []) as SessionAction[];
+            rows = [parent as SessionAction, ...childRows];
+            const grandchildInserts = childRows.flatMap((child, index) =>
+              actionTree[index].substeps.map((title, subIndex) => ({
+                goal_id: currentSession.goal_id,
+                session_id: currentSession.id,
+                user_id: authSession.user.id,
+                parent_action_id: child.id,
+                title,
+                sort_order: subIndex,
+              }))
+            );
+            if (grandchildInserts.length > 0) {
+              const { data: grandChildren, error: grandchildError } = await supabase
+                .from('session_actions')
+                .insert(grandchildInserts)
+                .select('*')
+                .order('sort_order', { ascending: true });
+              if (grandchildError) {
+                console.error('[VOW] Could not save generated nested substeps:', grandchildError);
+                setError('The actions were saved, but some nested substeps could not be saved. Add them from the session editor.');
+              } else {
+                rows = [...rows, ...((grandChildren || []) as SessionAction[])];
+              }
+            }
+          }
+        } else if (childSteps.length > 0) {
           const inserts = childSteps.map((title, index) => ({
             goal_id: currentSession.goal_id,
             session_id: currentSession.id,
@@ -102,8 +181,8 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
             .insert(inserts)
             .select('*');
           if (childError) {
-            console.error('[VOW] Could not save generated child steps:', childError);
-            setError('The main session action was saved, but some substeps could not be saved. Please retry.');
+            console.error('[VOW] Could not save legacy child steps:', childError);
+            setError('The main session was saved, but some substeps could not be saved. Add them from the session editor.');
           } else {
             rows = [parent as SessionAction, ...((children || []) as SessionAction[])];
           }
