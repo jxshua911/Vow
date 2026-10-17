@@ -65,8 +65,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
     if (children.length > 12 || substeps.length > 8) return false;
     if (substeps.some((step) => typeof step !== "string" || step.trim().length < 3)) return false;
     if (children.length > 0) {
-      return children.every((child) => visit(child, depth + 1))
-        && (typeof action.instructions === "string" && action.instructions.trim().length >= 8 || substeps.length > 0 || depth === 0);
+      return children.every((child) => visit(child, depth + 1));
     }
     return typeof action.instructions === "string"
       && action.instructions.trim().length >= 8
