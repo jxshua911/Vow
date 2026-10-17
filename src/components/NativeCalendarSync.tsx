@@ -15,7 +15,7 @@ export function NativeCalendarSync() {
   const [enabled, setEnabled] = useState(() => localStorage.getItem(ENABLE_KEY) === 'true');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState<boolean | null>(null);
   const [dismissedUserId, setDismissedUserId] = useState<string | null>(null);
   const [hiding, setHiding] = useState(false);
   const dismissTimer = useRef<number | null>(null);
@@ -80,7 +80,7 @@ export function NativeCalendarSync() {
     return () => { cancelled = true; };
   }, [enabled, userId, accountEmail, dismissAfterSuccess]);
 
-  if (!Capacitor.isNativePlatform() || !session || !userId || dismissedUserId !== userId || dismissed) return null;
+  if (!Capacitor.isNativePlatform() || !session || !userId || dismissedUserId !== userId || dismissed !== false) return null;
 
   async function toggle() {
     if (busy || !userId) return;
