@@ -4,7 +4,16 @@ import { useAuth } from '@/lib/auth';
 import type { Session, SessionAction } from '@/types/database';
 import { cancelReminder, notificationId, scheduleReminder } from '@/lib/notifications';
 
-type PlannedActionSeed = { title: string; instructions?: string; sets?: number | null; reps?: string | null; duration_minutes?: number | null; rest_seconds?: number | null; substeps: string[] };
+type PlannedActionSeed = {
+  title: string;
+  instructions?: string;
+  sets?: number | null;
+  reps?: string | null;
+  duration_minutes?: number | null;
+  rest_seconds?: number | null;
+  substeps?: string[];
+  children?: PlannedActionSeed[];
+};
 
 interface SessionActionsProps {
   session: Session;
@@ -66,29 +75,37 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       const target = noteLines.find((line) => line.startsWith('Target: '))?.slice(8).trim();
       const actionTreeLine = noteLines.find((line) => line.startsWith('Action tree: '))?.slice('Action tree: '.length);
       let actionTree: PlannedActionSeed[] = [];
+      const normalizePlannedAction = (value: unknown, depth = 0): PlannedActionSeed | null => {
+        if (!value || typeof value !== 'object' || depth > 5) return null;
+        const record = value as Record<string, unknown>;
+        if (typeof record.title !== 'string' || !record.title.trim()) return null;
+        const numeric = (input: unknown, min: number, max: number, integer = true): number | null => {
+          const value = Number(input);
+          if (input == null || input === '' || !Number.isFinite(value) || value < min || value > max) return null;
+          return integer ? Math.round(value) : value;
+        };
+        const rawSubsteps = Array.isArray(record.substeps) ? record.substeps : [];
+        const substeps = rawSubsteps
+          .filter((step): step is string => typeof step === 'string' && Boolean(step.trim()))
+          .map((step) => step.trim().slice(0, 300)).slice(0, 8);
+        const children = Array.isArray(record.children)
+          ? record.children.map((child) => normalizePlannedAction(child, depth + 1)).filter((child): child is PlannedActionSeed => Boolean(child)).slice(0, 12)
+          : [];
+        return {
+          title: record.title.trim().slice(0, 160),
+          instructions: typeof record.instructions === 'string' ? record.instructions.trim().slice(0, 2000) : undefined,
+          sets: numeric(record.sets, 1, 100),
+          reps: typeof record.reps === 'string' ? record.reps.trim().slice(0, 120) : null,
+          duration_minutes: numeric(record.duration_minutes, 1, 240),
+          rest_seconds: numeric(record.rest_seconds, 0, 3600),
+          substeps,
+          children,
+        };
+      };
       try {
         const parsed: unknown = JSON.parse(actionTreeLine || '[]');
         if (Array.isArray(parsed)) {
-          actionTree = parsed.flatMap((value): PlannedActionSeed[] => {
-            if (!value || typeof value !== 'object') return [];
-            const record = value as Record<string, unknown>;
-            if (typeof record.title !== 'string' || !record.title.trim()) return [];
-            const substeps = Array.isArray(record.substeps)
-              ? record.substeps.filter((step): step is string => typeof step === 'string' && Boolean(step.trim())).map((step) => step.trim()).slice(0, 8)
-              : [];
-            const sets = Number(record.sets);
-            const duration = Number(record.duration_minutes);
-            const rest = Number(record.rest_seconds);
-            return [{
-              title: record.title.trim().slice(0, 160),
-              instructions: typeof record.instructions === 'string' ? record.instructions.trim().slice(0, 500) : undefined,
-              sets: Number.isFinite(sets) && sets > 0 ? Math.min(100, Math.round(sets)) : null,
-              reps: typeof record.reps === 'string' ? record.reps.trim().slice(0, 80) : null,
-              duration_minutes: Number.isFinite(duration) && duration > 0 ? Math.min(240, Math.round(duration)) : null,
-              rest_seconds: Number.isFinite(rest) && rest >= 0 ? Math.min(3600, Math.round(rest)) : null,
-              substeps,
-            }];
-          }).slice(0, 8);
+          actionTree = parsed.map((value) => normalizePlannedAction(value)).filter((value): value is PlannedActionSeed => Boolean(value)).slice(0, 12);
         }
       } catch {
         // Older notes contain no structured action tree; fall back to numbered steps below.
@@ -120,53 +137,59 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       } else {
         rows = [parent as SessionAction];
         if (actionTree.length > 0) {
-          const inserts = actionTree.map((action, index) => ({
-            goal_id: currentSession.goal_id,
-            session_id: currentSession.id,
-            user_id: authSession.user.id,
-            parent_action_id: parent.id,
-            title: action.title,
-            instructions: action.instructions || null,
-            sets: action.sets ?? null,
-            reps: action.reps ?? null,
-            duration_minutes: action.duration_minutes ?? null,
-            rest_seconds: action.rest_seconds ?? null,
-            sort_order: index,
-          }));
-          const { data: children, error: childError } = await supabase
-            .from('session_actions')
-            .insert(inserts)
-            .select('*')
-            .order('sort_order', { ascending: true });
-          if (childError) {
-            console.error('[VOW] Could not save generated actions:', childError);
-            setError('The main session was saved, but some actions could not be saved. Add the missing actions in the session editor.');
-          } else {
-            const childRows = (children || []) as SessionAction[];
-            rows = [parent as SessionAction, ...childRows];
-            const grandchildInserts = childRows.flatMap((child, index) =>
-              actionTree[index].substeps.map((title, subIndex) => ({
-                goal_id: currentSession.goal_id,
-                session_id: currentSession.id,
-                user_id: authSession.user.id,
-                parent_action_id: child.id,
+          const insertedRows: SessionAction[] = [parent as SessionAction];
+          const insertLevel = async (items: PlannedActionSeed[], parentId: string, depth: number): Promise<boolean> => {
+            if (depth > 5 || items.length === 0) return true;
+            const inserts = items.map((action, index) => ({
+              goal_id: currentSession.goal_id,
+              session_id: currentSession.id,
+              user_id: authSession.user.id,
+              parent_action_id: parentId,
+              title: action.title,
+              instructions: action.instructions || null,
+              sets: action.sets ?? null,
+              reps: action.reps ?? null,
+              duration_minutes: action.duration_minutes ?? null,
+              rest_seconds: action.rest_seconds ?? null,
+              sort_order: index,
+            }));
+            const { data: created, error: insertError } = await supabase
+              .from('session_actions')
+              .insert(inserts)
+              .select('*')
+              .order('sort_order', { ascending: true });
+            if (insertError || !created) {
+              console.error('[VOW] Could not save generated action hierarchy:', insertError);
+              return false;
+            }
+            const createdRows = created as SessionAction[];
+            insertedRows.push(...createdRows);
+            for (let index = 0; index < createdRows.length; index += 1) {
+              const action = items[index];
+              const children = action.children || [];
+              const textSubsteps = (action.substeps || []).map((title) => ({
                 title,
-                sort_order: subIndex,
-              }))
-            );
-            if (grandchildInserts.length > 0) {
-              const { data: grandChildren, error: grandchildError } = await supabase
-                .from('session_actions')
-                .insert(grandchildInserts)
-                .select('*')
-                .order('sort_order', { ascending: true });
-              if (grandchildError) {
-                console.error('[VOW] Could not save generated nested substeps:', grandchildError);
-                setError('The actions were saved, but some nested substeps could not be saved. Add them from the session editor.');
-              } else {
-                rows = [...rows, ...((grandChildren || []) as SessionAction[])];
+                instructions: undefined,
+                substeps: [],
+                children: [],
+              }));
+              if (children.length && textSubsteps.length) {
+                const ok = await insertLevel([...children, ...textSubsteps], createdRows[index].id, depth + 1);
+                if (!ok) return false;
+              } else if (children.length) {
+                const ok = await insertLevel(children, createdRows[index].id, depth + 1);
+                if (!ok) return false;
+              } else if (textSubsteps.length) {
+                const ok = await insertLevel(textSubsteps, createdRows[index].id, depth + 1);
+                if (!ok) return false;
               }
             }
+            return true;
+          };
+          const converted = await insertLevel(actionTree, (parent as SessionAction).id, 1);
+          rows = insertedRows;
+          if (!converted) {
+            setError('The session was saved, but part of its action hierarchy could not be saved. Refresh to retry or add the missing steps manually.');
           }
         } else if (childSteps.length > 0) {
           const inserts = childSteps.map((title, index) => ({
