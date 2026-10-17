@@ -32,7 +32,6 @@ const CATEGORY_SIGNALS: Record<string, RegExp> = {
   health: /\b(health|wellbeing|wellness|sleep|symptom|appointment|clinician|doctor|professional|hydration|meal|nutrition|mobility|recovery|monitor|log|screening|routine|safe|guidance)\b/i,
   personal: /\b(habit|routine|cue|trigger|track|checklist|priority|schedule|plan|reflect|review|prepare|book|booking|document|application|route|itinerary|packing|deadline|reminder|organise|organize|declutter|admin|practice|practise)\b/i,
   home: /\b(clean|declutter|organise|organize|sort|repair|laundry|room|kitchen|storage|inventory|donate|recycle|maintenance|checklist|supplies|household|organis|label|dispose|put away)\b/i,
-  general: /\b(define|identify|research|compare|choose|plan|schedule|create|complete|measure|track|test|review|deliverable|milestone|target|evidence|checkpoint|action|decision|next step)\b/i,
 };
 
 export function validateCategorySpecificDetail(
