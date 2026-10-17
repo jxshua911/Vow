@@ -90,8 +90,6 @@ const CATEGORY_ALIASES: Record<string, GoalCategory> = {
   'life admin': 'personal',
   productivity: 'personal',
   travel: 'personal',
-  organisation: 'personal',
-  organization: 'personal',
   volunteering: 'personal',
   community: 'personal',
   money: 'money',
