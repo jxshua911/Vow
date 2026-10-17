@@ -49,20 +49,29 @@ export function validateCategorySpecificDetail(
 
 
 export function hasCompleteActionTree(actions: unknown): boolean {
-  if (!Array.isArray(actions) || actions.length < 3 || actions.length > 6) return false;
+  if (!Array.isArray(actions) || actions.length < 3 || actions.length > 12) return false;
 
-  // Keep validation domain-neutral: a study task, budget calculation, customer
-  // interview, creative draft, and workout do not share the same measurement.
-  // Existing numeric fields are optional metadata used only when relevant.
-  return actions.every((value) => {
-    if (!value || typeof value !== "object") return false;
+  // Validate a domain-neutral, recursive tree. Group headings may contain
+  // children; executable leaves need actionable instructions and a concrete
+  // ordered breakdown, without forcing fitness-only fields onto other goals.
+  const visit = (value: unknown, depth = 0): boolean => {
+    if (!value || typeof value !== "object" || depth > 5) return false;
     const action = value as Record<string, unknown>;
-    const title = typeof action.title === "string" && action.title.trim().length >= 2;
-    const instructions = typeof action.instructions === "string" && action.instructions.trim().length >= 8;
-    const substeps = Array.isArray(action.substeps)
-      && action.substeps.length >= 2
-      && action.substeps.length <= 5
-      && action.substeps.every((step) => typeof step === "string" && step.trim().length >= 3);
-    return title && instructions && substeps;
-  });
+    if (typeof action.title !== "string" || action.title.trim().length < 2) return false;
+    if (action.instructions != null && (typeof action.instructions !== "string" || action.instructions.trim().length < 8)) return false;
+
+    const children = Array.isArray(action.children) ? action.children : [];
+    const substeps = Array.isArray(action.substeps) ? action.substeps : [];
+    if (children.length > 12 || substeps.length > 8) return false;
+    if (substeps.some((step) => typeof step !== "string" || step.trim().length < 3)) return false;
+    if (children.length > 0) {
+      return children.every((child) => visit(child, depth + 1))
+        && (typeof action.instructions === "string" && action.instructions.trim().length >= 8 || substeps.length > 0 || depth === 0);
+    }
+    return typeof action.instructions === "string"
+      && action.instructions.trim().length >= 8
+      && (substeps.length >= 2 || depth > 0);
+  };
+
+  return actions.every((action) => visit(action));
 }
