@@ -1018,7 +1018,7 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "", schedul
 
   const planned = schedule(b, w, ds, str(b?.start_date) || new Date().toISOString().slice(0, 10), scheduleTimesEnabled);
   if (planned.length !== w * ds.length) return "INCOMPLETE_SCHEDULE";
-  if (planned.some((item: any) => Number(item.week) <= Math.min(w, 4) && !hasCompleteActionTree(item.actions))) return "INSUFFICIENT_ACTION_TREE";
+  if (planned.some((item: any) => !hasCompleteActionTree(item.actions))) return "INSUFFICIENT_ACTION_TREE";
 
   const tasks = planned.map((x: any) => str(x.task, 350).toLowerCase()).filter(Boolean);
   const unique = new Set(tasks);
@@ -1057,7 +1057,14 @@ function validatePlan(b: any, w: number, ds: string[], goalContext = "", schedul
     str(item?.task, 350),
     str(item?.purpose, 250),
     ...(Array.isArray(item?.substeps) ? item.substeps.map((step: any) => str(step, 250)) : []),
-    ...(Array.isArray(item?.actions) ? item.actions.flatMap((action: any) => [str(action?.title, 160), str(action?.instructions, 250), ...(Array.isArray(action?.substeps) ? action.substeps.map((step: any) => str(step, 200)) : [])]) : []),
+    ...(Array.isArray(item?.actions) ? item.actions.flatMap((action: any) => {
+      const collectActionText = (node: any, depth = 0): string[] => depth > 5 || !node || typeof node !== "object" ? [] : [
+        str(node.title, 160), str(node.instructions, 500),
+        ...(Array.isArray(node.substeps) ? node.substeps.map((step: any) => str(step, 250)) : []),
+        ...(Array.isArray(node.children) ? node.children.flatMap((child: any) => collectActionText(child, depth + 1)) : []),
+      ];
+      return collectActionText(action);
+    }) : []),
   ].join(" ")).join(" ").toLowerCase();
   const categoryValidationError = validateCategorySpecificDetail(normalizedCategory, detailText, planned.length);
   if (categoryValidationError) return categoryValidationError;
