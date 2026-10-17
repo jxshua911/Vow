@@ -366,11 +366,11 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
     const expanded = expandedId === action.id;
     return <div key={action.id} className={depth ? 'ml-5 mt-2 border-l border-vow-border pl-3' : 'mt-3'}>
       <div className="flex items-start gap-2">
-        <input aria-label={`Mark ${action.title} complete`} type="checkbox" checked={action.status === 'completed'} disabled={readOnly || busyId === action.id} onChange={() => void toggleAction(action)} className="mt-1 accent-current" />
+        {children.length === 0 && <input aria-label={`Mark ${action.title} complete`} type="checkbox" checked={action.status === 'completed'} disabled={readOnly || busyId === action.id} onChange={() => void toggleAction(action)} className="mt-1 accent-current" />}
         <div className="min-w-0 flex-1">
           <p className={`text-sm break-words ${action.status === 'completed' ? 'line-through text-vow-muted' : 'text-vow-ink'}`}>{action.title}</p>
-          {action.duration_minutes != null && <p className="text-xs text-vow-muted mt-1">{action.duration_minutes} min{action.sets ? ` · ${action.sets} sets` : ''}{action.reps ? ` · ${action.reps}` : ''}{action.rest_seconds ? ` · ${action.rest_seconds}s rest` : ''}</p>}
-          {action.instructions && <p className="text-xs text-vow-muted mt-2 whitespace-pre-wrap break-words">{action.instructions}</p>}
+          {children.length === 0 && action.duration_minutes != null && <p className="text-xs text-vow-muted mt-1">{action.duration_minutes} min{action.sets ? ` · ${action.sets} sets` : ''}{action.reps ? ` · ${action.reps}` : ''}{action.rest_seconds ? ` · ${action.rest_seconds}s rest` : ''}</p>}
+          {children.length === 0 && action.instructions && <p className="text-xs text-vow-muted mt-2 whitespace-pre-wrap break-words">{action.instructions}</p>}
           {action.scheduled_at && <p className="text-xs text-vow-muted mt-1">Step scheduled: {new Date(action.scheduled_at).toLocaleString()}</p>}
           {!readOnly && <div className="flex flex-wrap gap-2 mt-2">
             {(() => {
@@ -410,12 +410,13 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   }
 
   const roots = actions.filter((action) => !action.parent_action_id);
-  const completedCount = actions.filter((action) => action.status === 'completed').length;
+  const actionableActions = actions.filter((action) => !actions.some((child) => child.parent_action_id === action.id));
+  const completedCount = actionableActions.filter((action) => action.status === 'completed').length;
 
   return <section className="mt-4 rounded-md border border-vow-border p-3">
     <div className="flex items-center justify-between gap-3">
       <h3 className="text-xs font-medium uppercase tracking-wide text-vow-muted">Action checklist</h3>
-      <span className="text-xs text-vow-muted">{completedCount}/{actions.length} complete</span>
+      <span className="text-xs text-vow-muted">{completedCount}/{actionableActions.length} complete</span>
     </div>
     {loading ? <p className="text-xs text-vow-muted mt-3">Loading saved actions…</p> : roots.length ? roots.map((action) => renderAction(action)) : <p className="text-xs text-vow-muted mt-3">Break this session into steps to track the work, one action at a time.</p>}
     {!readOnly && <form className="flex gap-2 mt-4" onSubmit={(event) => { event.preventDefault(); void addAction(newActionTitle); }}>
