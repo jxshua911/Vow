@@ -51,8 +51,9 @@ export function validateCategorySpecificDetail(
 export function hasCompleteActionTree(actions: unknown): boolean {
   if (!Array.isArray(actions) || actions.length < 3 || actions.length > 6) return false;
 
-  // The action shape is deliberately domain-neutral. Sets/reps and durations
-  // are optional metadata, not universal requirements for every kind of goal.
+  // Keep validation domain-neutral: a study task, budget calculation, customer
+  // interview, creative draft, and workout do not share the same measurement.
+  // Existing numeric fields are optional metadata used only when relevant.
   return actions.every((value) => {
     if (!value || typeof value !== "object") return false;
     const action = value as Record<string, unknown>;
@@ -62,16 +63,6 @@ export function hasCompleteActionTree(actions: unknown): boolean {
       && action.substeps.length >= 2
       && action.substeps.length <= 5
       && action.substeps.every((step) => typeof step === "string" && step.trim().length >= 3);
-    const sets = Number.isFinite(Number(action.sets)) && Number(action.sets) > 0;
-    const reps = (typeof action.reps === "string" && action.reps.trim().length > 0)
-      || (Number.isFinite(Number(action.reps)) && Number(action.reps) > 0);
-    const duration = Number.isFinite(Number(action.duration_minutes)) && Number(action.duration_minutes) > 0;
-    const rest = Number.isFinite(Number(action.rest_seconds)) && Number(action.rest_seconds) >= 0;
-    // Require executable detail in the instructions/substeps. Domain-specific
-    // measurement can be reps, duration, a count, a deliverable, or evidence.
-    // Numeric exercise fields are accepted when relevant but never mandatory.
-    return title && instructions && substeps && (
-      (sets && reps) || duration || instructions
-    ) && (!rest || sets || reps || duration || instructions);
+    return title && instructions && substeps;
   });
 }
