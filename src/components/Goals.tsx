@@ -461,14 +461,72 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     onBack();
   }
   async function deleteGoal() {
-    if (!confirm('Permanently delete this goal and all associated data? This cannot be undone.')) return;
-    const { error } = await supabase.from('goals').delete().eq('id', goalId);
-    if (error) {
-       console.error('[VOW] Failed to delete goal:', error);
-       alert('Could not delete goal. Please try again.');
-       return;
+    if (!session || !confirm('Permanently delete this goal and all associated data? This cannot be undone.')) return;
+    setActionError(null);
+    const { data: linkedSessions, error: sessionsError } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('goal_id', goalId)
+      .eq('user_id', session.user.id);
+    if (sessionsError) {
+      console.error('[VOW] Could not load sessions before goal deletion:', sessionsError);
+      alert('Could not safely prepare this goal for deletion. Please try again.');
+      return;
     }
-    await Promise.all(sessions.filter(s => s.status === 'scheduled' && Boolean(s.scheduled_at) && new Date(s.scheduled_at as string).getTime() > Date.now()).map(s => cancelReminder(notificationId(s.id))));
+
+    const cleanupFailures: string[] = [];
+    for (const item of (linkedSessions || []) as Session[]) {
+      try {
+        await cancelReminder(notificationId(item.id));
+        await cancelActionRemindersForSession(item.id);
+      } catch (error) {
+        console.error('[VOW] Reminder cleanup failed for deleted goal session:', item.id, error);
+        cleanupFailures.push('reminders');
+      }
+      if (item.external_event_id && navigator.onLine) {
+        try {
+          const { error: googleError } = await supabase.functions.invoke('google-calendar-events', {
+            headers: { Authorization: 'Bearer ' + session.access_token },
+            body: { action: 'delete', eventId: item.external_event_id },
+          });
+          if (googleError) throw googleError;
+        } catch (error) {
+          console.error('[VOW] Google Calendar cleanup failed for goal session:', item.id, error);
+          cleanupFailures.push('Google Calendar');
+        }
+      }
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await deleteSessionFromNativeCalendar(item);
+        } catch (error) {
+          console.error('[VOW] Phone calendar cleanup failed for goal session:', item.id, error);
+          cleanupFailures.push('phone calendar');
+        }
+      }
+    }
+
+    const { error } = await supabase.from('goals').delete().eq('id', goalId).eq('user_id', session.user.id);
+    if (error) {
+      console.error('[VOW] Failed to delete goal:', error);
+      alert('Could not delete goal. Please try again.');
+      return;
+    }
+
+    try {
+      localStorage.removeItem(`vow:offline-goal-detail:${session.user.id}:${goalId}`);
+      localStorage.removeItem(`vow:offline-milestones:${session.user.id}:${goalId}`);
+      localStorage.removeItem(`vow:offline-sessions:${session.user.id}:${goalId}`);
+      const rawGoals = localStorage.getItem(`vow:offline-goals:${session.user.id}`);
+      const cachedGoals: unknown = rawGoals ? JSON.parse(rawGoals) : [];
+      if (Array.isArray(cachedGoals)) {
+        localStorage.setItem(`vow:offline-goals:${session.user.id}`, JSON.stringify((cachedGoals as Goal[]).filter((item) => item.id !== goalId)));
+      }
+    } catch (cacheError) {
+      console.warn('[VOW] Could not fully clear deleted goal from offline cache:', cacheError);
+    }
+    if (cleanupFailures.length) {
+      setActionError('The goal was deleted, but some external cleanup failed (' + [...new Set(cleanupFailures)].join(', ') + '). Check those calendars and notifications.');
+    }
     onBack();
   }
   async function handlePause(context: string) {
