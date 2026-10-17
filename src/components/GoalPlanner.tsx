@@ -213,6 +213,30 @@ function normalizePlan(
       week: durationWeeks,
     });
   }
+  const normalizePlanAction = (value: unknown, depth = 0): PlanAction | null => {
+    if (!value || typeof value !== 'object' || depth > 5) return null;
+    const action = value as Record<string, unknown>;
+    const title = String(action.title ?? action.name ?? '').trim().slice(0, 160);
+    if (!title) return null;
+    const numeric = (input: unknown, min: number, max: number): number | null => {
+      const value = Number(input);
+      return input == null || input === '' || !Number.isFinite(value) || value < min
+        ? null : Math.min(max, Math.round(value));
+    };
+    const children = Array.isArray(action.children)
+      ? action.children.slice(0, 12).map(child => normalizePlanAction(child, depth + 1)).filter((child): child is PlanAction => Boolean(child))
+      : [];
+    return {
+      title,
+      instructions: String(action.instructions ?? action.purpose ?? '').trim().slice(0, 500) || undefined,
+      sets: numeric(action.sets, 1, 100),
+      reps: action.reps == null ? null : String(action.reps).trim().slice(0, 80),
+      duration_minutes: numeric(action.duration_minutes, 1, 240),
+      rest_seconds: numeric(action.rest_seconds, 0, 3600),
+      substeps: Array.isArray(action.substeps) ? action.substeps.map(step => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 8) : [],
+      children,
+    };
+  };
   const schedule = raw.schedule
     .slice(0, 300)
     .map(item => ({
@@ -225,15 +249,7 @@ function normalizePlan(
       preferred_time: /^\d{1,2}:\d{2}$/.test(String(item?.preferred_time ?? '')) ? String(item.preferred_time).trim().slice(0, 8) : null,
       video_url: (() => { const url = String(item?.video_url ?? '').trim().slice(0, 1000); return isYoutubeUrl(url) ? url : ''; })(),
       substeps: Array.isArray(item?.substeps) ? item.substeps.map((step: unknown) => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 12) : [],
-      actions: Array.isArray(item?.actions) ? item.actions.slice(0, 8).map((action) => ({
-        title: String(action?.title ?? action?.name ?? '').trim().slice(0, 160),
-        instructions: String(action?.instructions ?? action?.purpose ?? '').trim().slice(0, 500) || undefined,
-        sets: Number.isFinite(Number(action?.sets)) && Number(action.sets) > 0 ? Math.min(100, Math.round(Number(action.sets))) : null,
-        reps: action?.reps == null ? null : String(action.reps).trim().slice(0, 80),
-        duration_minutes: Number.isFinite(Number(action?.duration_minutes)) && Number(action.duration_minutes) > 0 ? Math.min(240, Math.round(Number(action.duration_minutes))) : null,
-        rest_seconds: Number.isFinite(Number(action?.rest_seconds)) && Number(action.rest_seconds) >= 0 ? Math.min(3600, Math.round(Number(action.rest_seconds))) : null,
-        substeps: Array.isArray(action?.substeps) ? action.substeps.map((step: unknown) => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 8) : [],
-      })).filter((action: PlanAction) => action.title) : [],
+      actions: Array.isArray(item?.actions) ? item.actions.slice(0, 12).map(action => normalizePlanAction(action)).filter((action): action is PlanAction => Boolean(action)) : [],
     }))
     .filter(item => item.task);
   if (!schedule.length || !milestones.length) return null;
