@@ -1359,7 +1359,7 @@ Deno.serve(async (req) => {
         const classResult = await ai(req, [
           {
             role: "system",
-            content: `Classify the user's goal into exactly one of these supported categories: Sports, Languages, Crafts/Hobbies, Education, Reading, Mindfulness, Technology/Projects, Career/Projects, Personal Development, Life Admin, Communication, Wellbeing, Creative Skills, Travel, Learning, Practical Skills, Finance, Productivity. If the goal involves a specific event, competition, or ambiguous term, use web search to understand it first. Return ONLY JSON: {"category": "string"}. Do not return 'General'.`
+            content: `Classify the user's goal into exactly one of these supported categories: Sports, Languages, Crafts/Hobbies, Education, Reading, Mindfulness, Technology/Projects, Career/Projects, Personal Development, Life Admin, Communication, Wellbeing, Creative Skills, Travel, Learning, Practical Skills, Finance, Productivity. Based on the goal title and any provided research or context, determine the single best-fitting category. Return ONLY JSON: {"category": "string"}. Do not return 'General'.`
           },
           { role: "user", content: `Goal: ${str(g?.title || g?.outcome, 300)}. Context: ${str(g?.why_it_matters, 500)}` }
         ], "clarify", researchRequired);
