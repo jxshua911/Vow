@@ -47,6 +47,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   const [editRest, setEditRest] = useState('');
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [executionOpen, setExecutionOpen] = useState(false);
+  const [executionStartActionId, setExecutionStartActionId] = useState<string | null>(null);
 
   const loadActions = useCallback(async () => {
     if (!authSession?.user?.id) {
@@ -407,6 +408,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
           {children.length === 0 && action.duration_minutes != null && !isRest && <p className="text-xs text-vow-muted mt-1">{action.duration_minutes} min{action.sets ? ` · ${action.sets} sets` : ''}{action.reps ? ` · ${action.reps}` : ''}{action.rest_seconds ? ` · ${action.rest_seconds}s rest` : ''}</p>}
           {isRest && <p className="text-xs text-vow-muted mt-1">{action.rest_seconds ? `${Math.floor(action.rest_seconds / 60)} min ${action.rest_seconds % 60 ? `${action.rest_seconds % 60} sec` : ''}` : `${action.duration_minutes || 5} min`} rest</p>}
           {children.length === 0 && action.instructions && <p className="text-xs text-vow-muted mt-2 whitespace-pre-wrap break-words">{action.instructions}</p>}
+          {children.length === 0 && !isRest && <button type="button" onClick={() => { setExecutionStartActionId(action.id); setExecutionOpen(true); }} className="text-xs underline underline-offset-2 text-vow-muted mt-2">Open details / start here</button>}
           {action.scheduled_at && <p className="text-xs text-vow-muted mt-1">Step scheduled: {new Date(action.scheduled_at).toLocaleString()}</p>}
           {!readOnly && !isRest && <div className="flex flex-wrap gap-2 mt-2">
             {(() => {
@@ -449,12 +451,12 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   const actionableActions = actions.filter((action) => !actions.some((child) => child.parent_action_id === action.id) && action.action_type !== 'rest' && action.action_type !== 'break');
   const completedCount = actionableActions.filter((action) => action.status === 'completed').length;
 
-  if (executionOpen) return <SessionExecution session={currentSession} actions={actions} readOnly={readOnly} onClose={() => setExecutionOpen(false)} onCompleted={() => { setExecutionOpen(false); void loadActions(); }} />;
+  if (executionOpen) return <SessionExecution session={currentSession} actions={actions} initialActionId={executionStartActionId} readOnly={readOnly} onClose={() => { setExecutionOpen(false); setExecutionStartActionId(null); }} onCompleted={() => { setExecutionOpen(false); setExecutionStartActionId(null); void loadActions(); }} />;
 
   return <section className="mt-4 rounded-md border border-vow-border p-3">
     <div className="flex items-center justify-between gap-3">
       <div><h3 className="text-xs font-medium uppercase tracking-wide text-vow-muted">Action checklist</h3><span className="text-xs text-vow-muted">{completedCount}/{actionableActions.length} complete</span></div>
-      <button type="button" disabled={readOnly || loading || actions.length === 0} onClick={() => setExecutionOpen(true)} className="vow-btn-soft text-xs disabled:opacity-40">Start session</button>
+      <button type="button" disabled={readOnly || loading || actions.length === 0} onClick={() => { setExecutionStartActionId(null); setExecutionOpen(true); }} className="vow-btn-soft text-xs disabled:opacity-40">Start session</button>
     </div>
     {loading ? <p className="text-xs text-vow-muted mt-3">Loading saved actions…</p> : roots.length ? roots.map((action) => renderAction(action)) : <p className="text-xs text-vow-muted mt-3">Break this session into steps to track the work, one action at a time.</p>}
     {!readOnly && <form className="flex gap-2 mt-4" onSubmit={(event) => { event.preventDefault(); void addAction(newActionTitle); }}>
