@@ -777,13 +777,15 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
     for (const provider of providers) {
       try {
         const providerMessages =
-          researchRequired && provider !== "groq"
+          provider === "groq" || (researchRequired && provider !== "groq")
             ? [
                 ...messages,
                 {
                   role: "system",
                   content:
-                    "Fallback provider mode: provider-side web research is unavailable on this path. Do not claim that web research was performed. Use the supplied research results, VOW knowledge, and user context; no additional provider-side browser search is available on this path. Do not claim extra research, and return the same valid JSON structure requested by the original prompt.",
+                    provider === "groq"
+                      ? "Groq does not support provider-side web research. Do not claim that web research was performed. Use the supplied research results, VOW knowledge, and user context; no additional provider-side browser search is available. Do not claim extra research, and return the same valid JSON structure requested by the original prompt."
+                      : "Fallback provider mode: provider-side web research is unavailable on this path. Do not claim that web research was performed. Use the supplied research results, VOW knowledge, and user context; no additional provider-side browser search is available on this path. Do not claim extra research, and return the same valid JSON structure requested by the original prompt.",
                 },
               ]
             : messages;
