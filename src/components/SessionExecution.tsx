@@ -38,6 +38,7 @@ export function SessionExecution({ session, actions, readOnly = false, onClose, 
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [finished, setFinished] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timerRemaining, setTimerRemaining] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -175,7 +176,7 @@ export function SessionExecution({ session, actions, readOnly = false, onClose, 
       return;
     }
     setSaving(false);
-    onCompleted();
+    setFinished(true);
   }
 
   return <section className="mt-4 rounded-md border border-vow-border p-4">
@@ -184,7 +185,7 @@ export function SessionExecution({ session, actions, readOnly = false, onClose, 
       <button type="button" onClick={onClose} className="vow-btn-ghost text-xs">Close</button>
     </div>
     <div className="h-1.5 bg-vow-border mt-4 rounded-full overflow-hidden"><div className="h-full bg-vow-ink transition-all" style={{ width: `${totalUnits ? Math.min(100, completedUnits / totalUnits * 100) : 0}%` }} /></div>
-    {loading ? <p className="text-sm text-vow-muted mt-4">Loading saved progress…</p> : !action ? <div className="mt-6"><h4 className="vow-heading text-lg text-vow-ink">{allDone ? 'Session complete!' : 'No executable steps yet'}</h4>{allDone && <p className="text-xs text-vow-muted mt-2">Every planned action is marked complete.</p>}{!allDone && <p className="text-xs text-vow-muted mt-2">Add actions in the session checklist before starting execution.</p>}</div> : <div className="mt-6 border border-vow-border p-4">
+    {finished ? <div className="mt-6 border border-vow-border p-5"><h4 className="vow-heading text-2xl text-vow-ink">Session complete! 🎉</h4><p className="text-sm text-vow-muted mt-2">Your progress has been saved.</p><button type="button" onClick={onCompleted} className="vow-btn-primary mt-4">Done</button></div> : loading ? <p className="text-sm text-vow-muted mt-4">Loading saved progress…</p> : !action ? <div className="mt-6"><h4 className="vow-heading text-lg text-vow-ink">{allDone ? 'Session complete!' : 'No executable steps yet'}</h4>{allDone && <p className="text-xs text-vow-muted mt-2">Every planned action is marked complete.</p>}{!allDone && <p className="text-xs text-vow-muted mt-2">Add actions in the session checklist before starting execution.</p>}</div> : <div className="mt-6 border border-vow-border p-4">
       {current && current.path.length > 0 && <p className="vow-label mb-2">{current.path.join(' / ')}</p>}
       <h4 className="vow-heading text-xl text-vow-ink">{action.title}</h4>
       {action.instructions && <p className="text-sm text-vow-muted mt-2 whitespace-pre-wrap">{action.instructions}</p>}
@@ -193,6 +194,6 @@ export function SessionExecution({ session, actions, readOnly = false, onClose, 
       : <div className="mt-5"><p className="text-sm text-vow-muted">Completion target</p><button type="button" disabled={readOnly || saving} onClick={() => void toggleCompletion(action, 0)} className="vow-btn-primary mt-3">{completed.has(keyFor(action.id, 0)) ? 'Mark incomplete' : 'Complete task'}</button></div>}
     </div>}
     {error && <p role="alert" className="text-sm text-red-600 mt-4">{error}</p>}
-    <div className="flex flex-wrap gap-2 mt-5"><button type="button" onClick={onClose} className="vow-btn-ghost">Back to session</button><button type="button" disabled={readOnly || saving || !allDone} onClick={() => void finishSession()} className="vow-btn-primary disabled:opacity-40">{saving ? 'Saving…' : 'Finish session'}</button></div>
+    {!finished && <div className="flex flex-wrap gap-2 mt-5"><button type="button" onClick={onClose} className="vow-btn-ghost">Back to session</button><button type="button" disabled={readOnly || saving || !allDone} onClick={() => void finishSession()} className="vow-btn-primary disabled:opacity-40">{saving ? 'Saving…' : 'Finish session'}</button></div>}
   </section>;
 }
