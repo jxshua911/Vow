@@ -1141,7 +1141,8 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
           const normalizeAction = (item: any, depth = 0): any => ({
             type: (() => {
               const actionType = str(item?.type ?? item?.action_type, 24).toLowerCase();
-              if (actionType === "rest" || actionType === "break") return "rest";
+              const actionTitle = str(item?.title || item?.name, 160);
+              if (actionType === "rest" || actionType === "break" || /^(rest|break)\\b/i.test(actionTitle)) return "rest";
               if (actionType === "category" || actionType === "group") return "category";
               if (actionType === "exercise" || item?.sets != null || item?.reps != null) return "exercise";
               return Array.isArray(item?.children) && item.children.length ? "category" : "task";
