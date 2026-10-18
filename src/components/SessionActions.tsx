@@ -176,7 +176,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
               const children = action.children || [];
               const textSubsteps = (action.substeps || []).map((title) => ({
                 title,
-                type: 'task',
+                type: 'task' as const,
                 instructions: undefined,
                 substeps: [],
                 children: [],
