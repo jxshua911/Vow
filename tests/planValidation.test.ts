@@ -52,6 +52,28 @@ test('accepts a complete grouped action tree with instructions, measurements and
   assert.equal(hasCompleteActionTree(actions), true);
 });
 
+test('accepts explicit rest periods inside a structured action tree', () => {
+  const actions = [
+    { title: 'FOUNDATIONS', type: 'category', children: [
+      { title: 'Limits practice', instructions: 'Solve three limit problems and check each answer.', type: 'task' },
+      { title: 'Short break', type: 'rest', duration_seconds: 300 },
+    ] },
+    { title: 'PRACTICE', type: 'category', children: [
+      { title: 'Past exam questions', instructions: 'Solve three past exam questions and mark the working.', type: 'task' },
+    ] },
+    { title: 'REVIEW', type: 'category', children: [
+      { title: 'Error review', instructions: 'Record each mistake and write the corrected method.', type: 'task' },
+    ] },
+  ];
+  assert.equal(hasCompleteActionTree(actions), true);
+  assert.equal(hasCompleteActionTree([
+    ...actions.slice(0, 2),
+    { title: 'REVIEW', type: 'category', children: [
+      { title: 'Break with no duration', type: 'rest' },
+    ] },
+  ]), false);
+});
+
 test('rejects flat or incomplete action trees that cannot guide a session', () => {
   assert.equal(hasCompleteActionTree(['Biceps', 'Triceps', 'Shoulders']), false);
   assert.equal(hasCompleteActionTree([
