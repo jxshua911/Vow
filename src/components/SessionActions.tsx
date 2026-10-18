@@ -130,7 +130,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
           user_id: authSession.user.id,
           parent_action_id: null,
           title: taskTitle,
-          action_type: 'task',
+          action_type: actionTree.length ? 'category' : 'task',
           instructions,
           duration_minutes: currentSession.duration_minutes,
           sort_order: 0,
@@ -396,7 +396,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   function renderAction(action: SessionAction, depth = 0) {
     const children = actions.filter((item) => item.parent_action_id === action.id).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
     const expanded = expandedId === action.id;
-    const collapsible = (action.action_type === 'category' || action.action_type === 'group') && children.length > 0;
+    const collapsible = children.length > 0;
     const collapsed = collapsedIds.has(action.id);
     const isRest = action.action_type === 'rest' || action.action_type === 'break';
     return <div key={action.id} className={depth ? 'ml-5 mt-2 border-l border-vow-border pl-3' : 'mt-3'}>
