@@ -63,6 +63,14 @@ export function hasCompleteActionTree(actions: unknown): boolean {
     const substeps = Array.isArray(action.substeps) ? action.substeps : [];
     if (children.length > 12 || substeps.length > 8) return false;
     if (substeps.some((step) => typeof step !== "string" || step.trim().length < 3)) return false;
+    const actionType = String(action.type ?? action.action_type ?? "").trim().toLowerCase();
+    const isRest = actionType === "rest" || actionType === "break" || /^(rest|break)\\b/i.test(action.title);
+    if (isRest) {
+      const rawDuration = action.rest_seconds ?? action.duration_seconds ??
+        (action.duration_minutes == null ? null : Number(action.duration_minutes) * 60);
+      const seconds = Number(rawDuration);
+      return rawDuration != null && Number.isFinite(seconds) && seconds > 0;
+    }
     if (children.length > 0) {
       return children.every((child) => visit(child, depth + 1));
     }
