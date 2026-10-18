@@ -446,7 +446,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   }
 
   const roots = actions.filter((action) => !action.parent_action_id);
-  const actionableActions = actions.filter((action) => !actions.some((child) => child.parent_action_id === action.id));
+  const actionableActions = actions.filter((action) => !actions.some((child) => child.parent_action_id === action.id) && action.action_type !== 'rest' && action.action_type !== 'break');
   const completedCount = actionableActions.filter((action) => action.status === 'completed').length;
 
   if (executionOpen) return <SessionExecution session={currentSession} actions={actions} readOnly={readOnly} onClose={() => setExecutionOpen(false)} onCompleted={() => { setExecutionOpen(false); void loadActions(); }} />;
