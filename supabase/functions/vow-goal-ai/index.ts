@@ -1154,7 +1154,11 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
             duration_minutes: Number.isFinite(Number(item?.duration_minutes)) && Number(item.duration_minutes) > 0 ? Math.min(240, Math.round(Number(item.duration_minutes))) : null,
             rest_seconds: (() => {
               const rawType = String(item?.type ?? item?.action_type ?? "").toLowerCase();
-              const rawRest = item?.rest_seconds ?? ((rawType === "rest" || rawType === "break") ? item?.duration_seconds : null);
+              const title = str(item?.title || item?.name, 160);
+              const isRest = rawType === "rest" || rawType === "break" || /^(rest|break)\\b/i.test(title);
+              const rawRest = item?.rest_seconds ?? (isRest
+                ? item?.duration_seconds ?? (item?.duration_minutes == null ? null : Number(item.duration_minutes) * 60)
+                : null);
               const seconds = Number(rawRest);
               return rawRest != null && Number.isFinite(seconds) && seconds >= 0 ? Math.min(86400, Math.round(seconds)) : null;
             })(),
