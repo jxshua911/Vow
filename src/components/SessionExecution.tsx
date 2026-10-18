@@ -6,6 +6,7 @@ import type { Session, SessionAction } from '@/types/database';
 interface SessionExecutionProps {
   session: Session;
   actions: SessionAction[];
+  initialActionId?: string | null;
   readOnly?: boolean;
   onClose: () => void;
   onCompleted: () => void;
@@ -31,10 +32,15 @@ function flattenActions(actions: SessionAction[]): ExecutableItem[] {
   return result;
 }
 
-export function SessionExecution({ session, actions, readOnly = false, onClose, onCompleted }: SessionExecutionProps) {
+export function SessionExecution({ session, actions, initialActionId = null, readOnly = false, onClose, onCompleted }: SessionExecutionProps) {
   const { session: authSession } = useAuth();
   const userId = authSession?.user?.id;
   const items = useMemo(() => flattenActions(actions), [actions]);
+  const orderedItems = useMemo(() => {
+    if (!initialActionId) return items;
+    const start = items.findIndex(item => item.action.id === initialActionId);
+    return start > 0 ? [...items.slice(start), ...items.slice(0, start)] : items;
+  }, [items, initialActionId]);
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,11 +85,11 @@ export function SessionExecution({ session, actions, readOnly = false, onClose, 
     return () => window.clearTimeout(timer);
   }, [timerRunning, timerRemaining]);
 
-  const totalUnits = items.reduce((total, item) => {
+  const totalUnits = orderedItems.reduce((total, item) => {
     const action = item.action;
     return total + (action.action_type === 'rest' || action.action_type === 'break' ? 1 : Math.max(1, action.sets || 1));
   }, 0);
-  const completedUnits = items.reduce((total, item) => {
+  const completedUnits = orderedItems.reduce((total, item) => {
     const action = item.action;
     if (action.action_type === 'rest' || action.action_type === 'break') return total + (completed.has(keyFor(action.id, 0)) ? 1 : 0);
     if (action.sets && action.sets > 0) {
@@ -102,7 +108,7 @@ export function SessionExecution({ session, actions, readOnly = false, onClose, 
     }
     return completed.has(keyFor(action.id, 0)) || action.status === 'completed';
   };
-  const current = items.find(item => !isItemComplete(item)) || null;
+  const current = orderedItems.find(item => !isItemComplete(item)) || null;
   const action = current?.action || null;
   const isRest = Boolean(action && (action.action_type === 'rest' || action.action_type === 'break'));
   const setCount = action?.sets && action.sets > 0 ? action.sets : 1;
@@ -110,7 +116,7 @@ export function SessionExecution({ session, actions, readOnly = false, onClose, 
   if (action && !isRest && action.sets && action.sets > 0) {
     currentSet = Array.from({ length: action.sets }, (_, index) => index + 1).find(n => !completed.has(keyFor(action.id, n))) || action.sets;
   }
-  const allDone = items.length > 0 && completedUnits >= totalUnits;
+  const allDone = orderedItems.length > 0 && completedUnits >= totalUnits;
 
   async function toggleCompletion(target: SessionAction, setNumber: number) {
     if (!userId || readOnly || saving) return;
