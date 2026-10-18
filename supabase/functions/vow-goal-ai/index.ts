@@ -1139,12 +1139,24 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
         substeps: Array.isArray(template?.substeps) ? template.substeps.map((step: any) => str(step, 300)).filter(Boolean).slice(0, 12) : [],
         actions: Array.isArray(template?.actions) ? template.actions.slice(0, 12).map((action: any) => {
           const normalizeAction = (item: any, depth = 0): any => ({
+            type: (() => {
+              const actionType = str(item?.type ?? item?.action_type, 24).toLowerCase();
+              if (actionType === "rest" || actionType === "break") return "rest";
+              if (actionType === "category" || actionType === "group") return "category";
+              if (actionType === "exercise" || item?.sets != null || item?.reps != null) return "exercise";
+              return Array.isArray(item?.children) && item.children.length ? "category" : "task";
+            })(),
             title: str(item?.title || item?.name, 160),
             instructions: str(item?.instructions || item?.purpose, 2000),
             sets: Number.isFinite(Number(item?.sets)) && Number(item.sets) > 0 ? Math.min(100, Math.round(Number(item.sets))) : null,
             reps: item?.reps == null ? null : str(item.reps, 120),
             duration_minutes: Number.isFinite(Number(item?.duration_minutes)) && Number(item.duration_minutes) > 0 ? Math.min(240, Math.round(Number(item.duration_minutes))) : null,
-            rest_seconds: Number.isFinite(Number(item?.rest_seconds)) && Number(item.rest_seconds) >= 0 ? Math.min(3600, Math.round(Number(item.rest_seconds))) : null,
+            rest_seconds: (() => {
+              const rawType = String(item?.type ?? item?.action_type ?? "").toLowerCase();
+              const rawRest = item?.rest_seconds ?? ((rawType === "rest" || rawType === "break") ? item?.duration_seconds : null);
+              const seconds = Number(rawRest);
+              return rawRest != null && Number.isFinite(seconds) && seconds >= 0 ? Math.min(86400, Math.round(seconds)) : null;
+            })(),
             substeps: Array.isArray(item?.substeps) ? item.substeps.map((step: any) => typeof step === "string" ? str(step, 300) : "").filter(Boolean).slice(0, 8) : [],
             children: depth < 5 && Array.isArray(item?.children)
               ? item.children.slice(0, 12).map((child: any) => normalizeAction(child, depth + 1)).filter((child: any) => child.title)
