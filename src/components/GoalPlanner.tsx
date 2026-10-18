@@ -35,6 +35,7 @@ type SavedPlannerDraft = {
   sessionTimes?: Record<string, string>;
   scheduleTimesEnabled?: boolean;
   scheduleMode?: 'timed' | 'flexible-day' | 'unscheduled';
+  sessionScheduleModes?: Record<string, 'timed' | 'flexible-day' | 'unscheduled'>;
   answerHistory?: Record<string, string>;
   clarification?: Clarification | null;
   isPlanFollowup?: boolean;
@@ -48,6 +49,7 @@ type PlanAction = {
   name?: string;
   purpose?: string;
   instructions?: string;
+  type?: 'category' | 'group' | 'exercise' | 'task' | 'rest' | 'break';
   sets?: number | null;
   reps?: string | null;
   duration_minutes?: number | null;
@@ -63,6 +65,7 @@ type PlanItem = {
   target_metric: string;
   duration_minutes: number;
   preferred_time: string | null;
+  schedule_mode?: 'timed' | 'flexible-day' | 'unscheduled';
   scheduled_at?: string | null;
   video_url?: string;
   substeps?: string[];
@@ -229,10 +232,11 @@ function normalizePlan(
     return {
       title,
       instructions: String(action.instructions ?? action.purpose ?? '').trim().slice(0, 500) || undefined,
+      type: (() => { const t = String(action.type ?? action.action_type ?? '').toLowerCase(); if (t === 'rest' || t === 'break') return 'rest'; if (t === 'category' || t === 'group') return 'category'; if (t === 'exercise') return 'exercise'; return Array.isArray(action.children) && action.children.length ? 'category' : 'task'; })(),
       sets: numeric(action.sets, 1, 100),
       reps: action.reps == null ? null : String(action.reps).trim().slice(0, 80),
-      duration_minutes: numeric(action.duration_minutes, 1, 240),
-      rest_seconds: numeric(action.rest_seconds, 0, 3600),
+      duration_minutes: numeric(action.duration_minutes, 0, 240),
+      rest_seconds: numeric(action.rest_seconds ?? ((String(action.type ?? action.action_type ?? '').toLowerCase() === 'rest' || String(action.type ?? action.action_type ?? '').toLowerCase() === 'break') ? action.duration_seconds : null), 0, 86400),
       substeps: Array.isArray(action.substeps) ? action.substeps.map(step => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 8) : [],
       children,
     };
@@ -247,6 +251,7 @@ function normalizePlan(
       target_metric: String(item?.target_metric ?? '').trim().slice(0, 120),
       duration_minutes: Math.max(5, Math.min(240, Math.round(Number(item?.duration_minutes) || 30))),
       preferred_time: /^\d{1,2}:\d{2}$/.test(String(item?.preferred_time ?? '')) ? String(item.preferred_time).trim().slice(0, 8) : null,
+      schedule_mode: ['timed', 'flexible-day', 'unscheduled'].includes(String(item?.schedule_mode)) ? item.schedule_mode as PlanItem['schedule_mode'] : undefined,
       video_url: (() => { const url = String(item?.video_url ?? '').trim().slice(0, 1000); return isYoutubeUrl(url) ? url : ''; })(),
       substeps: Array.isArray(item?.substeps) ? item.substeps.map((step: unknown) => String(step ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 12) : [],
       actions: Array.isArray(item?.actions) ? item.actions.slice(0, 12).map(action => normalizePlanAction(action)).filter((action): action is PlanAction => Boolean(action)) : [],
@@ -362,7 +367,9 @@ export function GoalPlanner({
   const [availableDays, setAvailableDays] = useState<string[]>([]);
   const [sessionTimes, setSessionTimes] = useState<Record<string, string>>({});
   const [scheduleMode, setScheduleMode] = useState<'timed' | 'flexible-day' | 'unscheduled'>('flexible-day');
-  const scheduleTimesEnabled = scheduleMode === 'timed';
+  const [sessionScheduleModes, setSessionScheduleModes] = useState<Record<string, 'timed' | 'flexible-day' | 'unscheduled'>>({});
+  const modeForDay = (day: string) => sessionScheduleModes[day] || scheduleMode;
+  const scheduleTimesEnabled = availableDays.some((day) => modeForDay(day) === 'timed');
   const [domain, setDomain] = useState<GoalDomain | null>(null);
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [isPlanFollowup, setIsPlanFollowup] = useState(false);
@@ -392,7 +399,7 @@ export function GoalPlanner({
 
   const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
   const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
-  const missingSessionTimes = scheduleTimesEnabled ? availableDays.filter((day) => !sessionTimes[day]) : [];
+  const missingSessionTimes = availableDays.filter((day) => modeForDay(day) === 'timed' && !sessionTimes[day]);
   const previewDomain = rawInput.trim().length >= 3
     ? analyseGoalForEvidence({ title: rawInput.trim(), outcome: rawInput.trim(), why_it_matters: why.trim() || null })
     : null;
@@ -440,6 +447,7 @@ export function GoalPlanner({
           if (savedDraft.customDurationUnit) setCustomDurationUnit(savedDraft.customDurationUnit);
           if (Array.isArray(savedDraft.availableDays)) setAvailableDays(savedDraft.availableDays);
           if (savedDraft.sessionTimes) setSessionTimes(savedDraft.sessionTimes);
+          if (savedDraft.sessionScheduleModes) setSessionScheduleModes(savedDraft.sessionScheduleModes);
           if (savedDraft.scheduleMode) setScheduleMode(savedDraft.scheduleMode);
           else if (typeof savedDraft.scheduleTimesEnabled === 'boolean') setScheduleMode(savedDraft.scheduleTimesEnabled ? 'timed' : 'flexible-day');
           if (savedDraft.clarification) setClarification(savedDraft.clarification);
@@ -494,12 +502,13 @@ export function GoalPlanner({
               : [...new Set(restoredPlan.schedule.map((item) => item.day).filter((day): day is string => DAYS.includes(day)))];
             if (restoredDays.length) setAvailableDays(restoredDays);
             const restoredTimes: Record<string, string> = {};
+            const restoredModes: Record<string, 'timed' | 'flexible-day' | 'unscheduled'> = {};
             for (const item of restoredPlan.schedule) {
-              if (restoredDays.includes(item.day) && item.preferred_time && !restoredTimes[item.day]) {
-                restoredTimes[item.day] = item.preferred_time;
-              }
+              if (restoredDays.includes(item.day) && item.preferred_time && !restoredTimes[item.day]) restoredTimes[item.day] = item.preferred_time;
+              if (restoredDays.includes(item.day) && item.schedule_mode && !restoredModes[item.day]) restoredModes[item.day] = item.schedule_mode;
             }
             if (Object.keys(restoredTimes).length) setSessionTimes(restoredTimes);
+            if (Object.keys(restoredModes).length) setSessionScheduleModes(restoredModes);
           }
 
           if (savedMatchesRequestedDraft) {
@@ -546,6 +555,7 @@ export function GoalPlanner({
         availableDays,
         sessionTimes,
         scheduleMode,
+        sessionScheduleModes,
         clarification,
         answerHistory,
         isPlanFollowup,
@@ -568,6 +578,7 @@ export function GoalPlanner({
     availableDays,
     sessionTimes,
     scheduleMode,
+    sessionScheduleModes,
     clarification,
     answerHistory,
     isPlanFollowup,
@@ -595,6 +606,7 @@ export function GoalPlanner({
           delete next[day];
           return next;
         });
+        setSessionScheduleModes((modes) => { const next = { ...modes }; delete next[day]; return next; });
         return current.filter((d) => d !== day);
       }
       return current.length < 7 ? [...current, day] : current;
@@ -724,7 +736,7 @@ export function GoalPlanner({
             schedule_mode: scheduleMode,
             available_days: availableDays,
           },
-          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days: ${availableDays.join(', ')}\n${scheduleTimesEnabled ? `Session times: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Schedule at these times.` : scheduleMode === 'unscheduled' ? 'The user chose unscheduled sessions. Use the selected days only as a weekly workload/frequency guide; do not assign a weekday or clock time to persisted sessions, leave preferred_time null, and do not invent a time.' : 'The user chose flexible-day sessions. Organise the plan by selected weekday only; leave preferred_time null and do not invent a clock time.'}\nThe deterministic domain analysis is ${goalAnalysis.category} / ${goalAnalysis.goal_type}; preserve this specialist classification unless the goal text clearly contradicts it. Identify the right kind of activity or outcome, then ask at most 2-3 genuinely useful personal-context questions. Never ask users to supply facts VOW can look up (for example a known book's page count, a food's published nutrition facts, or public information about a named person, place, product, event, or topic). Do not ask users to predict unknowable future measurements such as exact running distance, calorie burn, pace, or future performance; establish a baseline with a simple optional test or use a clearly labelled adjustable estimate. Do not require the user to own a book or product just because they want to plan around it. Accept 'I don't know' and blank answers; treat them as uncertainty to plan around, not as a reason to block generation. Ask only about meaningful personal preferences, current experience, constraints, or desired outcome. Use plain, direct language and briefly explain specialist terms.`,
+          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days and independent scheduling: ${availableDays.map((day) => `${day}: ${modeForDay(day)}${modeForDay(day) === 'timed' ? ` at ${sessionTimes[day] || 'a time the user must choose'}` : ''}`).join('; ')}. Apply each setting only to that weekday. Timed days use their own selected time; flexible days retain the weekday without a clock time; unscheduled days have no weekday or timestamp in persisted sessions. Do not copy one day’s mode or time to another day.\nThe deterministic domain analysis is ${goalAnalysis.category} / ${goalAnalysis.goal_type}; preserve this specialist classification unless the goal text clearly contradicts it. Identify the right kind of activity or outcome, then ask at most 2-3 genuinely useful personal-context questions. Never ask users to supply facts VOW can look up (for example a known book's page count, a food's published nutrition facts, or public information about a named person, place, product, event, or topic). Do not ask users to predict unknowable future measurements such as exact running distance, calorie burn, pace, or future performance; establish a baseline with a simple optional test or use a clearly labelled adjustable estimate. Do not require the user to own a book or product just because they want to plan around it. Accept 'I don't know' and blank answers; treat them as uncertainty to plan around, not as a reason to block generation. Ask only about meaningful personal preferences, current experience, constraints, or desired outcome. Use plain, direct language and briefly explain specialist terms.`,
           available_days: availableDays,
           schedule_times_enabled: scheduleTimesEnabled,
           schedule_mode: scheduleMode,
@@ -837,7 +849,7 @@ export function GoalPlanner({
             schedule_mode: scheduleMode,
             available_days: availableDays,
           },
-          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days are exactly: ${availableDays.join(', ')}. ${scheduleTimesEnabled ? `Session times by day are exactly: ${availableDays.map((day) => `${day} ${sessionTimes[day]}`).join(', ')}. Use these times for the selected days.` : scheduleMode === 'unscheduled' ? 'The user chose unscheduled sessions. Selected days indicate weekly frequency only; persisted session weekdays and timestamps must remain null. Do not invent a day or time.' : 'The user chose flexible-day sessions. Organise by selected weekday, return preferred_time as null, and do not invent a clock time.'} Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions. Use plain, direct wording. Every session in every week must contain executable, goal-specific details, not just a theme. First infer the actual work system required by this goal, then choose a structure that fits it. Use actions as logical groups or executable tasks; use nested children when the goal naturally needs groups → actions → substeps (for example, topic → exercises → steps, or phase → deliverables → implementation tasks). Do not force a group hierarchy when it would be artificial. Every executable leaf must have clear instructions and an observable finish condition; put that criterion in its instructions or target_metric. Use sets/repetitions/rest only when genuinely relevant, and otherwise use domain-appropriate quantities, practice counts, deliverables, quality checks, calculations, decisions, or evidence. Keep the same level of specificity in later weeks—never reduce them to vague outlines. Every schedule item must also include video_url with a directly relevant, valid YouTube video URL for that exact session topic; do not invent URLs, and if you cannot verify a specific video use the goal-level YouTube reference instead. For sport or martial-arts goals, match the user's stated level, build skills progressively, and do not prescribe unsupervised sparring or promise belt readiness; distinguish practice goals from formal instructor assessment. Make each day's session specific enough that the user can follow it without guessing.`,
+          message: `Build a genuinely personalised ${domain.goal_type} plan in the ${domain.category} category.\nFollow-up answers:\n${clarification.questions.map((q, i) => `Q: ${q}\nA: ${clean[i] || 'Not supplied'}`).join('\n')}\n\nThe user's duration is exactly ${selectedDurationLabel}. Available days and independent scheduling are: ${availableDays.map((day) => `${day}: ${modeForDay(day)}${modeForDay(day) === 'timed' ? ` at ${sessionTimes[day] || 'a time the user must choose'}` : ''}`).join('; ')}. Apply each setting only to its weekday. For timed days use that day's time; for flexible days return preferred_time null but preserve the weekday; for unscheduled days persist no weekday or timestamp. Do not invent dates or times, and do not copy one day's settings to another. Use the domain context and answers; if a critical input is still missing, return a clarification request rather than generic sessions. Use plain, direct wording. Every session in every week must contain executable, goal-specific details, not just a theme. First infer the actual work system required by this goal, then choose a structure that fits it. Use actions as logical groups or executable tasks; use nested children when the goal naturally needs groups → actions → substeps (for example, topic → exercises → steps, or phase → deliverables → implementation tasks). Do not force a group hierarchy when it would be artificial. Every executable leaf must have clear instructions and an observable finish condition; put that criterion in its instructions or target_metric. Use sets/repetitions/rest only when genuinely relevant, and otherwise use domain-appropriate quantities, practice counts, deliverables, quality checks, calculations, decisions, or evidence. Keep the same level of specificity in later weeks—never reduce them to vague outlines. Every schedule item must also include video_url with a directly relevant, valid YouTube video URL for that exact session topic; do not invent URLs, and if you cannot verify a specific video use the goal-level YouTube reference instead. For sport or martial-arts goals, match the user's stated level, build skills progressively, and do not prescribe unsupervised sparring or promise belt readiness; distinguish practice goals from formal instructor assessment. Make each day's session specific enough that the user can follow it without guessing.`,
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
           schedule_times_enabled: scheduleTimesEnabled,
@@ -858,7 +870,7 @@ export function GoalPlanner({
         throw new Error('VOW AI returned a plan for a different duration than you selected. Please try again.');
       const normalized = normalizePlan(next, selectedDurationWeeks, domain, rawInput.trim(), why.trim());
       if (!normalized) throw new Error('VOW AI returned an incomplete plan. Please try again.');
-      normalized.schedule = normalized.schedule.map((item) => ({ ...item, preferred_time: scheduleTimesEnabled ? (sessionTimes[item.day] || item.preferred_time || null) : null, scheduled_at: null }));
+      normalized.schedule = normalized.schedule.map((item) => { const mode = modeForDay(item.day); return { ...item, schedule_mode: mode, preferred_time: mode === 'timed' ? (sessionTimes[item.day] || item.preferred_time || null) : null, scheduled_at: null }; });
       // Keep the exact generated plan recoverable before the user confirms it.
       // The local draft effect provides immediate device recovery; this database
       // write makes recovery survive route changes, app restarts, and device reloads.
@@ -905,7 +917,7 @@ export function GoalPlanner({
 
       // Only inspect the device calendar when the user has already opted into
       // calendar sync; do not trigger a surprise permission prompt during planning.
-      if (!ignoreCalendarConflicts && scheduleTimesEnabled && Capacitor.isNativePlatform() && localStorage.getItem('vow:native-calendar-sync') === 'true') {
+      if (!ignoreCalendarConflicts && filteredItems.some((item) => modeForDay(item.day) === 'timed') && Capacitor.isNativePlatform() && localStorage.getItem('vow:native-calendar-sync') === 'true') {
         const rangeEnd = addDays(start, (selectedDurationWeeks || 1) * 7);
         let events: NativeCalendarEvent[];
         try {
@@ -917,7 +929,7 @@ export function GoalPlanner({
           return;
         }
         const conflicts: string[] = [];
-        for (const item of filteredItems) {
+        for (const item of filteredItems.filter((item) => modeForDay(item.day) === 'timed')) {
           const sessionStart = buildDate(item.week, item.day, item.preferred_time || currentLocalTime()).getTime();
           const sessionEnd = sessionStart + Math.max(5, Number(item.duration_minutes) || 30) * 60_000;
           const collision = events.find((event) => {
@@ -951,12 +963,13 @@ export function GoalPlanner({
       }));
 
       const planItemRows = filteredItems.map(item => {
-        const date = scheduleTimesEnabled ? buildDate(item.week, item.day, item.preferred_time || currentLocalTime()) : null;
+        const mode = modeForDay(item.day);
+        const date = mode === 'timed' ? buildDate(item.week, item.day, item.preferred_time || currentLocalTime()) : null;
         const duration = Math.max(5, Number(item.duration_minutes) || 30);
         return {
           plan_version: 1,
           week_number: Math.max(1, Math.min(selectedDurationWeeks || 1, item.week)),
-          day_of_week: scheduleMode === 'unscheduled' ? null : item.day,
+          day_of_week: mode === 'unscheduled' ? null : item.day,
           scheduled_at: date?.toISOString() ?? null,
           task: item.task,
           purpose: item.purpose?.trim() || `Complete the scheduled task and build consistency toward “${rawInput.trim()}”.`,
@@ -967,20 +980,21 @@ export function GoalPlanner({
       });
 
       const sessionRows = filteredItems.map(item => {
-        const date = scheduleTimesEnabled ? buildDate(item.week, item.day, item.preferred_time || currentLocalTime()) : null;
+        const mode = modeForDay(item.day);
+        const date = mode === 'timed' ? buildDate(item.week, item.day, item.preferred_time || currentLocalTime()) : null;
         const milestoneIndex = Math.min(
           Math.max(0, Math.floor(((item.week - 1) / Math.max(1, selectedDurationWeeks || 1)) * plan.milestones.length)),
           Math.max(0, plan.milestones.length - 1)
         );
         return {
           title: conciseSessionTitle(item.task, item.week),
-          day_of_week: scheduleMode === 'unscheduled' ? null : item.day,
+          day_of_week: mode === 'unscheduled' ? null : item.day,
           scheduled_at: date?.toISOString() ?? null,
           duration_minutes: Math.max(5, Number(item.duration_minutes) || 30),
           status: 'scheduled',
           milestone_sort_order: milestoneIndex,
           notes: [
-            scheduleMode === 'unscheduled' ? `Plan cadence: Week ${item.week}` : `Plan day: Week ${item.week}, ${item.day}`,
+            mode === 'unscheduled' ? `Plan cadence: Week ${item.week}` : `Plan day: Week ${item.week}, ${item.day}`,
             `Task: ${item.task}`,
             item.purpose ? `Purpose: ${item.purpose}` : null,
             item.target_metric ? `Target: ${item.target_metric}` : null,
@@ -1408,25 +1422,26 @@ export function GoalPlanner({
 
         {availableDays.length > 0 && <div className="bg-vow-gray/10 border border-vow-border p-4">
           <label className="vow-label block mb-3">How should VOW schedule your sessions?</label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {([
-              { value: 'timed', title: 'Timed', detail: 'Set a day and clock time.' },
-              { value: 'flexible-day', title: 'Flexible day', detail: 'Keep the day, choose the time later.' },
-              { value: 'unscheduled', title: 'Unscheduled', detail: 'Leave sessions in your queue.' },
-            ] as const).map(option => <button key={option.value} type="button" aria-pressed={scheduleMode === option.value} onClick={() => setScheduleMode(option.value)} className={scheduleMode === option.value ? 'border border-vow-ink bg-vow-ink text-vow-bg p-3 text-left' : 'border border-vow-border text-vow-ink p-3 text-left hover:border-vow-ink'}>
-              <span className="block text-sm font-medium">{option.title}</span>
-              <span className="block text-[11px] mt-1 opacity-75">{option.detail}</span>
-            </button>)}
+          <div className="space-y-4 mt-3">
+            {availableDays.map(day => {
+              const dayMode = modeForDay(day);
+              return <div key={day} className="border-b border-vow-border pb-4 last:border-b-0 last:pb-0">
+                <label className="block text-sm font-medium text-vow-ink mb-2" htmlFor={`schedule-mode-${day}`}>{day}</label>
+                <select id={`schedule-mode-${day}`} value={dayMode} onChange={event => { const mode = event.target.value as 'timed' | 'flexible-day' | 'unscheduled'; setSessionScheduleModes(current => ({ ...current, [day]: mode })); if (mode === 'timed') setSessionTimes(current => current[day] ? current : ({ ...current, [day]: currentLocalTime() })); }} className="w-full border border-vow-border bg-transparent px-3 py-2 text-sm text-vow-ink">
+                  <option value="timed">Specific time</option>
+                  <option value="flexible-day">Flexible day — no fixed time</option>
+                  <option value="unscheduled">No date/time — leave in queue</option>
+                </select>
+                {dayMode === 'timed' && <div className="mt-3 flex items-center justify-between gap-3">
+                  <div><p className="text-xs text-vow-muted">Time for {day}</p></div>
+                  <TimeWheelPicker value={sessionTimes[day] || currentLocalTime()} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={day + ' session time'} />
+                </div>}
+                {dayMode === 'flexible-day' && <p className="text-xs text-vow-muted mt-2">Keep sessions on {day}, without a clock time or reminder.</p>}
+                {dayMode === 'unscheduled' && <p className="text-xs text-vow-muted mt-2">Leave {day} sessions in the unscheduled queue.</p>}
+              </div>;
+            })}
           </div>
-          {scheduleTimesEnabled && <div className="space-y-3 mt-4">
-            {availableDays.map(day => <div key={day} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-vow-border pb-3 last:border-b-0 last:pb-0">
-              <div><p className="text-sm text-vow-ink">{day}</p>{!sessionTimes[day] && <p className="text-[11px] text-vow-muted mt-1">Choose a reminder time</p>}</div>
-              <TimeWheelPicker value={sessionTimes[day] || currentLocalTime()} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={day + ' session time'} />
-            </div>)}
-            <p className="text-xs text-vow-muted">Times can be changed later. VOW will only create reminders for timed sessions.</p>
-          </div>}
-          {scheduleMode === 'flexible-day' && <p className="text-xs text-vow-muted mt-3">VOW keeps each session on its selected weekday without setting a clock time or reminder.</p>}
-          {scheduleMode === 'unscheduled' && <p className="text-xs text-vow-muted mt-3">Sessions will be saved without a weekday or clock time, ready for you to schedule when it suits you.</p>}
+          <p className="text-xs text-vow-muted mt-3">Each day is independent. Changing one day will not change the others. Timed sessions recur on that weekday throughout the plan.</p>
         </div>}
 
         {error && (
