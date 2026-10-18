@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Browser } from '@capacitor/browser';
+import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -63,7 +64,24 @@ export function CalendarPage() {
     return () => { window.removeEventListener('online', reconnect); window.removeEventListener('offline', offline); };
   }, [loadSessions, checkGoogleConnection, loadGoogleEvents, googleConnected]);
   useEffect(() => { if (googleConnected) loadGoogleEvents(); }, [googleConnected, loadGoogleEvents]);
-  useEffect(() => { const connected = () => { setConnectingGoogle(false); setGoogleConnected(true); setError(null); }; const failed = (event: Event) => { setConnectingGoogle(false); setError((event as CustomEvent<string>).detail || 'Google Calendar connection failed.'); }; window.addEventListener('vow:google-calendar-connected', connected); window.addEventListener('vow:google-calendar-error', failed); return () => { window.removeEventListener('vow:google-calendar-connected', connected); window.removeEventListener('vow:google-calendar-error', failed); }; }, []);
+  useEffect(() => {
+    const connected = () => { setConnectingGoogle(false); setError(null); void checkGoogleConnection(); };
+    const failed = (event: Event) => { setConnectingGoogle(false); setError((event as CustomEvent<string>).detail || 'Google Calendar connection failed.'); };
+    window.addEventListener('vow:google-calendar-connected', connected);
+    window.addEventListener('vow:google-calendar-error', failed);
+    return () => { window.removeEventListener('vow:google-calendar-connected', connected); window.removeEventListener('vow:google-calendar-error', failed); };
+  }, [checkGoogleConnection]);
+  useEffect(() => {
+    let disposed = false;
+    let resumeHandle: { remove: () => Promise<void> } | null = null;
+    const refreshConnection = () => { if (!document.hidden) { void checkGoogleConnection(); void loadSessions(); void loadNativeEvents(); } };
+    window.addEventListener('focus', refreshConnection);
+    document.addEventListener('visibilitychange', refreshConnection);
+    if (Capacitor.isNativePlatform()) {
+      void App.addListener('resume', refreshConnection).then((handle) => { if (disposed) void handle.remove(); else resumeHandle = handle; }).catch((error) => console.warn('[VOW] Calendar resume listener could not be attached:', error));
+    }
+    return () => { disposed = true; window.removeEventListener('focus', refreshConnection); document.removeEventListener('visibilitychange', refreshConnection); if (resumeHandle) void resumeHandle.remove(); };
+  }, [checkGoogleConnection, loadSessions, loadNativeEvents]);
   async function connectGoogleCalendar() { if (!authSession) return; setConnectingGoogle(true); setError(null); try { const redirectUri = Capacitor.isNativePlatform() ? NATIVE_CALENDAR_REDIRECT : `${window.location.origin}/calendar/oauth/callback`; const { data, error: functionError } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'start', redirectUri } }); if (functionError) throw functionError; if (!data?.authorizationUrl) throw new Error('Google Calendar authorization URL was not returned.'); if (Capacitor.isNativePlatform()) await Browser.open({ url: data.authorizationUrl }); else window.location.assign(data.authorizationUrl); } catch (err) { setConnectingGoogle(false); setError(err instanceof Error ? err.message : 'Could not start Google Calendar connection.'); } }
   function selectDate(day: Date) { const date = toDateString(day); setSelectedDate(date); setNewDate(date); setRoutineChange(''); setNewTitle(''); setShowCreate(true); requestAnimationFrame(() => { createPanelRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' }); }); }
   function openCreateForCurrentDate() { setSelectedDate(newDate); setShowCreate(true); requestAnimationFrame(() => createPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }
