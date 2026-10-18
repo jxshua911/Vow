@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Session, SessionAction } from '@/types/database';
+import { SessionExecution } from './SessionExecution';
 import { cancelReminder, notificationId, scheduleReminder } from '@/lib/notifications';
 
 type PlannedActionSeed = {
   title: string;
+  type?: 'category' | 'group' | 'exercise' | 'task' | 'rest' | 'break';
   instructions?: string;
   sets?: number | null;
   reps?: string | null;
@@ -43,6 +45,8 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   const [editSets, setEditSets] = useState('');
   const [editReps, setEditReps] = useState('');
   const [editRest, setEditRest] = useState('');
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  const [executionOpen, setExecutionOpen] = useState(false);
 
   const loadActions = useCallback(async () => {
     if (!authSession?.user?.id) {
@@ -93,11 +97,12 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
           : [];
         return {
           title: record.title.trim().slice(0, 160),
+          type: (() => { const t = String(record.type ?? record.action_type ?? '').toLowerCase(); if (t === 'rest' || t === 'break') return 'rest'; if (t === 'category' || t === 'group') return 'category'; if (t === 'exercise') return 'exercise'; return children.length ? 'category' : 'task'; })(),
           instructions: typeof record.instructions === 'string' ? record.instructions.trim().slice(0, 2000) : undefined,
           sets: numeric(record.sets, 1, 100),
           reps: typeof record.reps === 'string' ? record.reps.trim().slice(0, 120) : null,
           duration_minutes: numeric(record.duration_minutes, 1, 240),
-          rest_seconds: numeric(record.rest_seconds, 0, 3600),
+          rest_seconds: numeric(record.rest_seconds ?? ((String(record.type ?? record.action_type ?? '').toLowerCase() === 'rest' || String(record.type ?? record.action_type ?? '').toLowerCase() === 'break') ? record.duration_seconds : null), 0, 86400),
           substeps,
           children,
         };
@@ -125,6 +130,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
           user_id: authSession.user.id,
           parent_action_id: null,
           title: taskTitle,
+          action_type: 'task',
           instructions,
           duration_minutes: currentSession.duration_minutes,
           sort_order: 0,
@@ -145,6 +151,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
               session_id: currentSession.id,
               user_id: authSession.user.id,
               parent_action_id: parentId,
+              action_type: action.type || (action.children?.length ? 'category' : 'task'),
               title: action.title,
               instructions: action.instructions || null,
               sets: action.sets ?? null,
@@ -169,6 +176,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
               const children = action.children || [];
               const textSubsteps = (action.substeps || []).map((title) => ({
                 title,
+                type: 'task',
                 instructions: undefined,
                 substeps: [],
                 children: [],
@@ -228,6 +236,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
       session_id: currentSession.id,
       user_id: authSession.user.id,
       parent_action_id: parentActionId,
+      action_type: 'task',
       title: title.trim(),
       sort_order: siblings.length,
     });
@@ -385,17 +394,21 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   }
 
   function renderAction(action: SessionAction, depth = 0) {
-    const children = actions.filter((item) => item.parent_action_id === action.id);
+    const children = actions.filter((item) => item.parent_action_id === action.id).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
     const expanded = expandedId === action.id;
+    const collapsible = (action.action_type === 'category' || action.action_type === 'group') && children.length > 0;
+    const collapsed = collapsedIds.has(action.id);
+    const isRest = action.action_type === 'rest' || action.action_type === 'break';
     return <div key={action.id} className={depth ? 'ml-5 mt-2 border-l border-vow-border pl-3' : 'mt-3'}>
       <div className="flex items-start gap-2">
-        {children.length === 0 && <input aria-label={`Mark ${action.title} complete`} type="checkbox" checked={action.status === 'completed'} disabled={readOnly || busyId === action.id} onChange={() => void toggleAction(action)} className="mt-1 accent-current" />}
+        {children.length === 0 && !isRest && <input aria-label={`Mark ${action.title} complete`} type="checkbox" checked={action.status === 'completed'} disabled={readOnly || busyId === action.id} onChange={() => void toggleAction(action)} className="mt-1 accent-current" />}
         <div className="min-w-0 flex-1">
-          <p className={`text-sm break-words ${action.status === 'completed' ? 'line-through text-vow-muted' : 'text-vow-ink'}`}>{action.title}</p>
-          {children.length === 0 && action.duration_minutes != null && <p className="text-xs text-vow-muted mt-1">{action.duration_minutes} min{action.sets ? ` · ${action.sets} sets` : ''}{action.reps ? ` · ${action.reps}` : ''}{action.rest_seconds ? ` · ${action.rest_seconds}s rest` : ''}</p>}
+          {collapsible ? <button type="button" aria-expanded={!collapsed} onClick={() => setCollapsedIds(current => { const next = new Set(current); if (next.has(action.id)) next.delete(action.id); else next.add(action.id); return next; })} className="flex items-center gap-2 text-left text-sm font-semibold uppercase tracking-wide text-vow-ink"><span aria-hidden="true">{collapsed ? '▸' : '▾'}</span>{action.title}<span className="text-xs font-normal text-vow-muted">{children.length} items</span></button> : <p className={`text-sm break-words ${action.status === 'completed' ? 'line-through text-vow-muted' : isRest ? 'font-medium text-vow-muted' : 'text-vow-ink'}`}>{isRest ? `BREAK · ${action.title}` : action.title}</p>}
+          {children.length === 0 && action.duration_minutes != null && !isRest && <p className="text-xs text-vow-muted mt-1">{action.duration_minutes} min{action.sets ? ` · ${action.sets} sets` : ''}{action.reps ? ` · ${action.reps}` : ''}{action.rest_seconds ? ` · ${action.rest_seconds}s rest` : ''}</p>}
+          {isRest && <p className="text-xs text-vow-muted mt-1">{action.rest_seconds ? `${Math.floor(action.rest_seconds / 60)} min ${action.rest_seconds % 60 ? `${action.rest_seconds % 60} sec` : ''}` : `${action.duration_minutes || 5} min`} rest</p>}
           {children.length === 0 && action.instructions && <p className="text-xs text-vow-muted mt-2 whitespace-pre-wrap break-words">{action.instructions}</p>}
           {action.scheduled_at && <p className="text-xs text-vow-muted mt-1">Step scheduled: {new Date(action.scheduled_at).toLocaleString()}</p>}
-          {!readOnly && <div className="flex flex-wrap gap-2 mt-2">
+          {!readOnly && !isRest && <div className="flex flex-wrap gap-2 mt-2">
             {(() => {
               const siblings = actions.filter((item) => item.parent_action_id === action.parent_action_id)
                 .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
@@ -428,7 +441,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
           </form>}
         </div>
       </div>
-      {children.map((child) => renderAction(child, depth + 1))}
+      {!collapsed && children.map((child) => renderAction(child, depth + 1))}
     </div>;
   }
 
@@ -436,10 +449,12 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
   const actionableActions = actions.filter((action) => !actions.some((child) => child.parent_action_id === action.id));
   const completedCount = actionableActions.filter((action) => action.status === 'completed').length;
 
+  if (executionOpen) return <SessionExecution session={currentSession} actions={actions} readOnly={readOnly} onClose={() => setExecutionOpen(false)} onCompleted={() => { setExecutionOpen(false); void loadActions(); }} />;
+
   return <section className="mt-4 rounded-md border border-vow-border p-3">
     <div className="flex items-center justify-between gap-3">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-vow-muted">Action checklist</h3>
-      <span className="text-xs text-vow-muted">{completedCount}/{actionableActions.length} complete</span>
+      <div><h3 className="text-xs font-medium uppercase tracking-wide text-vow-muted">Action checklist</h3><span className="text-xs text-vow-muted">{completedCount}/{actionableActions.length} complete</span></div>
+      <button type="button" disabled={readOnly || loading || actions.length === 0} onClick={() => setExecutionOpen(true)} className="vow-btn-soft text-xs disabled:opacity-40">Start session</button>
     </div>
     {loading ? <p className="text-xs text-vow-muted mt-3">Loading saved actions…</p> : roots.length ? roots.map((action) => renderAction(action)) : <p className="text-xs text-vow-muted mt-3">Break this session into steps to track the work, one action at a time.</p>}
     {!readOnly && <form className="flex gap-2 mt-4" onSubmit={(event) => { event.preventDefault(); void addAction(newActionTitle); }}>
