@@ -73,6 +73,31 @@ export function CalendarPage() {
     if (!authSession) { setGoogleEvents([]); return; }
     try { setGoogleEvents(JSON.parse(localStorage.getItem(`${CACHE_KEY_PREFIX}${authSession.user.id}`) || '[]')); } catch { setGoogleEvents([]); }
   }, [authSession]);
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem('vow:google-calendar-oauth-result');
+      if (raw) localStorage.removeItem('vow:google-calendar-oauth-result');
+    } catch { /* Local storage may be unavailable; server state remains authoritative. */ }
+    if (!raw) return;
+    try {
+      const result = JSON.parse(raw) as { success?: boolean; error?: string | null; receivedAt?: number };
+      if (typeof result.receivedAt === 'number' && Date.now() - result.receivedAt > 15 * 60 * 1000) return;
+      if (!result.success) {
+        setConnectingGoogle(false);
+        setError(result.error || 'Google Calendar authorization was not completed.');
+        return;
+      }
+      setConnectingGoogle(false);
+      void checkGoogleConnection().then((active) => {
+        if (active) setError(null);
+        else setError('Google returned to VOW, but the connection was not saved. Please connect again.');
+      });
+    } catch {
+      setConnectingGoogle(false);
+      setError('Could not read the Google Calendar callback. Please connect again.');
+    }
+  }, [checkGoogleConnection]);
   useEffect(() => { loadSessions(); checkGoogleConnection(); loadNativeEvents(); }, [loadSessions, checkGoogleConnection, loadNativeEvents]);
   useEffect(() => {
     const reconnect = () => { setError(null); void loadSessions(); void checkGoogleConnection(); if (googleConnected) void loadGoogleEvents(); };
