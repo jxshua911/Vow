@@ -1440,7 +1440,6 @@ export function GoalPlanner({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {DAYS.map(day => <button key={day} type="button" onClick={() => toggleDay(day)} className={`border px-3 py-2 text-xs transition-colors ${availableDays.includes(day) ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>{day}</button>)}
           </div>
-          <p className="text-xs text-vow-muted mt-3">Select the days you can genuinely commit to. Nothing is pre-selected—you choose.</p>
         </div>
 
         {availableDays.length > 0 && <div className="bg-vow-gray/10 border border-vow-border p-4">
@@ -1464,7 +1463,6 @@ export function GoalPlanner({
               </div>;
             })}
           </div>
-          <p className="text-xs text-vow-muted mt-3">Each day is independent. Changing one day will not change the others. Timed sessions recur on that weekday throughout the plan.</p>
         </div>}
 
         {error && (
