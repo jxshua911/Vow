@@ -36,16 +36,24 @@ export function NativeCalendarSync() {
     setDismissedUserId(userId);
   }, [userId]);
 
-  const dismissAfterSuccess = useCallback((text: string) => {
+  const dismissAfterSuccess = useCallback((text: string, waitBeforeHide = 0) => {
     setMessage(text);
-    setHiding(true);
     if (userId) localStorage.setItem(DISMISSED_KEY_PREFIX + userId, 'true');
     if (dismissTimer.current !== null) window.clearTimeout(dismissTimer.current);
-    // Let the CSS transition finish before unmounting the panel.
-    dismissTimer.current = window.setTimeout(() => {
-      setDismissed(true);
-      dismissTimer.current = null;
-    }, 480);
+    const hidePanel = () => {
+      setHiding(true);
+      // Let the CSS transition finish before unmounting the panel.
+      dismissTimer.current = window.setTimeout(() => {
+        setDismissed(true);
+        dismissTimer.current = null;
+      }, 480);
+    };
+    if (waitBeforeHide > 0) {
+      setHiding(false);
+      dismissTimer.current = window.setTimeout(hidePanel, waitBeforeHide);
+    } else {
+      hidePanel();
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -66,7 +74,7 @@ export function NativeCalendarSync() {
         return;
       }
       if (!data?.length) {
-        if (!cancelled) setMessage('No dated sessions to sync yet. Add a session time in Goals, then return here to sync.');
+        if (!cancelled) dismissAfterSuccess('Phone calendar sync is enabled. Add a session time in Goals to sync it.', 2200);
         return;
       }
       try {
