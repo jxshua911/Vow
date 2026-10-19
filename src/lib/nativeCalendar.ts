@@ -109,13 +109,24 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
       localStorage.removeItem(storageKey);
     }
 
+    let staleEventId: string | null = null;
     if (storedEventId) {
       const startDate = new Date(session.scheduled_at || '');
       const from = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
       const to = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
       const existing = (await listNativeCalendarEvents(from, to)).find((event) => event.id === storedEventId);
-      if (existing?.summary === desiredTitle) continue;
-      if (existing) await CapacitorCalendar.deleteEvent({ id: storedEventId });
+      const desiredStart = startDate.getTime();
+      const desiredEnd = desiredStart + Math.max(15, session.duration_minutes || 60) * 60_000;
+      const existingStart = existing?.start.dateTime ? new Date(existing.start.dateTime).getTime() : NaN;
+      const existingEnd = existing?.end.dateTime ? new Date(existing.end.dateTime).getTime() : NaN;
+      const timeMatches = Number.isFinite(existingStart)
+        && Math.abs(existingStart - desiredStart) < 60_000
+        && (!Number.isFinite(existingEnd) || Math.abs(existingEnd - desiredEnd) < 60_000);
+      if (existing?.summary === desiredTitle && timeMatches) continue;
+
+      // Create the replacement first; deleting the old event before a successful
+      // create could leave the user's calendar empty if the plugin fails.
+      staleEventId = storedEventId;
       localStorage.removeItem(storageKey);
     }
 
@@ -123,8 +134,14 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
     const startDate = new Date(session.scheduled_at).getTime();
     const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
     const { id } = await CapacitorCalendar.createEvent({ calendarId, title: desiredTitle, description: nativeDescription(session), startDate, endDate, alerts: [-15, 0] });
-    if (id) markSynced(session.id, id);
-    createdOrRefreshed += 1;
+    if (id) {
+      markSynced(session.id, id);
+      createdOrRefreshed += 1;
+      if (staleEventId && staleEventId !== id) {
+        try { await CapacitorCalendar.deleteEvent({ id: staleEventId }); }
+        catch (error) { console.warn('[VOW] Could not remove the superseded phone calendar event:', error); }
+      }
+    }
   }
   return createdOrRefreshed;
 }

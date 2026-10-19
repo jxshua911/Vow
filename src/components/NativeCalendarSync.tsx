@@ -74,7 +74,7 @@ export function NativeCalendarSync() {
         return;
       }
       if (!data?.length) {
-        if (!cancelled) dismissAfterSuccess('Phone calendar sync is enabled. Add a session time in Goals to sync it.', 2200);
+        if (!cancelled) dismissAfterSuccess('Phone calendar sync is enabled. Add a session time in Goals to sync it.');
         return;
       }
       try {
