@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from '../supabase/functions/vow-goal-ai/planValidation.ts';
+import { ensureCompleteActionTree, hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from '../supabase/functions/vow-goal-ai/planValidation.ts';
 
 test('recognises percentage measurements without requiring a word boundary after percent', () => {
   assert.equal(hasMeasurableEvidence('Increase weekly savings by 15%'), true);
@@ -81,4 +81,16 @@ test('rejects flat or incomplete action trees that cannot guide a session', () =
     { title: 'Triceps extensions', instructions: 'Do the exercise', sets: 3, reps: '10', substeps: ['Extend'] },
     { title: 'Shoulder press', instructions: 'Do the exercise', sets: 3, reps: '10', substeps: ['Press'] },
   ]), false);
+});
+
+
+test('repairs a missing action tree from the session task and metric', () => {
+  const actions = ensureCompleteActionTree([], {
+    task: 'Solve five algebra problems',
+    purpose: 'Improve accuracy with linear equations',
+    targetMetric: '5 problems checked',
+  });
+  assert.equal(hasCompleteActionTree(actions), true);
+  assert.equal(actions.length, 3);
+  assert.match(String(actions[1].title), /Solve five algebra problems/);
 });

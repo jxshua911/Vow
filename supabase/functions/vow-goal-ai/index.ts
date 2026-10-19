@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from "./planValidation.ts";
+import { ensureCompleteActionTree, hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from "./planValidation.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -1148,7 +1148,7 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
             type: (() => {
               const actionType = str(item?.type ?? item?.action_type, 24).toLowerCase();
               const actionTitle = str(item?.title || item?.name, 160);
-              if (actionType === "rest" || actionType === "break" || /^(rest|break)\\b/i.test(actionTitle)) return "rest";
+              if (actionType === "rest" || actionType === "break" || /^(rest|break)\b/i.test(actionTitle)) return "rest";
               if (actionType === "category" || actionType === "group") return "category";
               if (actionType === "exercise" || item?.sets != null || item?.reps != null) return "exercise";
               return Array.isArray(item?.children) && item.children.length ? "category" : "task";
@@ -1161,7 +1161,7 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
             rest_seconds: (() => {
               const rawType = String(item?.type ?? item?.action_type ?? "").toLowerCase();
               const title = str(item?.title || item?.name, 160);
-              const isRest = rawType === "rest" || rawType === "break" || /^(rest|break)\\b/i.test(title);
+              const isRest = rawType === "rest" || rawType === "break" || /^(rest|break)\b/i.test(title);
               const rawRest = item?.rest_seconds ?? (isRest
                 ? item?.duration_seconds ?? (item?.duration_minutes == null ? null : Number(item.duration_minutes) * 60)
                 : null);
@@ -1182,7 +1182,18 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
       });
     }
   }
-  return out;
+  // Repair missing or incomplete model action trees deterministically from the
+  // already validated session task, purpose, metric and substeps. This avoids
+  // a second expensive model call just to format executable steps.
+  return out.map((item: any) => ({
+    ...item,
+    actions: ensureCompleteActionTree(item.actions, {
+      task: item.task,
+      purpose: item.purpose,
+      targetMetric: item.target_metric,
+      substeps: item.substeps,
+    }),
+  }));
 }
 
 Deno.serve(async (req) => {

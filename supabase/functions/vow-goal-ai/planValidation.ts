@@ -64,7 +64,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
     if (children.length > 12 || substeps.length > 8) return false;
     if (substeps.some((step) => typeof step !== "string" || step.trim().length < 3)) return false;
     const actionType = String(action.type ?? action.action_type ?? "").trim().toLowerCase();
-    const isRest = actionType === "rest" || actionType === "break" || /^(rest|break)\\b/i.test(action.title);
+    const isRest = actionType === "rest" || actionType === "break" || /^(rest|break)\b/i.test(action.title);
     if (isRest) {
       const rawDuration = action.rest_seconds ?? action.duration_seconds ??
         (action.duration_minutes == null ? null : Number(action.duration_minutes) * 60);
@@ -80,4 +80,49 @@ export function hasCompleteActionTree(actions: unknown): boolean {
   };
 
   return actions.every((action) => visit(action));
+}
+
+
+/**
+ * Preserve model-provided action trees when they pass validation. If a provider
+ * omits or truncates the tree, derive a small, domain-neutral execution outline
+ * from the session's own task, purpose, target metric and supplied substeps.
+ * This is a formatting fallback, not a substitute for plan-level quality checks.
+ */
+export function ensureCompleteActionTree(
+  actions: unknown,
+  context: { task: string; purpose?: string; targetMetric?: string; substeps?: string[] },
+): Array<Record<string, unknown>> {
+  if (hasCompleteActionTree(actions)) return actions as Array<Record<string, unknown>>;
+
+  const task = String(context.task || "the planned task").trim().slice(0, 140) || "the planned task";
+  const purpose = String(context.purpose || "make measurable progress toward the goal").trim().slice(0, 220);
+  const metric = String(context.targetMetric || "the session's stated target").trim().slice(0, 160);
+  const suppliedSteps = Array.isArray(context.substeps)
+    ? context.substeps.map((step) => String(step || "").trim()).filter((step) => step.length >= 3).slice(0, 8)
+    : [];
+  const workSteps = suppliedSteps.length >= 2
+    ? suppliedSteps.slice(0, 2)
+    : ["Complete the main part of the task in a focused block.", `Check the result against: ${metric}`];
+
+  return [
+    {
+      type: "task",
+      title: `Prepare: ${task}`.slice(0, 160),
+      instructions: `Prepare to work on ${task}. Keep the purpose in view: ${purpose}`.slice(0, 500),
+      substeps: [`Review the session target: ${metric}`, "Gather the materials or references needed for this task."],
+    },
+    {
+      type: "task",
+      title: `Do: ${task}`.slice(0, 160),
+      instructions: `Work through ${task} in a manageable block, aiming toward: ${metric}`.slice(0, 500),
+      substeps: workSteps,
+    },
+    {
+      type: "task",
+      title: `Review: ${task}`.slice(0, 160),
+      instructions: `Record what you completed for ${task} and compare it with: ${metric}`.slice(0, 500),
+      substeps: ["Record the result or evidence of completion.", "Choose one adjustment for the next session."],
+    },
+  ];
 }
