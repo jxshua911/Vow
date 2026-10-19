@@ -4,9 +4,13 @@ import { supabase } from './supabase';
 
 export const NATIVE_OAUTH_REDIRECT = 'com.vow.app://callback';
 export const NATIVE_CALENDAR_REDIRECT = 'com.vow.app://calendar-callback';
+export const WEB_CALENDAR_REDIRECT = 'https://vowglobal.online/calendar/oauth/callback';
 
 export async function initNativeAuthListener() {
-  const listener = await App.addListener('appUrlOpen', async ({ url }) => {
+  const handledUrls = new Set<string>();
+  const handleUrl = async (url: string) => {
+    if (handledUrls.has(url)) return;
+    handledUrls.add(url);
     try {
       const urlObj = new URL(url);
       const isOAuthCallback =
@@ -68,7 +72,14 @@ export async function initNativeAuthListener() {
         detail: error instanceof Error ? error.message : 'Google sign-in failed. Please try again.',
       }));
     }
-  });
-
+  };
+  const listener = await App.addListener('appUrlOpen', ({ url }) => { void handleUrl(url); });
+  // Android may launch VOW cold from the OAuth deep link without firing appUrlOpen.
+  try {
+    const launch = await App.getLaunchUrl();
+    if (launch?.url) await handleUrl(launch.url);
+  } catch (error) {
+    console.warn('[VOW OAuth] Could not inspect launch URL:', error);
+  }
   return listener;
 }
