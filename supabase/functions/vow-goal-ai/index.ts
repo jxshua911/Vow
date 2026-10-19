@@ -421,12 +421,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function retryDelayMs(response: Response, attempt: number) {
+function retryDelayMs(response: Response, _attempt: number) {
   const raw = response.headers.get("retry-after");
-  const seconds = raw ? Number(raw) : NaN;
-  if (Number.isFinite(seconds) && seconds >= 0)
-    return Math.min(10000, Math.max(500, Math.round(seconds * 1000)));
-  return Math.min(8000, 1000 * 2 ** attempt);
+  if (!raw) return Number.POSITIVE_INFINITY;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds < 0) return Number.POSITIVE_INFINITY;
+  return Math.min(10000, Math.max(500, Math.round(seconds * 1000)));
 }
 
 async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean) {
