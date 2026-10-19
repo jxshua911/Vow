@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import type { Session } from '@/types/database';
 import { formatTime, toDateString } from '@/lib/dates';
 import { PageHeader } from './AppShell';
-import { NATIVE_CALENDAR_REDIRECT } from '@/lib/nativeAuth';
+import { NATIVE_CALENDAR_REDIRECT, WEB_CALENDAR_REDIRECT } from '@/lib/nativeAuth';
 import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
 
 type CalendarEvent = { id: string; summary?: string; description?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } };
@@ -48,7 +48,25 @@ export function CalendarPage() {
   const routineInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const loadSessions = useCallback(async () => { if (!authSession) { setLoading(false); return; } if (!navigator.onLine) { setError('You’re offline. Reconnect to refresh your schedule.'); setLoading(false); return; } const start = new Date(); start.setMonth(start.getMonth() - 2); start.setHours(0,0,0,0); const end = new Date(); end.setMonth(end.getMonth() + 3); end.setHours(23,59,59,999); const { data, error: sessionsError } = await supabase.from('sessions').select('*').eq('user_id', authSession.user.id).or('and(scheduled_at.gte.' + start.toISOString() + ',scheduled_at.lte.' + end.toISOString() + '),scheduled_at.is.null').order('scheduled_at', { ascending: true, nullsFirst: false }); if (sessionsError) setError(navigator.onLine ? 'Could not refresh your schedule. Your saved calendar remains available.' : 'You’re offline. Reconnect to refresh your schedule.'); else { setSessions(data || []); setError(null); } setLoading(false); }, [authSession]);
-  const checkGoogleConnection = useCallback(async () => { if (!authSession || !navigator.onLine) return; try { const { data, error: statusError } = await supabase.functions.invoke('google-calendar-auth', { headers: { Authorization: `Bearer ${authSession.access_token}` }, body: { action: 'status' } }); if (!statusError) setGoogleConnected(Boolean(data?.connected)); } catch { /* Preserve the last known state during transient network failures. */ } }, [authSession]);
+  const checkGoogleConnection = useCallback(async () => {
+    if (!authSession || !navigator.onLine) return false;
+    try {
+      const { data, error: statusError } = await supabase.functions.invoke('google-calendar-auth', {
+        headers: { Authorization: `Bearer ${authSession.access_token}` },
+        body: { action: 'status' },
+      });
+      if (statusError) throw statusError;
+      const connected = Boolean(data?.connected);
+      setGoogleConnected(connected);
+      if (!data?.available && !connected) setError('Google Calendar is not configured for this VOW environment.');
+      else if (connected) setError(null);
+      return connected;
+    } catch (err) {
+      console.warn('[VOW] Google Calendar connection status check failed:', err);
+      setError('Could not verify Google Calendar connection. Check your connection and try again.');
+      return false;
+    }
+  }, [authSession]);
   const loadNativeEvents = useCallback(async () => { if (!authSession || !Capacitor.isNativePlatform()) { setNativeEvents([]); return; } try { const start = getMonthStart(currentDate); start.setHours(0, 0, 0, 0); const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999); setNativeEvents(await listNativeCalendarEvents(start, end)); } catch (err) { console.warn('[VOW] Device calendar read failed:', err); setNativeEvents([]); } }, [authSession, currentDate]);
   const loadGoogleEvents = useCallback(async () => { if (!authSession || !googleConnected || !navigator.onLine) return; setGoogleLoading(true); try { const start = new Date(); start.setMonth(start.getMonth() - 1); start.setHours(0,0,0,0); const end = new Date(); end.setMonth(end.getMonth() + 3); end.setHours(23,59,59,999); const { data, error: functionError } = await supabase.functions.invoke('google-calendar-events', { headers: { Authorization: `Bearer ${authSession.access_token}` }, body: { action: 'list', timeMin: start.toISOString(), timeMax: end.toISOString() } }); if (functionError) throw functionError; const events = data?.events || []; setGoogleEvents(events); localStorage.setItem(`${CACHE_KEY_PREFIX}${authSession.user.id}`, JSON.stringify(events)); } catch (err) { console.warn('[VOW] Google Calendar refresh failed:', err); setError(navigator.onLine ? 'Could not sync Google Calendar right now. Your saved calendar events remain available.' : 'You’re offline. Saved calendar events remain available; reconnect to sync.'); } finally { setGoogleLoading(false); } }, [authSession, googleConnected]);
   useEffect(() => {
@@ -65,7 +83,13 @@ export function CalendarPage() {
   }, [loadSessions, checkGoogleConnection, loadGoogleEvents, googleConnected]);
   useEffect(() => { if (googleConnected) loadGoogleEvents(); }, [googleConnected, loadGoogleEvents]);
   useEffect(() => {
-    const connected = () => { setConnectingGoogle(false); setError(null); void checkGoogleConnection(); };
+    const connected = () => {
+      setConnectingGoogle(false);
+      void checkGoogleConnection().then((active) => {
+        if (active) setError(null);
+        else setError('Google returned to VOW, but the connection was not saved. Please connect again.');
+      });
+    };
     const failed = (event: Event) => { setConnectingGoogle(false); setError((event as CustomEvent<string>).detail || 'Google Calendar connection failed.'); };
     window.addEventListener('vow:google-calendar-connected', connected);
     window.addEventListener('vow:google-calendar-error', failed);
@@ -82,7 +106,7 @@ export function CalendarPage() {
     }
     return () => { disposed = true; window.removeEventListener('focus', refreshConnection); document.removeEventListener('visibilitychange', refreshConnection); if (resumeHandle) void resumeHandle.remove(); };
   }, [checkGoogleConnection, loadSessions, loadNativeEvents]);
-  async function connectGoogleCalendar() { if (!authSession) return; setConnectingGoogle(true); setError(null); try { const redirectUri = Capacitor.isNativePlatform() ? NATIVE_CALENDAR_REDIRECT : `${window.location.origin}/calendar/oauth/callback`; const { data, error: functionError } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'start', redirectUri } }); if (functionError) throw functionError; if (!data?.authorizationUrl) throw new Error('Google Calendar authorization URL was not returned.'); if (Capacitor.isNativePlatform()) await Browser.open({ url: data.authorizationUrl }); else window.location.assign(data.authorizationUrl); } catch (err) { setConnectingGoogle(false); setError(err instanceof Error ? err.message : 'Could not start Google Calendar connection.'); } }
+  async function connectGoogleCalendar() { if (!authSession) return; setConnectingGoogle(true); setError(null); try { const redirectUri = Capacitor.isNativePlatform() ? NATIVE_CALENDAR_REDIRECT : WEB_CALENDAR_REDIRECT; const { data, error: functionError } = await supabase.functions.invoke('google-calendar-auth', { body: { action: 'start', redirectUri } }); if (functionError) throw functionError; if (!data?.authorizationUrl) throw new Error('Google Calendar authorization URL was not returned.'); if (Capacitor.isNativePlatform()) await Browser.open({ url: data.authorizationUrl }); else window.location.assign(data.authorizationUrl); } catch (err) { setConnectingGoogle(false); setError(err instanceof Error ? err.message : 'Could not start Google Calendar connection.'); } }
   function selectDate(day: Date) { const date = toDateString(day); setSelectedDate(date); setNewDate(date); setRoutineChange(''); setNewTitle(''); setShowCreate(true); requestAnimationFrame(() => { createPanelRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' }); }); }
   function openCreateForCurrentDate() { setSelectedDate(newDate); setShowCreate(true); requestAnimationFrame(() => createPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }
   async function createGoogleEvent() { if (!authSession || !googleConnected || (!newTitle.trim() && !routineChange.trim())) return; setCreatingEvent(true); setError(null); try { const title = newTitle.trim() || 'Routine change'; const description = routineChange.trim() || undefined; const start = new Date(`${newDate}T${newTime}`); const end = new Date(start.getTime() + Math.max(15, Number(newDuration) || 60) * 60000); const { data, error: functionError } = await supabase.functions.invoke('google-calendar-events', { headers: { Authorization: `Bearer ${authSession.access_token}` }, body: { action: 'create', event: { summary: title, description, start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() }, reminders: { useDefault: true } } } }); if (functionError) throw functionError; if (!data?.event) throw new Error('Google Calendar did not return the created event.'); const next = [...googleEvents, data.event]; setGoogleEvents(next); localStorage.setItem(`${CACHE_KEY_PREFIX}${authSession.user.id}`, JSON.stringify(next)); setShowCreate(false); setSelectedDate(null); setNewTitle(''); setRoutineChange(''); } catch (err) { setError(err instanceof Error ? err.message : 'Could not create Google Calendar event.'); } finally { setCreatingEvent(false); } }
