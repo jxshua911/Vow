@@ -11,7 +11,7 @@ const CALENDAR_EVENT_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 const CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 const CALENDAR_SCOPES = [CALENDAR_EVENT_SCOPE, CALENDAR_LIST_SCOPE] as const;
 function hasRequiredCalendarScopes(value: unknown): boolean {
-  const granted = new Set(String(value || "").split(/\\s+/).filter(Boolean));
+  const granted = new Set(String(value || "").split(/\s+/).filter(Boolean));
   return CALENDAR_SCOPES.every((scope) => granted.has(scope));
 }
 function json(data: unknown, status = 200) { return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }); }
