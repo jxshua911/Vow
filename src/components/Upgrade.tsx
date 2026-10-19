@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { PageHeader } from './AppShell';
-import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
+import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { getPremiumProducts, openPremiumManagement, purchasePremium, restorePremium } from '@/lib/premiumPurchases';
 import { VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY } from '@/lib/premiumConfig';
 import { userFacingError } from '@/lib/userFacingError';
@@ -79,12 +80,21 @@ export function UpgradePage() {
 
   async function handleRestore() {
     setRestoreState('');
+    if (!Capacitor.isNativePlatform()) {
+      setRestoreState('Google Play restore is available in VOW for Android. Premium access already linked to your VOW account is checked automatically.');
+      return;
+    }
     try {
       const result = await restorePremium();
-      setRestoreState(result.restored
+      if (!result.restored) {
+        setRestoreState('No active Google Play subscription was found. This does not change your VOW account access; this button only restores purchases made through Google Play.');
+        return;
+      }
+      const snapshot = await refreshEntitlementSnapshot();
+      setUsage(snapshot);
+      setRestoreState(snapshot?.plan === 'premium'
         ? 'Your Google Play Premium purchase has been restored.'
-        : 'No active Google Play subscription was found. This does not change your VOW account access; this button only restores purchases made through Google Play.');
-      if (result.restored) setUsage(await getEntitlementSnapshot());
+        : 'Google Play verified the purchase, but VOW has not confirmed Premium access yet. Your account has not been charged again; refresh your account status or contact support before trying another purchase.');
     } catch (err) {
       setRestoreState(userFacingError(err, 'We could not restore your Premium purchase. Please try again.'));
     }
@@ -92,11 +102,18 @@ export function UpgradePage() {
 
   async function handlePurchase() {
     setPurchaseState('');
+    if (!Capacitor.isNativePlatform()) {
+      setPurchaseState('Google Play checkout is available in VOW for Android. Web checkout is not configured in this build.');
+      return;
+    }
     try {
       const productId = isYearly ? VOW_PREMIUM_YEARLY : VOW_PREMIUM_MONTHLY;
       await purchasePremium(productId);
-      setPurchaseState('Premium is now active.');
-      setUsage(await getEntitlementSnapshot());
+      const snapshot = await refreshEntitlementSnapshot();
+      setUsage(snapshot);
+      setPurchaseState(snapshot?.plan === 'premium'
+        ? 'Premium is now active.'
+        : 'The purchase was verified, but VOW has not confirmed Premium access yet. Your account has not been charged again; refresh your account status or contact support before trying another purchase.');
     } catch (err) {
       setPurchaseState(userFacingError(err, 'We could not complete the Premium purchase. Please try again.'));
     }
@@ -104,6 +121,10 @@ export function UpgradePage() {
 
   async function handleManage() {
     setManageState('');
+    if (!Capacitor.isNativePlatform()) {
+      setManageState('Manage or cancel your subscription through the store where you purchased it. Google Play subscription management is available in VOW for Android. Removing VOW does not cancel a subscription.');
+      return;
+    }
     try {
       await openPremiumManagement();
     } catch (err) {
@@ -187,8 +208,9 @@ export function UpgradePage() {
       </div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
-        <p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.</p>
-        <button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button>
+        {Capacitor.isNativePlatform()
+          ? <><p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.</p><button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button></>
+          : <p className="text-xs text-vow-muted mt-1">Google Play checkout is available in VOW for Android. Web checkout is not configured in this build. Premium access already linked to your VOW account remains available here.</p>}
       </div>}
       {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium is active</p>
