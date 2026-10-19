@@ -223,7 +223,10 @@ jobs:
 
           for function in "${functions[@]}"; do
             echo "Deploying changed function: $function"
-            if [ "$function" = "vow-blind-benchmark" ]; then
+            # Google must reach the OAuth callback without a Supabase JWT.
+            # google-calendar-auth validates JWTs itself for POST actions; GET is
+            # the provider callback and is authenticated by its single-use OAuth state.
+            if [ "$function" = "vow-blind-benchmark" ] || [ "$function" = "google-calendar-auth" ]; then
               supabase functions deploy "$function" --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
             else
               supabase functions deploy "$function" --project-ref "$SUPABASE_PROJECT_REF"
