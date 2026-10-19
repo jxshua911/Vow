@@ -10,7 +10,7 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
 };
-const MAX = { plan: 10000, clarify: 1200, chat: 700 };
+const MAX = { plan: 4500, planRetry: 3200, clarify: 1200, chat: 700 };
 const MAX_BODY_BYTES = 128 * 1024;
 const json = (x: unknown, s = 200, e: Record<string, string> = {}) =>
   new Response(JSON.stringify(x), { status: s, headers: { ...CORS, ...e } });
@@ -499,11 +499,14 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
     }
 
     if (response.status === 429 && rateRetries === 0) {
-      rateRetries = 1;
       const delay = retryDelayMs(response, 0);
-      console.warn("Groq rate limited; retrying once", { delay_ms: delay });
-      await sleep(delay);
-      continue;
+      if (delay <= 1200) {
+        rateRetries = 1;
+        console.warn("Groq briefly rate limited; retrying once", { delay_ms: delay });
+        await sleep(delay);
+        continue;
+      }
+      console.warn("Groq rate limit window exceeds the request budget; moving to the next provider", { delay_ms: delay });
     }
 
     if (response.status === 400 && jsonMode) {
@@ -639,11 +642,14 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
 
     if (!response.ok) {
       if (response.status === 429 && rateRetries === 0) {
-        rateRetries = 1;
         const delay = retryDelayMs(response, 0);
-        console.warn("[VOW AI] Mistral rate limited; retrying once", { delay_ms: delay });
-        await sleep(delay);
-        continue;
+        if (delay <= 1200) {
+          rateRetries = 1;
+          console.warn("[VOW AI] Mistral briefly rate limited; retrying once", { delay_ms: delay });
+          await sleep(delay);
+          continue;
+        }
+        console.warn("[VOW AI] Mistral rate limit window exceeds the request budget; moving to the next provider", { delay_ms: delay });
       }
       console.error("[VOW AI] Mistral provider error", { status: response.status, body: raw.slice(0, 1200) });
       throw new Error(response.status === 429 ? "MISTRAL_429" : `MISTRAL_PROVIDER_ERROR_${response.status}`);
@@ -1553,13 +1559,23 @@ Each week's sessions must advance that week's focus rather than repeating the sa
         });
         try {
           const retry = await ai(req, [
-            ...planMessages,
-            { role: "assistant", content: JSON.stringify(b) },
+            {
+              role: "system",
+              content: "You are repairing a VOW plan that failed a quality check. Return the complete corrected JSON object only. Preserve the goal, duration, selected days, required fields, and supported references. Repair the stated validation error directly. Every session must be concrete, distinct, domain-specific, and measurable. Use 3-5 meaningful actions with clear instructions and at least two ordered substeps per executable action. Do not invent research, facts, or URLs. Keep JSON compact without omitting required fields.",
+            },
             {
               role: "user",
-              content: `Rewrite the complete plan JSON. The previous draft failed VOW's quality check: ${validationError}. Keep the same goal, duration, selected days, and user answers. Every scheduled session must be concrete, distinct, domain-specific, and at least six words long. Re-evaluate the actual goal and apply the matching category-specific execution blueprint from the system prompt; do not flatten the plan into a generic task list. In weeks 1–4, provide 3–6 named actions per session, each with actionable instructions and 2–5 concrete ordered substeps. Use sets/reps/rest only when the goal genuinely needs them; otherwise use relevant counts, deliverables, quality criteria and an honest estimated duration when needed by the existing action format. Group related work under clear domain-native headings/titles. Define observable completion criteria and progression. Never use generic tasks such as "work on your goal", "practise more", "make progress", or "review the topic". For education, specify exact concepts, worked examples, question counts/types, recall and error correction. For product/business work, specify concrete artefacts, features, tests, customer actions and acceptance criteria. For money goals, specify calculations, target contributions and progress checks with labelled assumptions. For creative goals, specify techniques, drafts, iterations and a finished artefact. For habits, relationships, health, home and life-admin goals, specify the appropriate safe, measurable actions and observable finish states. For cooking goals, name real recipe actions rather than "make dinner". For kickboxing or other physical skills, name specific drills, technique, rounds and safety cues appropriate to the goal. Make each week progress from the previous week. Preserve every required JSON field and return JSON only.`,
+              content: JSON.stringify({
+                validation_error: validationError,
+                goal: str(g?.title || g?.outcome, 300),
+                context: validationContext,
+                duration_weeks: w,
+                available_days: ds,
+                category: str(g?.domain?.category || g?.category || b?.category, 80),
+                draft_plan: b,
+              }),
             },
-          ], "plan", researchRequired);
+          ], "planRetry", false);
           if (retry?.clarification_needed !== true) {
             b = retry;
             validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());

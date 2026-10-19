@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
 import { FREE_PLANNING_ACTION_LIMIT, getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
-import { isThisWeek, formatTime, formatRelative, dayName } from '@/lib/dates';
+import { formatTime, formatRelative, dayName } from '@/lib/dates';
+import { isSessionInCurrentPlanWeek } from '@/lib/dashboardSessions';
 import { PageHeader } from './AppShell';
 import type { View } from './AppShell';
 
@@ -41,7 +42,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     return () => { active = false; window.removeEventListener('vow:entitlement-changed', onEntitlementChange); window.removeEventListener('focus', refresh); };
   }, []);
   const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
-  const thisWeekSessions = sessions.filter((s) => isThisWeek(s.scheduled_at));
+  // Date-less sessions are supported by VOW's flexible scheduling modes. Count
+  // them against the active goal's current plan week instead of silently
+  // displaying 0/0 for a valid weekly commitment.
+  const thisWeekSessions = sessions.filter((s) => isSessionInCurrentPlanWeek(s, goals));
   const completedThisWeek = thisWeekSessions.filter((s) => s.status === 'completed');
   const completionPct = thisWeekSessions.length > 0 ? Math.round((completedThisWeek.length / thisWeekSessions.length) * 100) : 0;
   const completedSessions = sessions.filter((s) => s.status === 'completed').length;
@@ -58,14 +62,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     <div className="grid min-w-0 md:grid-cols-2 gap-6 md:gap-12">
       <div>
         <h2 className="vow-label mb-4">Upcoming sessions</h2>
-        {upcoming.length === 0 ? <div className="border border-vow-border p-8 text-center"><div className="w-7 h-7 mx-auto mb-3 border border-vow-border rounded-full" /><p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity">Schedule sessions</button></div> : <div className="space-y-px border border-vow-border">{upcoming.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); return <div key={s.id} className="bg-vow-bg px-4 py-3 flex items-center gap-3"><div className="w-2 h-2 rounded-full border border-vow-muted flex-shrink-0" /><div className="flex-1 min-w-0"><div className="text-sm text-vow-ink truncate">{s.title}</div><div className="text-xs text-vow-muted">{goal?.title || ''}</div></div><div className="text-right flex-shrink-0"><div className="text-xs text-vow-ink font-medium">{formatRelative(s.scheduled_at)}</div><div className="text-xs text-vow-muted">{formatTime(s.scheduled_at)}</div></div></div>; })}</div>}
+        {upcoming.length === 0 ? <div className="border border-vow-border p-8 text-center"><div className="w-7 h-7 mx-auto mb-3 border border-vow-border rounded-full" /><p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity">Schedule sessions</button></div> : <div className="space-y-px border border-vow-border">{upcoming.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); return <div key={s.id} className="bg-vow-bg px-4 py-3 flex items-center gap-3"><div className="w-2 h-2 rounded-full border border-vow-muted flex-shrink-0" /><div className="min-w-0 flex-1"><p className="text-sm font-medium text-vow-ink truncate">{s.title}</p><p className="text-xs text-vow-muted mt-1">{goal?.title || 'VOW session'} · {formatRelative(s.scheduled_at)} · {formatTime(s.scheduled_at)}</p></div></div>; })}</div>}
       </div>
       <div>
         <h2 className="vow-label mb-4">Active goals</h2>
-        {activeGoals.length === 0 ? <div className="border border-vow-border p-8 text-center"><p className="text-vow-muted text-sm">No active goals yet.</p></div> : <div className="space-y-px border border-vow-border">{activeGoals.map((g) => { const goalSessions = sessions.filter((s) => s.goal_id === g.id); const completed = goalSessions.filter((s) => s.status === 'completed').length; const total = goalSessions.length; const pct = total > 0 ? Math.round((completed / total) * 100) : 0; return <button key={g.id} onClick={() => onNavigate('goals')} className="w-full text-left bg-vow-bg px-4 py-3 hover:opacity-70 transition-opacity"><div className="flex min-w-0 items-start justify-between gap-2 mb-2"><div className="text-sm text-vow-ink min-w-0 flex-1 [overflow-wrap:anywhere]">{g.outcome}</div><div className="text-xs text-vow-muted flex-shrink-0">{pct}%</div></div><div className="h-px bg-vow-border relative"><div className="absolute inset-y-0 left-0 bg-vow-ink transition-all duration-500" style={{ width: `${pct}%`, height: '1px' }} /></div><div className="text-xs text-vow-muted mt-1.5 [overflow-wrap:anywhere]">{g.weekly_commitment_target} sessions/week — {completed}/{total} all-time</div></button>; })}</div>}
+        {activeGoals.length === 0 ? <div className="border border-vow-border p-8 text-center"><p className="text-vow-muted text-sm mb-3">No active goals yet.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity">Create a goal</button></div> : <div className="space-y-px border border-vow-border">{activeGoals.slice(0, 5).map((g) => <button key={g.id} onClick={() => onNavigate('goals')} className="w-full text-left bg-vow-bg px-4 py-3 hover:bg-vow-surface transition-colors"><p className="text-sm font-medium text-vow-ink">{g.title}</p><p className="text-xs text-vow-muted mt-1">{g.weekly_commitment_target} sessions/week{g.deadline ? ` · Due ${new Date(g.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}</p></button>)}</div>}
       </div>
     </div>
   </div>;
 }
 
-function StatCell({ label, value, subtitle }: { label: string; value: string | number; subtitle?: string }) { return <div className="bg-vow-bg min-w-0 px-3 sm:px-4 py-4 sm:py-5 overflow-hidden"><div className="text-3xl vow-heading text-vow-ink break-words">{value}</div><div className="vow-label mt-1.5 break-words">{label}</div>{subtitle && <div className="text-xs text-vow-muted mt-0.5">{subtitle}</div>}</div>; }
+function StatCell({ label, value, subtitle }: { label: string; value: string | number; subtitle?: string }) {
+  return <div className="bg-vow-bg px-3 py-4 md:px-4"><p className="text-[10px] uppercase tracking-[0.14em] text-vow-muted mb-2">{label}</p><p className="text-xl md:text-2xl font-medium text-vow-ink tabular-nums">{value}</p>{subtitle && <p className="text-[10px] text-vow-muted mt-1">{subtitle}</p>}</div>;
+}
