@@ -29,6 +29,20 @@ async function bootstrap() {
 
     if (Capacitor.isNativePlatform()) {
       void initNativeAuthListener();
+    } else if (window.location.pathname === '/calendar/oauth/callback') {
+      // The OAuth callback is a redirect-only URL; preserve its result, then let
+      // the normal SPA boot so Calendar can verify the persisted server state.
+      const params = new URLSearchParams(window.location.search);
+      try {
+        localStorage.setItem('vow:google-calendar-oauth-result', JSON.stringify({
+          success: params.get('success') === 'true',
+          error: params.get('error') || null,
+          receivedAt: Date.now(),
+        }));
+      } catch (error) {
+        console.warn('[VOW Calendar OAuth] Could not persist callback result:', error);
+      }
+      window.history.replaceState({}, '', '/');
     }
 
     installGlobalErrorTelemetry();
