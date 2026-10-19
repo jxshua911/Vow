@@ -5,8 +5,15 @@ const NATIVE_REDIRECT = "com.vow.app://calendar-callback";
 const WEB_REDIRECT = "https://vowglobal.online/calendar/oauth/callback";
 const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-// VOW lists and creates events only; request the narrow event scope.
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+// Listing calendars requires its own read-only scope; creating/editing events
+// remains limited to the event scope rather than granting full calendar access.
+const CALENDAR_EVENT_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
+const CALENDAR_SCOPES = [CALENDAR_EVENT_SCOPE, CALENDAR_LIST_SCOPE] as const;
+function hasRequiredCalendarScopes(value: unknown): boolean {
+  const granted = new Set(String(value || "").split(/\\s+/).filter(Boolean));
+  return CALENDAR_SCOPES.every((scope) => granted.has(scope));
+}
 function json(data: unknown, status = 200) { return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }); }
 function redirectUrl(base: string, params: Record<string, string>) { const url = new URL(base); for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value); return url.toString(); }
 serve(async (req) => {
@@ -20,12 +27,12 @@ serve(async (req) => {
       const authHeader = req.headers.get("Authorization"); if (!authHeader) return json({ error: "Missing authorization header" }, 401);
       const userClient = createClient(supabaseUrl!, supabaseAnonKey!, { global: { headers: { Authorization: authHeader } } }); const { data: { user }, error: userError } = await userClient.auth.getUser(); if (userError || !user) return json({ error: "Not authenticated" }, 401);
       const admin = createClient(supabaseUrl!, serviceRoleKey!);
-      if (body.action === "status") { const { data: connection, error } = await admin.from("google_calendar_connections").select("id, access_token, scope").eq("user_id", user.id).maybeSingle(); if (error) throw error; const scope = String(connection?.scope || ""); const connected = Boolean(connection?.id && connection?.access_token && scope.includes(CALENDAR_SCOPE)); return json({ connected, needsReauth: Boolean(connection?.id && connection?.access_token && !scope.includes(CALENDAR_SCOPE)), available: true, configured: true }); }
+      if (body.action === "status") { const { data: connection, error } = await admin.from("google_calendar_connections").select("id, access_token, scope").eq("user_id", user.id).maybeSingle(); if (error) throw error; const scope = String(connection?.scope || ""); const hasScopes = hasRequiredCalendarScopes(scope); const connected = Boolean(connection?.id && connection?.access_token && hasScopes); return json({ connected, needsReauth: Boolean(connection?.id && !hasScopes), available: true, configured: true }); }
       if (body.action !== "start") return json({ error: "Unknown action" }, 400);
       const redirectUri = body.redirectUri; if (redirectUri !== NATIVE_REDIRECT && redirectUri !== WEB_REDIRECT) return json({ error: "Invalid application redirect URI" }, 400);
       const state = crypto.randomUUID(); const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       const { error: saveError } = await admin.from("google_calendar_connections").upsert({ user_id: user.id, oauth_state: state, oauth_state_expires_at: expiresAt, oauth_redirect_uri: redirectUri, updated_at: new Date().toISOString() }, { onConflict: "user_id" }); if (saveError) throw saveError;
-      const authorizationUrl = new URL(GOOGLE_AUTHORIZE_URL); authorizationUrl.search = new URLSearchParams({ client_id: clientId!, redirect_uri: googleRedirectUri!, response_type: "code", access_type: "offline", prompt: "consent", state, scope: CALENDAR_SCOPE }).toString();
+      const authorizationUrl = new URL(GOOGLE_AUTHORIZE_URL); authorizationUrl.search = new URLSearchParams({ client_id: clientId!, redirect_uri: googleRedirectUri!, response_type: "code", access_type: "offline", prompt: "consent", state, scope: CALENDAR_SCOPES.join(" ") }).toString();
       return json({ authorizationUrl: authorizationUrl.toString(), available: true, configured: true });
     }
     if (!configured) return new Response("Google Calendar is not configured.", { status: 503, headers: { "Content-Type": "text/plain" } });
@@ -55,7 +62,7 @@ serve(async (req) => {
       return await finishWithError("Google token exchange failed. Please reconnect Google Calendar.");
     }
     const expiresAt = tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null;
-    const { error: saveError } = await admin.from("google_calendar_connections").upsert({ user_id: connection.user_id, access_token: tokenData.access_token, refresh_token: tokenData.refresh_token ?? connection.refresh_token ?? null, expires_at: expiresAt, scope: tokenData.scope ?? CALENDAR_SCOPE, oauth_state: null, oauth_state_expires_at: null, oauth_redirect_uri: null, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    const { error: saveError } = await admin.from("google_calendar_connections").upsert({ user_id: connection.user_id, access_token: tokenData.access_token, refresh_token: tokenData.refresh_token ?? connection.refresh_token ?? null, expires_at: expiresAt, scope: tokenData.scope ?? CALENDAR_SCOPES.join(" "), oauth_state: null, oauth_state_expires_at: null, oauth_redirect_uri: null, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
     if (saveError) throw saveError;
     console.info("[VOW Calendar OAuth] Token exchange and connection save completed.");
     return Response.redirect(redirectUrl(callbackUri, { success: "true" }), 302);

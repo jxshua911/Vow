@@ -79,7 +79,9 @@ async function googleGet(path: string, accessToken: string) {
   const response = await fetch(`${GOOGLE_CALENDAR_API}${path}`, { headers: { Authorization: `Bearer ${accessToken}` } });
   const data = await response.json();
   if (!response.ok) {
-    if (response.status === 401) throw Object.assign(new Error("Google Calendar authorization is no longer valid. Please reconnect Google Calendar."), { code: "REAUTH_REQUIRED" });
+    if (response.status === 401 || (response.status === 403 && /insufficient authentication scopes/i.test(String(data.error?.message || "")))) {
+      throw Object.assign(new Error("Google Calendar permissions need refreshing. Please reconnect Google Calendar."), { code: "REAUTH_REQUIRED" });
+    }
     throw Object.assign(new Error(data.error?.message || "Google Calendar request failed"), { code: response.status === 404 ? "NOT_FOUND" : undefined });
   }
   return data;

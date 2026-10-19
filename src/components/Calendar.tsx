@@ -58,7 +58,8 @@ export function CalendarPage() {
       if (statusError) throw statusError;
       const connected = Boolean(data?.connected);
       setGoogleConnected(connected);
-      if (!data?.available && !connected) setError('Google Calendar is not configured for this VOW environment.');
+      if (data?.needsReauth) setError('Google Calendar needs updated permissions. Reconnect it to sync your calendars.');
+      else if (!data?.available && !connected) setError('Google Calendar is not configured for this VOW environment.');
       else if (connected) setError(null);
       return connected;
     } catch (err) {
@@ -68,7 +69,7 @@ export function CalendarPage() {
     }
   }, [authSession]);
   const loadNativeEvents = useCallback(async () => { if (!authSession || !Capacitor.isNativePlatform()) { setNativeEvents([]); return; } try { const start = getMonthStart(currentDate); start.setHours(0, 0, 0, 0); const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999); setNativeEvents(await listNativeCalendarEvents(start, end)); } catch (err) { console.warn('[VOW] Device calendar read failed:', err); setNativeEvents([]); } }, [authSession, currentDate]);
-  const loadGoogleEvents = useCallback(async () => { if (!authSession || !googleConnected || !navigator.onLine) return; setGoogleLoading(true); try { const start = new Date(); start.setMonth(start.getMonth() - 1); start.setHours(0,0,0,0); const end = new Date(); end.setMonth(end.getMonth() + 3); end.setHours(23,59,59,999); const { data, error: functionError } = await supabase.functions.invoke('google-calendar-events', { headers: { Authorization: `Bearer ${authSession.access_token}` }, body: { action: 'list', timeMin: start.toISOString(), timeMax: end.toISOString() } }); if (functionError) throw functionError; const events = data?.events || []; setGoogleEvents(events); localStorage.setItem(`${CACHE_KEY_PREFIX}${authSession.user.id}`, JSON.stringify(events)); } catch (err) { console.warn('[VOW] Google Calendar refresh failed:', err); setError(navigator.onLine ? 'Could not sync Google Calendar right now. Your saved calendar events remain available.' : 'You’re offline. Saved calendar events remain available; reconnect to sync.'); } finally { setGoogleLoading(false); } }, [authSession, googleConnected]);
+  const loadGoogleEvents = useCallback(async () => { if (!authSession || !googleConnected || !navigator.onLine) return; setGoogleLoading(true); try { const start = new Date(); start.setMonth(start.getMonth() - 1); start.setHours(0,0,0,0); const end = new Date(); end.setMonth(end.getMonth() + 3); end.setHours(23,59,59,999); const { data, error: functionError } = await supabase.functions.invoke('google-calendar-events', { headers: { Authorization: `Bearer ${authSession.access_token}` }, body: { action: 'list', timeMin: start.toISOString(), timeMax: end.toISOString() } }); if (functionError) throw functionError; const events = data?.events || []; setGoogleEvents(events); localStorage.setItem(`${CACHE_KEY_PREFIX}${authSession.user.id}`, JSON.stringify(events)); } catch (err) { console.warn('[VOW] Google Calendar refresh failed:', err); const connected = await checkGoogleConnection(); if (!connected) return; setError(navigator.onLine ? 'Could not sync Google Calendar right now. Your saved calendar events remain available.' : 'You’re offline. Saved calendar events remain available; reconnect to sync.'); } finally { setGoogleLoading(false); } }, [authSession, googleConnected]);
   useEffect(() => {
     if (!authSession) { setGoogleEvents([]); return; }
     try { setGoogleEvents(JSON.parse(localStorage.getItem(`${CACHE_KEY_PREFIX}${authSession.user.id}`) || '[]')); } catch { setGoogleEvents([]); }

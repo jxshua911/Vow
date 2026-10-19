@@ -67,17 +67,25 @@ export function NativeCalendarSync() {
       if (cancelled) return;
       if (error) {
         console.error('[VOW] Native calendar sync session lookup failed:', error);
+        if (!cancelled) setMessage('VOW could not refresh your phone calendar. Please try again.');
+        return;
+      }
+      if (!data?.length) {
+        if (!cancelled) setMessage('No dated sessions to sync yet. Add a session time in Goals, then return here to sync.');
         return;
       }
       try {
-        const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail) : 0;
+        const created = await syncSessionsToNativeCalendar(data as Session[], accountEmail);
         if (!cancelled) dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.');
       } catch (error) {
         console.error('[VOW] Native calendar sync failed:', error);
+        if (!cancelled) setMessage(error instanceof Error ? error.message : 'VOW could not refresh your phone calendar.');
       }
     }
+    const refresh = () => { if (document.visibilityState === 'visible') void sync(); };
+    window.addEventListener('focus', refresh);
     void sync();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.removeEventListener('focus', refresh); };
   }, [enabled, userId, accountEmail, dismissAfterSuccess]);
 
   if (!Capacitor.isNativePlatform() || !session || !userId || dismissedUserId !== userId || dismissed !== false) return null;
@@ -98,12 +106,16 @@ export function NativeCalendarSync() {
           .gte('scheduled_at', new Date().toISOString())
           .order('scheduled_at', { ascending: true });
         if (error) throw error;
-        const created = data?.length ? await syncSessionsToNativeCalendar(data as Session[], accountEmail) : 0;
         localStorage.setItem(ENABLE_KEY, 'true');
         localStorage.removeItem(DISMISSED_KEY_PREFIX + userId);
         skipNextEffectSync.current = true;
         setHiding(false);
         setEnabled(true);
+        if (!data?.length) {
+          setMessage('No dated sessions to sync yet. Add a session time in Goals, then return here to sync.');
+          return;
+        }
+        const created = await syncSessionsToNativeCalendar(data as Session[], accountEmail);
         dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.');
       } else {
         localStorage.setItem(ENABLE_KEY, 'false');
