@@ -126,6 +126,21 @@ serve(async (req) => {
     if (connectionError) throw connectionError;
     if (!connection) return json({ error: "Google Calendar is not connected" }, 400);
 
+    // Existing connections may predate the calendar-list scope. Fail clearly
+    // before calling Google instead of surfacing an opaque 500 from the API.
+    const requiredScopes = [
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+    ];
+    const grantedScopes = new Set(String(connection.scope || "").split(/\\s+/).filter(Boolean));
+    if (!requiredScopes.every((scope) => grantedScopes.has(scope))) {
+      return json({
+        error: "Google Calendar permissions need refreshing. Please reconnect Google Calendar.",
+        code: "REAUTH_REQUIRED",
+        needsReauth: true,
+      }, 401);
+    }
+
     let accessToken: string;
     try {
       accessToken = await refreshAccessToken(connection as Record<string, unknown>, admin) as string;

@@ -57,7 +57,21 @@ serve(async (req) => {
     const { data: connection, error: connectionError } = await admin.from("google_calendar_connections").select("*").eq("user_id", user.id).maybeSingle();
     if (connectionError) throw connectionError;
     if (!connection) return json({ connected: false, created_count: 0, deleted_count: 0 });
-    if (!String(connection.scope || "").includes("https://www.googleapis.com/auth/calendar")) return json({ connected: false, needsReauth: true, created_count: 0, deleted_count: 0 });
+    const requiredScopes = [
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+    ];
+    const grantedScopes = new Set(String(connection.scope || "").split(/\\s+/).filter(Boolean));
+    if (!requiredScopes.every((scope) => grantedScopes.has(scope))) {
+      return json({
+        connected: false,
+        needsReauth: true,
+        code: "REAUTH_REQUIRED",
+        error: "Google Calendar permissions need refreshing. Please reconnect Google Calendar.",
+        created_count: 0,
+        deleted_count: 0,
+      }, 401);
+    }
 
     let accessToken: string;
     try { accessToken = await refreshAccessToken(connection as Record<string, unknown>, admin) as string; }

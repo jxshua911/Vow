@@ -56,9 +56,10 @@ export function CalendarPage() {
         body: { action: 'status' },
       });
       if (statusError) throw statusError;
-      const connected = Boolean(data?.connected);
+      const needsReauth = Boolean(data?.needsReauth);
+      const connected = Boolean(data?.connected) && !needsReauth;
       setGoogleConnected(connected);
-      if (data?.needsReauth) setError('Google Calendar needs updated permissions. Reconnect it to sync your calendars.');
+      if (needsReauth) setError('Google Calendar needs updated permissions. Reconnect it to sync your calendars.');
       else if (!data?.available && !connected) setError('Google Calendar is not configured for this VOW environment.');
       else if (connected) setError(null);
       return connected;
