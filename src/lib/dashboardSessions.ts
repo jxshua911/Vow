@@ -1,5 +1,3 @@
-import { isThisWeek } from './dates';
-
 type PlannedSession = {
   goal_id: string;
   status: string;
@@ -29,7 +27,16 @@ export function isSessionInCurrentPlanWeek(
   goals: PlannedGoal[],
   now: Date = new Date(),
 ): boolean {
-  if (session.scheduled_at) return isThisWeek(session.scheduled_at);
+  if (session.scheduled_at) {
+    const target = new Date(session.scheduled_at);
+    if (!Number.isFinite(target.getTime())) return false;
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const day = start.getDay();
+    start.setDate(start.getDate() + (day === 0 ? -6 : 1 - day));
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return target >= start && target < end;
+  }
   if (session.status !== 'scheduled' && session.status !== 'completed') return false;
 
   const goal = goals.find((candidate) => candidate.id === session.goal_id);
