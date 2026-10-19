@@ -29,11 +29,35 @@ serve(async (req) => {
       return json({ authorizationUrl: authorizationUrl.toString(), available: true, configured: true });
     }
     if (!configured) return new Response("Google Calendar is not configured.", { status: 503, headers: { "Content-Type": "text/plain" } });
-    const admin = createClient(supabaseUrl!, serviceRoleKey!); const requestUrl = new URL(req.url); const code = requestUrl.searchParams.get("code"); const state = requestUrl.searchParams.get("state"); const googleError = requestUrl.searchParams.get("error");
-    if (googleError) return new Response("Google Calendar authorization was cancelled.", { status: 400, headers: { "Content-Type": "text/plain" } }); if (!code || !state) return new Response("Missing OAuth code or state.", { status: 400, headers: { "Content-Type": "text/plain" } });
-    const { data: connection, error: lookupError } = await admin.from("google_calendar_connections").select("user_id, oauth_state, oauth_state_expires_at, oauth_redirect_uri").eq("oauth_state", state).maybeSingle(); if (lookupError) throw lookupError; if (!connection || connection.oauth_state !== state) return new Response("Invalid OAuth state.", { status: 400, headers: { "Content-Type": "text/plain" } }); if (!connection.oauth_state_expires_at || new Date(connection.oauth_state_expires_at).getTime() <= Date.now()) return new Response("OAuth state expired. Please try again.", { status: 400, headers: { "Content-Type": "text/plain" } });
-    const tokenResponse = await fetch(GOOGLE_TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: clientId!, client_secret: clientSecret!, redirect_uri: googleRedirectUri!, grant_type: "authorization_code" }) }); const tokenData = await tokenResponse.json(); if (!tokenResponse.ok) return new Response("Google token exchange failed.", { status: 400, headers: { "Content-Type": "text/plain" } });
-    const expiresAt = tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null; const { error: saveError } = await admin.from("google_calendar_connections").upsert({ user_id: connection.user_id, access_token: tokenData.access_token, refresh_token: tokenData.refresh_token ?? null, expires_at: expiresAt, scope: tokenData.scope ?? CALENDAR_SCOPE, oauth_state: null, oauth_state_expires_at: null, oauth_redirect_uri: null, updated_at: new Date().toISOString() }, { onConflict: "user_id" }); if (saveError) throw saveError;
-    return Response.redirect(redirectUrl(connection.oauth_redirect_uri || NATIVE_REDIRECT, { success: "true" }), 302);
+    const admin = createClient(supabaseUrl!, serviceRoleKey!);
+    const requestUrl = new URL(req.url);
+    const code = requestUrl.searchParams.get("code");
+    const state = requestUrl.searchParams.get("state");
+    const googleError = requestUrl.searchParams.get("error");
+    if (!state) return new Response("Missing OAuth state.", { status: 400, headers: { "Content-Type": "text/plain" } });
+    const { data: connection, error: lookupError } = await admin.from("google_calendar_connections").select("user_id, oauth_state, oauth_state_expires_at, oauth_redirect_uri, refresh_token").eq("oauth_state", state).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!connection || connection.oauth_state !== state) return new Response("Invalid or expired OAuth state. Return to VOW and try connecting again.", { status: 400, headers: { "Content-Type": "text/plain" } });
+    const callbackUri = connection.oauth_redirect_uri || NATIVE_REDIRECT;
+    const finishWithError = async (message: string) => {
+      const { error: clearError } = await admin.from("google_calendar_connections").update({ oauth_state: null, oauth_state_expires_at: null, oauth_redirect_uri: null, updated_at: new Date().toISOString() }).eq("user_id", connection.user_id).eq("oauth_state", state);
+      if (clearError) console.error("[VOW Calendar OAuth] Failed to clear unsuccessful OAuth state:", clearError.message);
+      console.warn("[VOW Calendar OAuth] Authorization did not complete:", message);
+      return Response.redirect(redirectUrl(callbackUri, { success: "false", error: message }), 302);
+    };
+    if (googleError) return await finishWithError(googleError === "access_denied" ? "Google Calendar access was cancelled." : "Google Calendar authorization was denied.");
+    if (!code) return await finishWithError("Google did not return an authorization code. Please try again.");
+    if (!connection.oauth_state_expires_at || new Date(connection.oauth_state_expires_at).getTime() <= Date.now()) return await finishWithError("Google Calendar connection timed out. Please try again.");
+    const tokenResponse = await fetch(GOOGLE_TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: clientId!, client_secret: clientSecret!, redirect_uri: googleRedirectUri!, grant_type: "authorization_code" }) });
+    const tokenData = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      console.error("[VOW Calendar OAuth] Token exchange failed:", tokenResponse.status, tokenData.error || "unknown_error");
+      return await finishWithError("Google token exchange failed. Please reconnect Google Calendar.");
+    }
+    const expiresAt = tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null;
+    const { error: saveError } = await admin.from("google_calendar_connections").upsert({ user_id: connection.user_id, access_token: tokenData.access_token, refresh_token: tokenData.refresh_token ?? connection.refresh_token ?? null, expires_at: expiresAt, scope: tokenData.scope ?? CALENDAR_SCOPE, oauth_state: null, oauth_state_expires_at: null, oauth_redirect_uri: null, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    if (saveError) throw saveError;
+    console.info("[VOW Calendar OAuth] Token exchange and connection save completed.");
+    return Response.redirect(redirectUrl(callbackUri, { success: "true" }), 302);
   } catch (error) { console.error("[VOW Calendar OAuth]", error); return json({ error: "Google Calendar connection failed. Please try again.", available: false }, 500); }
 });
