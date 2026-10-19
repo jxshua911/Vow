@@ -35,7 +35,6 @@ export function NativeCalendarSync() {
     setDismissed(localStorage.getItem(DISMISSED_KEY_PREFIX + userId) === 'true');
     setDismissedUserId(userId);
   }, [userId]);
-  const skipNextEffectSync = useRef(false);
 
   const dismissAfterSuccess = useCallback((text: string) => {
     setMessage(text);
@@ -51,10 +50,6 @@ export function NativeCalendarSync() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !userId || !enabled) return;
-    if (skipNextEffectSync.current) {
-      skipNextEffectSync.current = false;
-      return;
-    }
     let cancelled = false;
     async function sync() {
       const { data, error } = await supabase
@@ -98,25 +93,11 @@ export function NativeCalendarSync() {
       if (!enabled) {
         const granted = await requestNativeCalendarAccess();
         if (!granted) throw new Error('Calendar access was not granted.');
-        const { data, error } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('status', 'scheduled')
-          .gte('scheduled_at', new Date().toISOString())
-          .order('scheduled_at', { ascending: true });
-        if (error) throw error;
         localStorage.setItem(ENABLE_KEY, 'true');
         localStorage.removeItem(DISMISSED_KEY_PREFIX + userId);
-        skipNextEffectSync.current = true;
         setHiding(false);
         setEnabled(true);
-        if (!data?.length) {
-          setMessage('No dated sessions to sync yet. Add a session time in Goals, then return here to sync.');
-          return;
-        }
-        const created = await syncSessionsToNativeCalendar(data as Session[], accountEmail);
-        dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.');
+        setMessage('Refreshing your phone calendar…');
       } else {
         localStorage.setItem(ENABLE_KEY, 'false');
         setEnabled(false);
