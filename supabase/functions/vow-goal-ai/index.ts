@@ -422,11 +422,30 @@ function sleep(ms: number) {
 }
 
 function retryDelayMs(response: Response, _attempt: number) {
-  const raw = response.headers.get("retry-after");
-  if (!raw) return Number.POSITIVE_INFINITY;
-  const seconds = Number(raw);
-  if (!Number.isFinite(seconds) || seconds < 0) return Number.POSITIVE_INFINITY;
-  return Math.min(10000, Math.max(500, Math.round(seconds * 1000)));
+  const parseDelay = (raw: string | null): number | null => {
+    if (!raw) return null;
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+    const absoluteDate = Date.parse(raw);
+    if (Number.isFinite(absoluteDate)) return Math.max(0, absoluteDate - Date.now());
+    const duration = /^(\\d+(?:\\.\\d+)?)\\s*(ms|s|m)$/i.exec(raw.trim());
+    if (!duration) return null;
+    const amount = Number(duration[1]);
+    const unit = duration[2].toLowerCase();
+    return amount * (unit === "ms" ? 1 : unit === "m" ? 60000 : 1000);
+  };
+
+  // Providers can return Retry-After as seconds or an HTTP date. Groq also
+  // exposes token/request reset windows; honor the longest supplied window
+  // before retrying so we do not immediately burn another request.
+  const delays = [
+    response.headers.get("retry-after"),
+    response.headers.get("x-ratelimit-reset-tokens"),
+    response.headers.get("x-ratelimit-reset-requests"),
+    response.headers.get("mistral-ratelimit-reset"),
+  ].map(parseDelay).filter((value): value is number => value !== null);
+  if (!delays.length) return Number.POSITIVE_INFINITY;
+  return Math.min(10000, Math.max(0, Math.round(Math.max(...delays))));
 }
 
 async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean) {
