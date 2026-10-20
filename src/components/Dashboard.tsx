@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import type { Goal, Session } from '@/types/database';
 import { FREE_PLANNING_ACTION_LIMIT, getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { formatTime, formatRelative, dayName } from '@/lib/dates';
-import { isSessionInCurrentPlanWeek } from '@/lib/dashboardSessions';
+import { isFlexibleUpcomingSession, isSessionInCurrentPlanWeek } from '@/lib/dashboardSessions';
 import { PageHeader } from './AppShell';
 import type { View } from './AppShell';
 
@@ -63,11 +63,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const now = new Date();
   const planningLimit = Math.min(entitlement?.planning_limit ?? FREE_PLANNING_ACTION_LIMIT, FREE_PLANNING_ACTION_LIMIT);
   const timedUpcoming = sessions.filter((s) => Boolean(s.scheduled_at) && new Date(s.scheduled_at as string) >= now && s.status === 'scheduled');
-  const flexibleUpcoming = sessions.filter((s) => {
-    if (s.scheduled_at || s.status !== 'scheduled' || !('day_of_week' in s) || !(s as Session & { day_of_week?: string | null }).day_of_week) return false;
-    const goal = goals.find((g) => g.id === s.goal_id);
-    return Boolean(goal && (goal.status === 'active' || goal.status === 'locked'));
-  });
+  const flexibleUpcoming = sessions.filter((s) => isFlexibleUpcomingSession(s as Session & { day_of_week?: string | null }, goals));
   const allUpcoming = [...timedUpcoming, ...flexibleUpcoming];
   const upcoming = allUpcoming.slice(0, 5);
   if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
