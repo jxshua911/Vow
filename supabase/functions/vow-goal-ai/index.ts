@@ -428,7 +428,7 @@ function retryDelayMs(response: Response, _attempt: number) {
     if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
     const absoluteDate = Date.parse(raw);
     if (Number.isFinite(absoluteDate)) return Math.max(0, absoluteDate - Date.now());
-    const duration = /^(\\d+(?:\\.\\d+)?)\\s*(ms|s|m)$/i.exec(raw.trim());
+    const duration = /^(\d+(?:\.\d+)?)\s*(ms|s|m)$/i.exec(raw.trim());
     if (!duration) return null;
     const amount = Number(duration[1]);
     const unit = duration[2].toLowerCase();
