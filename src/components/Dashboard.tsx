@@ -62,7 +62,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const completedSessions = sessions.filter((s) => s.status === 'completed').length;
   const now = new Date();
   const planningLimit = Math.min(entitlement?.planning_limit ?? FREE_PLANNING_ACTION_LIMIT, FREE_PLANNING_ACTION_LIMIT);
-  const allUpcoming = sessions.filter((s) => Boolean(s.scheduled_at) && new Date(s.scheduled_at as string) >= now && s.status === 'scheduled');
+  const timedUpcoming = sessions.filter((s) => Boolean(s.scheduled_at) && new Date(s.scheduled_at as string) >= now && s.status === 'scheduled');
+  const flexibleUpcoming = sessions.filter((s) => {
+    if (s.scheduled_at || s.status !== 'scheduled' || !('day_of_week' in s) || !(s as Session & { day_of_week?: string | null }).day_of_week) return false;
+    const goal = goals.find((g) => g.id === s.goal_id);
+    return Boolean(goal && (goal.status === 'active' || goal.status === 'locked'));
+  });
+  const allUpcoming = [...timedUpcoming, ...flexibleUpcoming];
   const upcoming = allUpcoming.slice(0, 5);
   if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
 
@@ -73,7 +79,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     <div className="grid min-w-0 md:grid-cols-2 gap-6 md:gap-12">
       <div>
         <h2 className="vow-label mb-4">Upcoming sessions</h2>
-        {upcoming.length === 0 ? <div className="border border-vow-border p-8 text-center"><div className="w-7 h-7 mx-auto mb-3 border border-vow-border rounded-full" /><p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity">Schedule sessions</button></div> : <div className="space-y-px border border-vow-border">{upcoming.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); return <div key={s.id} className="bg-vow-bg px-4 py-3 flex items-center gap-3"><div className="w-2 h-2 rounded-full border border-vow-muted flex-shrink-0" /><div className="flex-1 min-w-0"><div className="text-sm text-vow-ink truncate">{s.title}</div><div className="text-xs text-vow-muted">{goal?.title || ''}</div></div><div className="text-right flex-shrink-0"><div className="text-xs text-vow-ink font-medium">{formatRelative(s.scheduled_at)}</div><div className="text-xs text-vow-muted">{formatTime(s.scheduled_at)}</div></div></div>; })}</div>}
+        {upcoming.length === 0 ? <div className="border border-vow-border p-8 text-center"><div className="w-7 h-7 mx-auto mb-3 border border-vow-border rounded-full" /><p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity">Schedule sessions</button></div> : <div className="space-y-px border border-vow-border">{upcoming.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); const day = (s as Session & { day_of_week?: string | null }).day_of_week; return <div key={s.id} className="bg-vow-bg px-4 py-3 flex items-center gap-3"><div className="w-2 h-2 rounded-full border border-vow-muted flex-shrink-0" /><div className="flex-1 min-w-0"><div className="text-sm text-vow-ink truncate">{s.title}</div><div className="text-xs text-vow-muted">{goal?.title || ''}</div></div><div className="text-right flex-shrink-0"><div className="text-xs text-vow-ink font-medium">{s.scheduled_at ? formatRelative(s.scheduled_at) : day || 'Flexible schedule'}</div><div className="text-xs text-vow-muted">{s.scheduled_at ? formatTime(s.scheduled_at) : 'No fixed time'}</div></div></div>; })}</div>}
       </div>
       <div>
         <h2 className="vow-label mb-4">Active goals</h2>
