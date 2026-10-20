@@ -14,7 +14,7 @@ import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadil
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
 import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
-import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, reuseClarificationAnswers } from '@/lib/clarification';
+import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '@/lib/clarification';
 
 type Clarification = {
   questions: string[];
@@ -768,16 +768,21 @@ export function GoalPlanner({
       }
       if (!Array.isArray(next.questions) || next.questions.length === 0)
         throw new Error('VOW AI returned no follow-up questions.');
+      const filteredQuestions = removeQuestionsAnsweredByPlanner(next.questions);
       const goalDomain = { category, goal_type: goalType };
-      setDomain(goalDomain);
+      const questions = filteredQuestions.length ? filteredQuestions : [
+        'What is your current starting point for this goal?',
+        'What measurable result would show meaningful progress toward this goal?',
+      ];
       const goalId = await ensureDraft(goalDomain);
-      setClarification(next);
+      setDomain(goalDomain);
+      setClarification({ ...next, questions });
       setIsPlanFollowup(false);
-      setAnswers(reuseClarificationAnswers(next.questions, answerHistory));
+      setAnswers(reuseClarificationAnswers(questions, answerHistory));
       const { error: ae } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
       if (ae) throw ae;
       const { error: ie } = await supabase.from('goal_clarification_answers').insert(
-        next.questions.map((question, index) => ({
+        questions.map((question, index) => ({
           goal_id: goalId,
           user_id: userId,
           question,
