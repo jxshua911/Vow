@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, reuseClarificationAnswers } from '../src/lib/clarification.ts';
+import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '../src/lib/clarification.ts';
 
 test('reuses an answer when the same question returns in a later round', () => {
   assert.deepEqual(reuseClarificationAnswers(['What is your current running level?'], {
@@ -32,4 +32,20 @@ test('remembering answers ignores skipped and blank responses', () => {
     ['__VOW_SKIP_USE_ASSUMPTION__', '', 'Beginner'],
   );
   assert.deepEqual(remembered, { 'What is your goal?': 'Finish a 5K', 'What is your experience?': 'Beginner' });
+});
+
+test('filters schedule and duration questions already answered in the planner', () => {
+  assert.deepEqual(removeQuestionsAnsweredByPlanner([
+    'How many days per week can you dedicate to training?',
+    'What is your current experience with Muay Thai?',
+    'What duration are you committing to?',
+  ]), ['What is your current experience with Muay Thai?']);
+});
+
+test('keeps useful questions and removes duplicate wording', () => {
+  assert.deepEqual(removeQuestionsAnsweredByPlanner([
+    'What is your current starting point?',
+    'What is your current starting point?',
+    'What outcome would show progress?',
+  ]), ['What is your current starting point?', 'What outcome would show progress?']);
 });

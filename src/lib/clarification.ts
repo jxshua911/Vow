@@ -1,5 +1,29 @@
 export const CLARIFICATION_SKIP = '__VOW_SKIP_USE_ASSUMPTION__';
 
+/** Remove follow-up questions whose answers are already explicit in the planner form. */
+export function removeQuestionsAnsweredByPlanner(questions: string[]): string[] {
+  const knownInForm = [
+    /\b(?:what|which)\s+days\b/i,
+    /\b(?:how many|number of)\s+(?:days|sessions)\b.{0,45}\b(?:week|weekly|available|commit|schedule|train|practice|study)\b/i,
+    /\b(?:available|availability)\b.{0,35}\b(?:days|schedule|sessions per week)\b/i,
+    /\b(?:how long|what duration|duration of|number of weeks|timeframe|time frame)\b.{0,45}\b(?:commit\w*|plan|goal|week|long)\b/i,
+    /\b(?:what|which)\s+time\b.{0,35}\b(?:session|train|practice|study|workout)\b/i,
+    /\b(?:schedule|scheduling)\b.{0,35}\b(?:days|times|availability)\b/i,
+  ];
+  const seen = new Set<string>();
+  return questions
+    .filter((question) => typeof question === 'string' && question.trim())
+    .map((question) => question.trim())
+    .filter((question) => !knownInForm.some((pattern) => pattern.test(question)))
+    .filter((question) => {
+      const key = normalizeClarificationQuestion(question);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 3);
+}
+
 export function normalizeClarificationQuestion(question: string): string {
   const synonyms: Record<string, string> = {
     currently: 'current',

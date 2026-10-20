@@ -21,6 +21,16 @@ function currentPlanWeek(startDate: string, now: Date): number {
   return elapsedDays < 0 ? -1 : Math.floor(elapsedDays / 7) + 1;
 }
 
+/** A flexible-day session is upcoming when it belongs to a currently active goal. */
+export function isFlexibleUpcomingSession(
+  session: PlannedSession,
+  goals: PlannedGoal[],
+): boolean {
+  if (session.scheduled_at || session.status !== 'scheduled' || !session.day_of_week?.trim()) return false;
+  const goal = goals.find((candidate) => candidate.id === session.goal_id);
+  return Boolean(goal && (goal.status === 'active' || goal.status === 'locked'));
+}
+
 /** Count date-less sessions when their active plan assigns them to this week. */
 export function isSessionInCurrentPlanWeek(
   session: PlannedSession,

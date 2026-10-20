@@ -2,18 +2,21 @@ import { useEffect, useState } from 'react';
 import { subscribeRealtimeInspector, type RealtimeInspectorEvent } from '@/lib/realtimeInspector';
 
 export function RealtimeInspector() {
+  const enabled = import.meta.env.DEV;
   const [events, setEvents] = useState<RealtimeInspectorEvent[]>([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!enabled) return;
     const unsubscribe = subscribeRealtimeInspector((event) => {
       setEvents((current) => [event, ...current].slice(0, 100));
     });
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [enabled]);
 
+  if (!enabled) return null;
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="fixed right-4 bottom-20 z-50 border border-vow-border bg-vow-bg px-3 py-2 text-xs text-vow-muted shadow-sm">Realtime Inspector</button>;
 
   return <aside className="fixed right-4 bottom-20 z-50 w-[min(92vw,420px)] max-h-[70vh] overflow-hidden border border-vow-border bg-vow-bg shadow-xl">

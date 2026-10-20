@@ -14,7 +14,7 @@ import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadil
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
 import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
-import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, reuseClarificationAnswers } from '@/lib/clarification';
+import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '@/lib/clarification';
 
 type Clarification = {
   questions: string[];
@@ -390,6 +390,7 @@ export function GoalPlanner({
   const [draftReady, setDraftReady] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [creationSuccess, setCreationSuccess] = useState(false);
   const [error, setError] = useState('');
   const [resourceError, setResourceError] = useState('');
   const [calendarConflicts, setCalendarConflicts] = useState<string[]>([]);
@@ -767,16 +768,21 @@ export function GoalPlanner({
       }
       if (!Array.isArray(next.questions) || next.questions.length === 0)
         throw new Error('VOW AI returned no follow-up questions.');
+      const filteredQuestions = removeQuestionsAnsweredByPlanner(next.questions);
       const goalDomain = { category, goal_type: goalType };
-      setDomain(goalDomain);
+      const questions = filteredQuestions.length ? filteredQuestions : [
+        'What is your current starting point for this goal?',
+        'What measurable result would show meaningful progress toward this goal?',
+      ];
       const goalId = await ensureDraft(goalDomain);
-      setClarification(next);
+      setDomain(goalDomain);
+      setClarification({ ...next, questions });
       setIsPlanFollowup(false);
-      setAnswers(reuseClarificationAnswers(next.questions, answerHistory));
+      setAnswers(reuseClarificationAnswers(questions, answerHistory));
       const { error: ae } = await supabase.from('goal_clarification_answers').delete().eq('goal_id', goalId);
       if (ae) throw ae;
       const { error: ie } = await supabase.from('goal_clarification_answers').insert(
-        next.questions.map((question, index) => ({
+        questions.map((question, index) => ({
           goal_id: goalId,
           user_id: userId,
           question,
@@ -1130,7 +1136,9 @@ export function GoalPlanner({
           }
         }
       }
-      onCreated();
+      // Show success only after all goal/session writes have completed.
+      setCreationSuccess(true);
+      window.setTimeout(() => onCreated(), 700);
     } catch (err) {
       console.error('[VOW] Goal creation failed:', err);
       setError(userFacingError(err, 'VOW could not finish creating your goal. Please try again.'));
@@ -1161,10 +1169,29 @@ export function GoalPlanner({
       </div>
     );
 
+  // Keep stage changes deliberate instead of abruptly swapping the form.
+  if (creationSuccess) return (
+    <div className="vow-goal-stage max-w-xl py-12 text-center" role="status" aria-live="polite">
+      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-vow-border text-vow-ink" aria-hidden="true">
+        <span className="text-2xl">✓</span>
+      </div>
+      <PageHeader title="Goal created" subtitle="Your goal and sessions have been saved. Getting your dashboard ready…" />
+      <div className="vow-loading-dots mx-auto mt-6" aria-hidden="true"><span /><span /><span /></div>
+    </div>
+  );
+
+  if (planning && !clarification && !plan) return (
+    <div className="vow-goal-stage max-w-xl py-12 text-center" role="status" aria-live="polite">
+      <PageHeader title="Preparing your questions" subtitle="VOW is checking your goal and building useful follow-up questions." />
+      <div className="vow-loading-dots mx-auto mt-6" aria-hidden="true"><span /><span /><span /></div>
+      <p className="text-xs text-vow-muted mt-5">This can take a little moment. Keep this screen open.</p>
+    </div>
+  );
+
   // ── Step 3 — Plan review ──────────────────────────────────────────────────────
   if (plan)
     return (
-      <div>
+      <div className="vow-goal-stage">
         <button onClick={() => setPlan(null)} className="text-sm text-vow-muted hover:text-vow-ink mb-6">
           ← Adjust answers
         </button>
@@ -1312,7 +1339,7 @@ export function GoalPlanner({
   // ── Step 2 — Clarification answers ────────────────────────────────────────────
   if (clarification)
     return (
-      <div>
+      <div className="vow-goal-stage">
         <button onClick={() => setClarification(null)} className="text-sm text-vow-muted hover:text-vow-ink mb-6">
           ← Adjust goal
         </button>
@@ -1378,7 +1405,7 @@ export function GoalPlanner({
 
   // ── Step 0 / 1 — Goal entry ───────────────────────────────────────────────────
   return (
-    <div>
+    <div className="vow-goal-stage">
       <PageHeader
         title="New goal"
         subtitle="Tell VOW what you want to accomplish. It will ask the right questions before building your plan."

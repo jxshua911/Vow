@@ -14,6 +14,9 @@ export function NativeCalendarSync() {
   const accountEmail = session?.user.email;
   const [enabled, setEnabled] = useState(() => localStorage.getItem(ENABLE_KEY) === 'true');
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const [syncFailed, setSyncFailed] = useState(false);
   const [message, setMessage] = useState('');
   const [dismissed, setDismissed] = useState<boolean | null>(null);
   const [dismissedUserId, setDismissedUserId] = useState<string | null>(null);
@@ -60,6 +63,8 @@ export function NativeCalendarSync() {
     if (!Capacitor.isNativePlatform() || !userId || !enabled) return;
     let cancelled = false;
     async function sync() {
+      setSyncing(true);
+      setSyncFailed(false);
       const { data, error } = await supabase
         .from('sessions')
         .select('*')
@@ -70,26 +75,26 @@ export function NativeCalendarSync() {
       if (cancelled) return;
       if (error) {
         console.error('[VOW] Native calendar sync session lookup failed:', error);
-        if (!cancelled) setMessage('VOW could not refresh your phone calendar. Please try again.');
+        if (!cancelled) { setMessage('VOW could not refresh your phone calendar. Please try again.'); setSyncFailed(true); setSyncing(false); }
         return;
       }
       if (!data?.length) {
-        if (!cancelled) dismissAfterSuccess('Phone calendar sync is enabled. Add a session time in Goals to sync it.');
+        if (!cancelled) { setSyncing(false); dismissAfterSuccess('Phone calendar sync is enabled. Add a session time in Goals to sync it.'); }
         return;
       }
       try {
         const created = await syncSessionsToNativeCalendar(data as Session[], accountEmail);
-        if (!cancelled) dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.');
+        if (!cancelled) { setSyncing(false); dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.'); }
       } catch (error) {
         console.error('[VOW] Native calendar sync failed:', error);
-        if (!cancelled) setMessage(error instanceof Error ? error.message : 'VOW could not refresh your phone calendar.');
+        if (!cancelled) { setMessage(error instanceof Error ? error.message : 'VOW could not refresh your phone calendar.'); setSyncFailed(true); setSyncing(false); }
       }
     }
     const refresh = () => { if (document.visibilityState === 'visible') void sync(); };
     window.addEventListener('focus', refresh);
     void sync();
     return () => { cancelled = true; window.removeEventListener('focus', refresh); };
-  }, [enabled, userId, accountEmail, dismissAfterSuccess]);
+  }, [enabled, userId, accountEmail, dismissAfterSuccess, retryKey]);
 
   if (!Capacitor.isNativePlatform() || !session || !userId || dismissedUserId !== userId || dismissed !== false) return null;
 
@@ -118,5 +123,5 @@ export function NativeCalendarSync() {
     }
   }
 
-  return <div aria-hidden={hiding} className={`border border-vow-border p-5 mb-8 vow-calendar-sync-panel${hiding ? ' vow-calendar-sync-panel-hiding pointer-events-none' : ''}`}><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-medium text-vow-ink">Phone calendar sync</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">Adds VOW sessions to a writable calendar on your phone.</p>{message && <p className="text-xs text-vow-ink mt-2">{message}</p>}</div><div className="flex items-center gap-3"><button onClick={toggle} disabled={busy || hiding} className="vow-btn-primary disabled:opacity-50">{busy ? 'Updating…' : enabled ? 'Phone calendar sync on' : 'Sync with phone calendar'}</button><button type="button" aria-label="Dismiss phone calendar sync panel" title="Dismiss" disabled={hiding} onClick={() => dismissAfterSuccess('Phone calendar sync settings dismissed.')} className="w-10 h-10 border border-vow-border text-vow-muted disabled:opacity-50">×</button></div></div></div>;
+  return <div aria-hidden={hiding} className={`border border-vow-border p-5 mb-8 vow-calendar-sync-panel${hiding ? ' vow-calendar-sync-panel-hiding pointer-events-none' : ''}`}><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-medium text-vow-ink">Phone calendar sync</p><p className="text-xs text-vow-muted mt-1 leading-relaxed">Adds VOW sessions to a writable calendar on your phone.</p>{message && <p className="text-xs text-vow-ink mt-2">{message}</p>}</div><div className="flex items-center gap-3">{syncFailed && enabled && <button type="button" onClick={() => setRetryKey((value) => value + 1)} disabled={syncing || busy || hiding} className="text-xs text-vow-ink underline underline-offset-4 disabled:opacity-50">{syncing ? 'Refreshing…' : 'Retry sync'}</button>}<button onClick={toggle} disabled={busy || syncing || hiding} className="vow-btn-primary disabled:opacity-50">{busy ? 'Updating…' : syncing ? 'Syncing…' : enabled ? 'Phone calendar sync on' : 'Sync with phone calendar'}</button><button type="button" aria-label="Dismiss phone calendar sync panel" title="Dismiss" disabled={hiding} onClick={() => dismissAfterSuccess('Phone calendar sync settings dismissed.')} className="w-10 h-10 border border-vow-border text-vow-muted disabled:opacity-50">×</button></div></div></div>;
 }

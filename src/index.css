@@ -71,7 +71,11 @@
   .vow-loading-dots span:nth-child(3) { animation-delay: 240ms; }
   .vow-calendar-sync-panel { max-height: 300px; opacity: 1; transform: translateY(0); overflow: hidden; transition: max-height 460ms ease, opacity 380ms ease, transform 460ms ease, margin-bottom 460ms ease, padding-top 460ms ease, padding-bottom 460ms ease, border-color 460ms ease; }
   .vow-calendar-sync-panel-hiding { max-height: 0; opacity: 0; transform: translateY(-8px); margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-color: transparent; }
+  .vow-goal-stage { animation: vow-goal-stage-in 260ms cubic-bezier(.2,.7,.2,1) both; }
 }
+
+@keyframes vow-goal-stage-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .vow-goal-stage, .vow-loading-dots span { animation: none; } .vow-calendar-sync-panel { transition: none; } }
 
 @keyframes vow-splash-in { from { opacity: 0; transform: scale(1.025) translateY(4px); } 60% { opacity: 1; } to { opacity: 1; transform: scale(1) translateY(0); } }
 @keyframes vow-theme-splash-in { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }

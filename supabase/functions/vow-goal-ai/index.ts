@@ -295,12 +295,12 @@ async function searchKnowledge(query: string) {
       clientDb.rpc("match_vow_knowledge_keyword", {
         query_text: q,
         domain_filter: null,
-        match_count: 12,
+        match_count: 8,
       }),
       clientDb.rpc("match_vow_goal_concepts", {
         query_text: q,
         domain_filter: null,
-        match_count: 12,
+        match_count: 8,
       }),
     ]);
 
@@ -311,20 +311,20 @@ async function searchKnowledge(query: string) {
       console.warn("goal concept search", conceptResult.error.message);
     }
 
-    const original = (knowledgeResult.data || []).slice(0, 12).map((x: any) => ({
+    const original = (knowledgeResult.data || []).slice(0, 8).map((x: any) => ({
       domain: str(x.domain, 80),
       topic: str(x.topic, 120),
       title: str(x.title, 180),
-      content: str(x.content, 700),
-      principles: Array.isArray(x.principles) ? x.principles.slice(0, 6) : [],
+      content: str(x.content, 450),
+      principles: Array.isArray(x.principles) ? x.principles.slice(0, 4) : [],
       recommended_actions: Array.isArray(x.recommended_actions)
-        ? x.recommended_actions.slice(0, 6)
+        ? x.recommended_actions.slice(0, 4)
         : [],
-      metrics: Array.isArray(x.metrics) ? x.metrics.slice(0, 6) : [],
-      cautions: Array.isArray(x.cautions) ? x.cautions.slice(0, 6) : [],
+      metrics: Array.isArray(x.metrics) ? x.metrics.slice(0, 4) : [],
+      cautions: Array.isArray(x.cautions) ? x.cautions.slice(0, 4) : [],
       source_url: str(x.source_url, 500),
     }));
-    const concepts = (conceptResult.data || []).slice(0, 12).map((x: any) => ({
+    const concepts = (conceptResult.data || []).slice(0, 8).map((x: any) => ({
       domain: str(x.domain, 80),
       topic: str(x.topic, 120),
       title: str(x.concept_name, 180),
@@ -334,7 +334,7 @@ async function searchKnowledge(query: string) {
       metrics: [],
       cautions: [],
       source_url: "",
-      aliases: Array.isArray(x.aliases) ? x.aliases.slice(0, 8) : [],
+      aliases: Array.isArray(x.aliases) ? x.aliases.slice(0, 5) : [],
       concept_type: str(x.concept_type, 80),
     }));
 
@@ -346,7 +346,7 @@ async function searchKnowledge(query: string) {
         seen.add(key);
         return true;
       })
-      .slice(0, 18);
+      .slice(0, 10);
   } catch (e) {
     console.warn("knowledge search failed", e);
     return [];
@@ -422,11 +422,30 @@ function sleep(ms: number) {
 }
 
 function retryDelayMs(response: Response, _attempt: number) {
-  const raw = response.headers.get("retry-after");
-  if (!raw) return Number.POSITIVE_INFINITY;
-  const seconds = Number(raw);
-  if (!Number.isFinite(seconds) || seconds < 0) return Number.POSITIVE_INFINITY;
-  return Math.min(10000, Math.max(500, Math.round(seconds * 1000)));
+  const parseDelay = (raw: string | null): number | null => {
+    if (!raw) return null;
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+    const absoluteDate = Date.parse(raw);
+    if (Number.isFinite(absoluteDate)) return Math.max(0, absoluteDate - Date.now());
+    const duration = /^(\d+(?:\.\d+)?)\s*(ms|s|m)$/i.exec(raw.trim());
+    if (!duration) return null;
+    const amount = Number(duration[1]);
+    const unit = duration[2].toLowerCase();
+    return amount * (unit === "ms" ? 1 : unit === "m" ? 60000 : 1000);
+  };
+
+  // Providers can return Retry-After as seconds or an HTTP date. Groq also
+  // exposes token/request reset windows; honor the longest supplied window
+  // before retrying so we do not immediately burn another request.
+  const delays = [
+    response.headers.get("retry-after"),
+    response.headers.get("x-ratelimit-reset-tokens"),
+    response.headers.get("x-ratelimit-reset-requests"),
+    response.headers.get("mistral-ratelimit-reset"),
+  ].map(parseDelay).filter((value): value is number => value !== null);
+  if (!delays.length) return Number.POSITIVE_INFINITY;
+  return Math.min(10000, Math.max(0, Math.round(Math.max(...delays))));
 }
 
 async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean) {
@@ -1381,8 +1400,18 @@ Deno.serve(async (req) => {
       answers,
       references: refs,
       preferred_language: preferredLanguage,
-      previousGoals: userGoals || [],
-      journalEntries: userJournal || [],
+      // Keep personal context concise so provider TPM limits are not consumed
+      // by stale history or oversized knowledge entries.
+      previousGoals: (userGoals || []).slice(0, 5).map((item: any) => ({
+        title: str(item?.title, 180),
+        outcome: str(item?.outcome, 240),
+        why_it_matters: str(item?.why_it_matters, 240),
+      })),
+      journalEntries: (userJournal || []).slice(0, 5).map((item: any) => ({
+        body: str(item?.body, 600),
+        created_at: item?.created_at,
+        linked_goal_id: item?.linked_goal_id,
+      })),
       knowledge,
       research,
     };
