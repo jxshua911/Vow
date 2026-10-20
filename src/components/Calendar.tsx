@@ -92,8 +92,9 @@ export function CalendarPage() {
       }
       setConnectingGoogle(false);
       void checkGoogleConnection().then((active) => {
+        // checkGoogleConnection owns the specific failure state (including
+        // missing scopes); do not replace it with a generic callback message.
         if (active) setError(null);
-        else setError('Google returned to VOW, but the connection was not saved. Please connect again.');
       });
     } catch {
       setConnectingGoogle(false);
@@ -113,8 +114,9 @@ export function CalendarPage() {
     const connected = () => {
       setConnectingGoogle(false);
       void checkGoogleConnection().then((active) => {
+        // checkGoogleConnection owns the specific failure state (including
+        // missing scopes); do not replace it with a generic callback message.
         if (active) setError(null);
-        else setError('Google returned to VOW, but the connection was not saved. Please connect again.');
       });
     };
     const failed = (event: Event) => { setConnectingGoogle(false); setError((event as CustomEvent<string>).detail || 'Google Calendar connection failed.'); };
