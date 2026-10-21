@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
       currency: typeof object?.currency === "string" ? object.currency : null,
       status: typeof object?.status === "string" ? object.status : null,
       metadata: { customer_id: customerId, subscription_id: subscriptionId },
-    }, { onConflict: "provider_event_id" });
+    }, { onConflict: "provider,provider_event_id" });
     if (paymentEventError) throw new Error("PAYMENT_EVENT_LEDGER_WRITE_FAILED");
 
     return json({ received: true });
