@@ -30,7 +30,7 @@ import { LanguageContext } from '@/lib/i18n';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { VOW_BUILD_TIER } from '@/lib/buildTier';
 
-const SPLASH_MIN_MS = 1400;
+const SPLASH_MIN_MS = 2500;
 const SPLASH_FADE_OUT_MS = 420;
 
 function SplashOverlay({ fadingOut }: { fadingOut: boolean }) { const { theme } = useTheme(); return <div className={`vow-splash-overlay${fadingOut ? ' vow-splash-fading' : ''}`} data-theme={theme} aria-hidden={fadingOut}><BrandLogo className="vow-splash-logo" /></div>; }
@@ -86,8 +86,10 @@ function AppContent() {
   useEffect(() => {
     if (!splashMounted) return;
     const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS);
-    const timeout = window.setTimeout(() => { setSplashFadingOut(true); setSplashMounted(false); }, 6000);
-    return () => { window.clearTimeout(timer); window.clearTimeout(timeout); };
+    // Never dismiss the branded splash on a timeout while the app is still
+    // booting: doing so exposed the blank AppLoading screen on slower devices.
+    // The splash exits only when the initial app/account state is ready.
+    return () => { window.clearTimeout(timer); };
   }, [splashMounted]);
   useEffect(() => {
     const listener = (event: Event) => {
