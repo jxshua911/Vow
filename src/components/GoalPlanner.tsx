@@ -84,7 +84,7 @@ type Plan = {
   success_metric: string;
   baseline: string;
   assumptions: string[];
-  milestones: Array<{ title: string; description: string; week: number }>;
+  milestones: Array<{ title: string; description: string; week: number; day_of_week?: string | null }>;
   schedule: PlanItem[];
   progression: string;
   checkpoints: string[];
@@ -147,6 +147,10 @@ function defaultDateForDay(day: string): string {
 }
 function deadlineFor(start: Date, weeks: number) {
   return toDateString(addDays(start, weeks * 7 - 1));
+}
+function milestoneDeadlineFor(start: Date, week: number, dayOfWeek?: string | null) {
+  const dayIndex = dayOfWeek ? DAYS.indexOf(dayOfWeek) : -1;
+  return toDateString(addDays(start, (Math.max(1, week) - 1) * 7 + (dayIndex >= 0 ? dayIndex : 6)));
 }
 function durationLabel(w: number) {
   const option = DURATION_OPTIONS.find(x => x.weeks === w);
@@ -212,6 +216,7 @@ function normalizePlan(
       title: String(m?.title ?? '').trim().slice(0, 200),
       description: String(m?.description ?? '').trim().slice(0, 600),
       week: Math.max(1, Math.min(durationWeeks, Math.round(Number(m?.week) || 1))),
+      day_of_week: canonicalDay(m?.day_of_week),
     }))
     .filter(m => m.title);
   // The database requires at least two milestones for an active plan.
@@ -266,6 +271,26 @@ function normalizePlan(
     }))
     .filter(item => item.task);
   if (!schedule.length || !milestones.length) return null;
+
+  // Anchor each milestone to a real session day when the model omits a day.
+  // This prevents every milestone in the same week from inheriting Sunday's
+  // end-of-week deadline. If several milestones share a week, spread them
+  // across that week's selected session days in order.
+  const milestonesByWeek = new Map<number, typeof milestones>();
+  for (const milestone of milestones) {
+    const group = milestonesByWeek.get(milestone.week) || [];
+    group.push(milestone);
+    milestonesByWeek.set(milestone.week, group);
+  }
+  for (const [week, group] of milestonesByWeek) {
+    const days = [...new Set(schedule.filter((item) => item.week === week).map((item) => item.day))];
+    group.forEach((milestone, index) => {
+      if (!milestone.day_of_week && days.length) {
+        milestone.day_of_week = days[Math.min(index, days.length - 1)];
+      }
+    });
+  }
+
   const candidateReferences = (Array.isArray(raw.references) ? raw.references : [])
     .map(reference => {
       const url = String(reference?.url || '').trim().slice(0, 1000);
@@ -987,7 +1012,11 @@ export function GoalPlanner({
         description: m.description || `Make measurable progress toward “${rawInput.trim()}” during week ${m.week}.`,
         week: Math.max(1, Math.min(selectedDurationWeeks || 1, Number(m.week) || 1)),
         sort_order: i,
-        deadline: deadlineFor(start, Math.min(selectedDurationWeeks || 1, Math.max(1, m.week))),
+        deadline: milestoneDeadlineFor(
+          start,
+          Math.min(selectedDurationWeeks || 1, Math.max(1, m.week)),
+          m.day_of_week,
+        ),
         status: i === 0 ? 'in_progress' : 'pending',
       }));
 

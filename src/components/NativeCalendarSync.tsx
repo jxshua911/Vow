@@ -79,12 +79,12 @@ export function NativeCalendarSync() {
         return;
       }
       if (!data?.length) {
-        if (!cancelled) { setSyncing(false); dismissAfterSuccess('Phone calendar sync is enabled. Add a session time in Goals to sync it.'); }
+        if (!cancelled) { setSyncing(false); dismissAfterSuccess('Phone calendar sync is enabled. Add a session time in Goals to sync it.', 2500); }
         return;
       }
       try {
         const created = await syncSessionsToNativeCalendar(data as Session[], accountEmail);
-        if (!cancelled) { setSyncing(false); dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.'); }
+        if (!cancelled) { setSyncing(false); dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.', 2500); }
       } catch (error) {
         console.error('[VOW] Native calendar sync failed:', error);
         if (!cancelled) { setMessage(error instanceof Error ? error.message : 'VOW could not refresh your phone calendar.'); setSyncFailed(true); setSyncing(false); }
