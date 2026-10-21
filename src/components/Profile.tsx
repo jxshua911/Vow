@@ -254,11 +254,13 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
           <h2 className="vow-label mb-2">My Account</h2>
           {entitlement?.plan === 'premium' && <div className="border border-vow-border rounded-xl p-4 mb-4 flex items-center justify-between gap-3"><div><p className="text-sm text-vow-ink">✦ Premium · Active</p><p className="text-xs text-vow-muted mt-1">Your Premium benefits are active.</p></div><button type="button" onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'upgrade' }))} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">Manage</button></div>}
           <div className="border border-vow-border rounded-xl p-4 mb-4">
-            <p className="text-xs text-vow-muted">Signed in as</p>
-            <p className="text-sm text-vow-ink mt-1 break-all">{session?.user?.email || 'Account email unavailable'}</p>
-            <div className="flex items-center justify-between gap-3 mt-4">
-              <p className="text-xs text-vow-muted">Current plan</p>
-              {entitlement ? <span className="border border-vow-border rounded-full px-3 py-1 text-xs text-vow-ink">{entitlement.plan === 'premium' ? '✦ Premium · Active' : 'Free'}</span> : <span className="text-xs text-vow-muted">Checking…</span>}
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-vow-ink">Account type</p>
+              {entitlement ? <span className="border border-vow-border rounded-full px-3 py-1 text-xs text-vow-ink">{entitlement.plan === 'premium' ? 'Premium' : 'Free'}</span> : <span className="text-xs text-vow-muted">Checking…</span>}
+            </div>
+            <div className="flex items-center justify-between gap-3 mt-3">
+              <p className="text-sm text-vow-ink">Subscription status</p>
+              <span className="text-xs text-vow-muted">{entitlement?.plan === 'premium' ? 'Premium active' : entitlement ? 'Free plan active' : 'Checking…'}</span>
             </div>
           </div>
           <h2 className="vow-label mb-2">Account settings</h2>
