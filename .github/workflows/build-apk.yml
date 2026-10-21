@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - capacitor-mobile
+      - 'fix/**'
   pull_request:
     branches:
       - capacitor-mobile
