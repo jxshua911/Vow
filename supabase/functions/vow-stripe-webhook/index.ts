@@ -58,36 +58,83 @@ Deno.serve(async (req) => {
     const customerId = typeof object?.customer === "string" ? object.customer : null;
     const subscriptionId = typeof object?.subscription === "string" ? object.subscription : (typeof object?.id === "string" && event.type.startsWith("customer.subscription.") ? object.id : null);
 
-    if (event.type === "checkout.session.completed" && metadataUserId) {
-      await db.from("vow_user_entitlements").upsert({
-        user_id: metadataUserId,
-        plan: "premium",
-        status: "active",
-        provider: "stripe",
-        stripe_customer_id: customerId,
-        stripe_subscription_id: subscriptionId,
-        current_period_end: null,
-      }, { onConflict: "user_id" });
-    }
+    // Do not grant Premium from checkout completion alone: checkout completion is
+    // not authoritative proof that the subscription is active. Subscription
+    // lifecycle events are signature-verified above and flow through the
+    // canonical server-only subscription RPC so both records and entitlements
+    // remain consistent.
+    const isSubscriptionEvent = [
+      "customer.subscription.created",
+      "customer.subscription.updated",
+      "customer.subscription.deleted",
+    ].includes(String(event.type));
 
-    if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
-      const status = object?.status === "active" || object?.status === "trialing" ? object.status : event.type === "customer.subscription.deleted" ? "cancelled" : "past_due";
-      const { data: existing } = await db.from("vow_user_entitlements").select("user_id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
-      const userId = existing?.user_id || metadataUserId;
-      if (userId) {
-        await db.from("vow_user_entitlements").upsert({
-          user_id: userId,
-          plan: status === "active" || status === "trialing" ? "premium" : "free",
-          status,
-          provider: "stripe",
-          stripe_customer_id: customerId,
-          stripe_subscription_id: subscriptionId,
-          current_period_end: object?.current_period_end ? new Date(Number(object.current_period_end) * 1000).toISOString() : null,
-        }, { onConflict: "user_id" });
+    if (isSubscriptionEvent) {
+      const { data: existing, error: lookupError } = await db
+        .from("vow_user_entitlements")
+        .select("user_id")
+        .eq("stripe_subscription_id", subscriptionId)
+        .maybeSingle();
+      if (lookupError) throw new Error("SUBSCRIPTION_OWNER_LOOKUP_FAILED");
+
+      const userId = metadataUserId || existing?.user_id;
+      if (!userId || !subscriptionId) {
+        // A verified but unlinked Stripe subscription must never grant access.
+        console.warn("vow-stripe-webhook: subscription event has no linked VOW user", String(event.id));
+      } else {
+        const price = object?.items?.data?.[0]?.price;
+        const productId = typeof price?.id === "string" ? price.id : "";
+        const billingPeriod = object?.metadata?.billing === "yearly" || price?.recurring?.interval === "year"
+          ? "yearly"
+          : object?.metadata?.billing === "monthly" || price?.recurring?.interval === "month"
+            ? "monthly"
+            : null;
+        if (!productId || !billingPeriod) {
+          throw new Error("SUBSCRIPTION_PRICE_METADATA_MISSING");
+        }
+
+        const stripeStatus = event.type === "customer.subscription.deleted"
+          ? "cancelled"
+          : String(object?.status ?? "");
+        const status = stripeStatus === "active" || stripeStatus === "trialing"
+          ? "active"
+          : stripeStatus === "past_due"
+            ? "grace"
+            : stripeStatus === "paused"
+              ? "paused"
+              : stripeStatus === "incomplete"
+                ? "pending"
+                : "expired";
+
+        const { error: recordError } = await db.rpc("vow_set_subscription_record", {
+          p_user_id: userId,
+          p_provider: "stripe",
+          p_product_id: productId,
+          p_billing_period: billingPeriod,
+          p_provider_purchase_id: subscriptionId,
+          p_provider_event_id: String(event.id),
+          p_status: status,
+          p_purchased_at: object?.start_date ? new Date(Number(object.start_date) * 1000).toISOString() : null,
+          p_current_period_end: object?.current_period_end ? new Date(Number(object.current_period_end) * 1000).toISOString() : null,
+          p_auto_renewing: typeof object?.cancel_at_period_end === "boolean" ? !object.cancel_at_period_end : null,
+        });
+        if (recordError) {
+          console.error("vow-stripe-webhook: canonical subscription write failed", recordError.message);
+          throw new Error("SUBSCRIPTION_STATE_WRITE_FAILED");
+        }
+
+        const { error: customerUpdateError } = await db
+          .from("vow_user_entitlements")
+          .update({
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscriptionId,
+          })
+          .eq("user_id", userId);
+        if (customerUpdateError) throw new Error("SUBSCRIPTION_CUSTOMER_LINK_WRITE_FAILED");
       }
     }
 
-    await db.from("vow_payment_events").upsert({
+    const { error: paymentEventError } = await db.from("vow_payment_events").upsert({
       user_id: metadataUserId || null,
       provider: "stripe",
       provider_event_id: String(event.id),
@@ -97,6 +144,7 @@ Deno.serve(async (req) => {
       status: typeof object?.status === "string" ? object.status : null,
       metadata: { customer_id: customerId, subscription_id: subscriptionId },
     }, { onConflict: "provider_event_id" });
+    if (paymentEventError) throw new Error("PAYMENT_EVENT_LEDGER_WRITE_FAILED");
 
     return json({ received: true });
   } catch (error) {
