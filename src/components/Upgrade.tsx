@@ -144,14 +144,13 @@ export function UpgradePage() {
 
   if (isPremium) {
     return <div>
-      <PageHeader title="VOW Premium" subtitle="Your full planning experience is ready." />
+      <PageHeader title="VOW Premium" subtitle="Your Premium benefits are active." />
       <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-6 animate-in fade-in duration-500">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 shrink-0 rounded-full border border-vow-border flex items-center justify-center text-2xl" aria-hidden="true">✓</div>
           <div>
-            <p className="vow-label mb-2">Congratulations!</p>
-            <h2 className="vow-heading text-2xl md:text-3xl text-vow-ink mb-3">Welcome to VOW Premium.</h2>
-            <p className="text-sm text-vow-muted leading-relaxed">Your Premium access is active. You’re all set to plan bigger, adapt as life changes, and keep making progress without the free-plan limits.</p>
+            <h2 className="vow-heading text-2xl md:text-3xl text-vow-ink mb-3">Premium is active.</h2>
+            <p className="text-sm text-vow-muted leading-relaxed">Your Premium benefits are ready whenever you need them.</p>
             <p className="inline-flex items-center gap-2 mt-4 border border-vow-border rounded-full px-3 py-1.5 text-xs text-vow-ink"><span aria-hidden="true">✦</span> Premium · Active</p>
           </div>
         </div>
@@ -168,7 +167,7 @@ export function UpgradePage() {
         <button type="button" onClick={() => void handleRestore()} className="vow-btn-ghost">Restore purchase</button>
       </div>
       <p className="text-xs text-vow-muted mt-3">To cancel a Google Play subscription, open subscription management and cancel it there. Removing VOW from your device does not cancel a subscription.</p>
-      <p className="text-xs text-vow-muted mt-2">Restore checks purchases made through Google Play. Premium granted directly to your VOW account can be active here without appearing in Play Store subscriptions.</p>
+      <p className="text-xs text-vow-muted mt-2">Enjoy your Premium benefits.</p>
       {manageState && <p role="status" className="text-xs text-vow-muted mt-3">{manageState}</p>}
       {restoreState && <p role="status" className="text-xs text-vow-muted mt-3">{restoreState}</p>}
     </div>;
