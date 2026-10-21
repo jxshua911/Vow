@@ -4,11 +4,12 @@ export const CLARIFICATION_SKIP = '__VOW_SKIP_USE_ASSUMPTION__';
 export function removeQuestionsAnsweredByPlanner(questions: string[]): string[] {
   const knownInForm = [
     /\b(?:what|which)\s+days\b/i,
-    /\b(?:how many|number of)\s+(?:days|sessions)\b.{0,45}\b(?:week|weekly|available|commit|schedule|train|practice|study)\b/i,
-    /\b(?:available|availability)\b.{0,35}\b(?:days|schedule|sessions per week)\b/i,
+    /\b(?:how many|number of|how often|frequency of)\b.{0,65}\b(?:sessions?|times|days?|workouts?|practices?|study sessions?)\b.{0,35}\b(?:week|weekly|schedule|commit|available|train|practice|study)?\b/i,
+    /\b(?:sessions?|workouts?|practices?|study sessions?)\s+(?:per|each)\s+week\b/i,
+    /\b(?:available|availability)\b.{0,45}\b(?:days|schedule|sessions per week|weekly commitment)\b/i,
     /\b(?:how long|what duration|duration of|number of weeks|timeframe|time frame)\b.{0,45}\b(?:commit\w*|plan|goal|week|long)\b/i,
-    /\b(?:what|which)\s+time\b.{0,35}\b(?:session|train|practice|study|workout)\b/i,
-    /\b(?:schedule|scheduling)\b.{0,35}\b(?:days|times|availability)\b/i,
+    /\b(?:what|which|preferred|preferred session)\s+time\b.{0,45}\b(?:session|train|practice|study|workout|day)?\b/i,
+    /\b(?:schedule|scheduling|session time|session date|timing)\b.{0,45}\b(?:days|times|availability|session|week|date|preference)?\b/i,
   ];
   const seen = new Set<string>();
   return questions
