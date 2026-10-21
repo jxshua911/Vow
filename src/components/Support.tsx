@@ -19,7 +19,14 @@ export function SupportPage({ onBack, onLegal }: Props) {
     try {
       const { data: result, error } = await supabase.functions.invoke('vow-support', { body: { request_id: requestId, name: name.trim(), email: email.trim(), issue: reason, message: text } });
       if (error) throw error;
-      if (result?.persisted !== true) { setStatus('error'); return; }
+      if (result?.persisted !== true || result?.accepted !== true || result?.delivery_status !== 'accepted') {
+        console.warn('[VOW] Support request persisted but delivery was not accepted:', {
+          persisted: result?.persisted === true,
+          delivery_status: result?.delivery_status || 'unknown',
+        });
+        setStatus('error');
+        return;
+      }
       requestIdRef.current = null;
       setMessage(''); setStatus('success');
     } catch (error) { console.error('[VOW] Support submission failed:', error); setStatus('error'); }

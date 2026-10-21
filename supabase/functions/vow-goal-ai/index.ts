@@ -1593,7 +1593,15 @@ Each week's sessions must advance that week's focus rather than repeating the sa
         .filter(Boolean)
         .join(" ");
       let validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());
-      if (validationError === "GENERIC_SESSION_TASK" || validationError === "REPETITIVE_SCHEDULE" || validationError.startsWith("CATEGORY_DETAIL_") || validationError === "INSUFFICIENT_ACTION_TREE") {
+      if (validationError && (
+        validationError === "GENERIC_SESSION_TASK" ||
+        validationError === "REPETITIVE_SCHEDULE" ||
+        validationError.startsWith("CATEGORY_DETAIL_") ||
+        validationError === "INSUFFICIENT_ACTION_TREE" ||
+        validationError === "INSUFFICIENT_MILESTONES" ||
+        validationError === "INSUFFICIENT_WEEKLY_SESSIONS" ||
+        validationError === "INCOMPLETE_SCHEDULE"
+      )) {
         console.warn("[VOW AI] Plan failed quality validation; retrying once with corrective instructions", {
           validation_error: validationError,
         });
@@ -1633,7 +1641,13 @@ Each week's sessions must advance that week's focus rather than repeating the sa
         }
       }
       if (validationError) {
-        console.warn("plan validation failed", { validation_error: validationError });
+        console.warn("[VOW AI] Plan validation rejected generated output", {
+          validation_error: validationError,
+          duration_weeks: w,
+          selected_days: ds.length,
+          has_milestones: Array.isArray(b?.milestones) && b.milestones.length > 0,
+          has_weekly_templates: Array.isArray(b?.weekly_session_templates) && b.weekly_session_templates.length > 0,
+        });
         const qualityAlertType =
           validationError === "GENERIC_SESSION_TASK"
             ? "generic_plan_blocked"
