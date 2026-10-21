@@ -907,9 +907,16 @@ export function GoalPlanner({
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not build the plan.');
       if (data.structured?.clarification_needed) {
         const followUp = data.structured as Clarification;
-        setClarification(followUp);
+        const questions = removeQuestionsAnsweredByPlanner(
+          Array.isArray(followUp.questions) ? followUp.questions : [],
+        );
+        if (questions.length === 0) {
+          throw new Error('VOW requested follow-up details that are already supplied in the planner. Please try generating the plan again.');
+        }
+        const sanitizedFollowUp = { ...followUp, questions };
+        setClarification(sanitizedFollowUp);
         setIsPlanFollowup(true);
-        setAnswers(reuseClarificationAnswers(followUp.questions, nextAnswerHistory));
+        setAnswers(reuseClarificationAnswers(questions, nextAnswerHistory));
         setError('VOW needs a bit more detail before it can build a reliable plan — please answer the follow-up below.');
         return;
       }
