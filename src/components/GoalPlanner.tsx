@@ -907,12 +907,13 @@ export function GoalPlanner({
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not build the plan.');
       if (data.structured?.clarification_needed) {
         const followUp = data.structured as Clarification;
-        const questions = removeQuestionsAnsweredByPlanner(
+        const filteredQuestions = removeQuestionsAnsweredByPlanner(
           Array.isArray(followUp.questions) ? followUp.questions : [],
         );
-        if (questions.length === 0) {
-          throw new Error('VOW requested follow-up details that are already supplied in the planner. Please try generating the plan again.');
-        }
+        const questions = filteredQuestions.length ? filteredQuestions : [
+          'What is your current starting point for this goal?',
+          'What measurable result would show meaningful progress toward this goal?',
+        ];
         const sanitizedFollowUp = { ...followUp, questions };
         setClarification(sanitizedFollowUp);
         setIsPlanFollowup(true);
