@@ -227,6 +227,7 @@ function normalizePlan(
       title: 'Review progress and record the outcome',
       description: `Review the progress made toward “${goalText}” and record the measurable result against the intended outcome.`,
       week: durationWeeks,
+      day_of_week: null,
     });
   }
   const normalizePlanAction = (value: unknown, depth = 0): PlanAction | null => {
