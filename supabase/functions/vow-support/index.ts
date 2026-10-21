@@ -97,7 +97,7 @@ Deno.serve(async (request) => {
   };
   const resendKey = Deno.env.get('RESEND_API_KEY')?.trim();
   const recipient = (Deno.env.get('SUPPORT_RECIPIENT_EMAIL') || 'support@vowglobal.online').trim();
-  const from = (Deno.env.get('SUPPORT_FROM_EMAIL') || 'VOW Support <support@vowglobal.online>').trim();
+  const from = (Deno.env.get('VOW_SUPPORT_FROM_EMAIL') || Deno.env.get('SUPPORT_FROM_EMAIL') || 'VOW Support <support@vowglobal.online>').trim();
   if (!resendKey || !recipient || !from) {
     const recorded = await recordDelivery({ delivery_status: 'failed', delivery_error: !resendKey ? 'Resend API key is not configured' : 'Support sender or recipient is not configured' });
     return json({ accepted: false, persisted: true, delivery_status: recorded ? 'failed' : 'unknown', delivery_configured: false, status_recorded: recorded });
