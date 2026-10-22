@@ -36,25 +36,29 @@ Deno.serve(async (request) => {
     return json({ error: "Email delivery is not configured." }, 503);
   }
 
-  let body: { user_id?: unknown; provider_event_id?: unknown; billing_period?: unknown };
+  let body: { user_id?: unknown; provider?: unknown; provider_event_id?: unknown; billing_period?: unknown };
   try {
     body = await request.json();
   } catch {
     return json({ error: "Invalid request." }, 400);
   }
   const userId = typeof body.user_id === "string" ? body.user_id : "";
+  const provider = body.provider === "google_play" ? "google_play" : body.provider === "stripe" ? "stripe" : "";
   const providerEventId = typeof body.provider_event_id === "string" ? body.provider_event_id.trim() : "";
   const billingPeriod = body.billing_period === "yearly" ? "yearly" : body.billing_period === "monthly" ? "monthly" : "";
+  const validProviderEventId = provider === "stripe"
+    ? /^evt_[A-Za-z0-9]+$/.test(providerEventId)
+    : provider === "google_play" && /^gplay_[a-f0-9]{64}$/.test(providerEventId);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)
-      || !/^evt_[A-Za-z0-9]+$/.test(providerEventId) || !billingPeriod) {
+      || !validProviderEventId || !billingPeriod) {
     return json({ error: "Invalid request." }, 400);
   }
 
   const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const eventKey = `premium-email:${providerEventId}`;
+  const eventKey = `premium-email:${provider}:${providerEventId}`;
   const { data: emailEvent, error: eventError } = await db.from("vow_payment_events")
     .select("status,metadata")
-    .eq("provider", "stripe")
+    .eq("provider", provider)
     .eq("provider_event_id", eventKey)
     .maybeSingle();
   if (eventError || !emailEvent) {
@@ -70,7 +74,7 @@ Deno.serve(async (request) => {
     .select("plan,status,provider,current_period_end")
     .eq("user_id", userId)
     .maybeSingle();
-  if (entitlementError || entitlement?.plan !== "premium" || entitlement?.status !== "active" || entitlement?.provider !== "stripe") {
+  if (entitlementError || entitlement?.plan !== "premium" || entitlement?.status !== "active" || entitlement?.provider !== provider) {
     console.error("[VOW Premium Email] Current server-side entitlement did not confirm active Stripe Premium.");
     return json({ error: "An active Premium entitlement could not be verified." }, 409);
   }
@@ -107,7 +111,7 @@ Deno.serve(async (request) => {
       headers: {
         Authorization: `Bearer ${resendKey}`,
         "Content-Type": "application/json",
-        "Idempotency-Key": `vow-premium-${providerEventId}`,
+        "Idempotency-Key": `vow-premium-${provider}-${providerEventId}`,
       },
       body: JSON.stringify({
         from,
@@ -123,7 +127,7 @@ Deno.serve(async (request) => {
       await db.from("vow_payment_events").update({
         status: "failed",
         metadata: { ...(emailEvent.metadata || {}), provider_http_status: response.status },
-      }).eq("provider", "stripe").eq("provider_event_id", eventKey);
+      }).eq("provider", provider).eq("provider_event_id", eventKey);
       console.error("[VOW Premium Email] Provider did not accept the message:", response.status);
       return json({ error: "Email delivery failed. The subscription remains active." }, 502);
     }
@@ -131,7 +135,7 @@ Deno.serve(async (request) => {
     const { error: updateError } = await db.from("vow_payment_events").update({
       status: "sent",
       metadata: { ...(emailEvent.metadata || {}), resend_message_id: result.id },
-    }).eq("provider", "stripe").eq("provider_event_id", eventKey);
+    }).eq("provider", provider).eq("provider_event_id", eventKey);
     if (updateError) {
       console.error("[VOW Premium Email] Could not record provider acceptance.");
       return json({ error: "Email status could not be recorded." }, 503);
@@ -139,7 +143,7 @@ Deno.serve(async (request) => {
     return json({ sent: true });
   } catch {
     await db.from("vow_payment_events").update({ status: "failed" })
-      .eq("provider", "stripe").eq("provider_event_id", eventKey);
+      .eq("provider", provider).eq("provider_event_id", eventKey);
     console.error("[VOW Premium Email] Delivery request failed.");
     return json({ error: "Email delivery failed. The subscription remains active." }, 502);
   }
