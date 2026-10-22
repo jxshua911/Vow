@@ -30,13 +30,9 @@ Deno.serve(async (req) => {
     const cancelUrl = Deno.env.get("STRIPE_CANCEL_URL");
     if (!secret || !successUrl || !cancelUrl) return json({ error: "Checkout is not configured yet." }, 503);
 
-    let billing = "monthly";
-    try {
-      const body = await req.json();
-      if (body?.billing === "yearly") billing = "yearly";
-    } catch {
-      // Default to monthly when no JSON body is supplied.
-    }
+    // Launch is monthly-only. Ignore client-supplied billing intervals so a
+    // modified client cannot create yearly checkout sessions during this phase.
+    const billing = "monthly";
 
     const { data: existingEntitlement } = await supabase
       .from("vow_user_entitlements")
