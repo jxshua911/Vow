@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '../src/lib/clarification.ts';
+import { answerForPlanning, CLARIFICATION_SKIP, clarificationQuestionsForPlanner, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '../src/lib/clarification.ts';
 
 test('reuses an answer when the same question returns in a later round', () => {
   assert.deepEqual(reuseClarificationAnswers(['What is your current running level?'], {
@@ -48,4 +48,46 @@ test('keeps useful questions and removes duplicate wording', () => {
     'What is your current starting point?',
     'What outcome would show progress?',
   ]), ['What is your current starting point?', 'What outcome would show progress?']);
+});
+
+
+test('filters redundant days, weekly session frequency, and session timing questions', () => {
+  assert.deepEqual(removeQuestionsAnsweredByPlanner([
+    'Which days work for you?',
+    'How many sessions per week?',
+    'What time should you train?',
+    'What is your current experience with Spanish?',
+  ]), [
+    'What is your current experience with Spanish?',
+  ]);
+});
+
+test('keeps legitimate goal-context questions across fitness, learning, and creative goals', () => {
+  const questions = [
+    'What equipment do you have available?',
+    'What is your budget for learning materials?',
+    'What tools or materials will your creative project require?',
+  ];
+  assert.deepEqual(removeQuestionsAnsweredByPlanner(questions), questions);
+});
+
+test('uses goal-specific fallback questions when every generated question is redundant', () => {
+  assert.deepEqual(clarificationQuestionsForPlanner([
+    'Which days work for you?',
+    'How many sessions per week?',
+    'What time should you train?',
+  ]), [
+    'What is your current starting point for this goal?',
+    'What measurable result would show meaningful progress toward this goal?',
+  ]);
+});
+
+test('keeps legitimate experience questions when redundant scheduling questions are mixed in', () => {
+  assert.deepEqual(clarificationQuestionsForPlanner([
+    'Which days work for you?',
+    'How many sessions per week?',
+    'What is your experience level with this goal?',
+  ]), [
+    'What is your experience level with this goal?',
+  ]);
 });

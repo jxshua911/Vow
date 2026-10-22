@@ -14,7 +14,7 @@ import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadil
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
 import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
-import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '@/lib/clarification';
+import { answerForPlanning, CLARIFICATION_SKIP, clarificationQuestionsForPlanner, rememberClarificationAnswers, reuseClarificationAnswers } from '@/lib/clarification';
 
 type Clarification = {
   questions: string[];
@@ -779,7 +779,7 @@ export function GoalPlanner({
             schedule_mode: scheduleMode,
             available_days: availableDays,
           },
-          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days and independent scheduling: ${availableDays.map((day) => `${day}: ${modeForDay(day)}${modeForDay(day) === 'timed' ? ` on ${sessionDates[day] || defaultDateForDay(day)} at ${sessionTimes[day] || 'a time the user must choose'}` : ''}`).join('; ')}. Apply each setting only to that weekday. Timed days use their own selected time; flexible days retain the weekday without a clock time; unscheduled days have no weekday or timestamp in persisted sessions. Do not copy one day’s mode or time to another day.\nThe deterministic domain analysis is ${goalAnalysis.category} / ${goalAnalysis.goal_type}; preserve this specialist classification unless the goal text clearly contradicts it. Identify the right kind of activity or outcome, then ask at most 2-3 genuinely useful personal-context questions. Never ask users to supply facts VOW can look up (for example a known book's page count, a food's published nutrition facts, or public information about a named person, place, product, event, or topic). Do not ask users to predict unknowable future measurements such as exact running distance, calorie burn, pace, or future performance; establish a baseline with a simple optional test or use a clearly labelled adjustable estimate. Do not require the user to own a book or product just because they want to plan around it. Accept 'I don't know' and blank answers; treat them as uncertainty to plan around, not as a reason to block generation. Ask only about meaningful personal preferences, current experience, constraints, or desired outcome. Use plain, direct language and briefly explain specialist terms.`,
+          message: `Goal: ${rawInput.trim()}\nWhy it matters: ${why.trim() || 'Not supplied.'}\nDuration: ${selectedDurationLabel}.\nAvailable days and independent scheduling: ${availableDays.map((day) => `${day}: ${modeForDay(day)}${modeForDay(day) === 'timed' ? ` on ${sessionDates[day] || defaultDateForDay(day)} at ${sessionTimes[day] || 'a time the user must choose'}` : ''}`).join('; ')}. Apply each setting only to that weekday. Timed days use their own selected time; flexible days retain the weekday without a clock time; unscheduled days have no weekday or timestamp in persisted sessions. Do not copy one day’s mode or time to another day.\nThe deterministic domain analysis is ${goalAnalysis.category} / ${goalAnalysis.goal_type}; preserve this specialist classification unless the goal text clearly contradicts it. Identify the right kind of activity or outcome, then ask at most 2 genuinely useful personal-context questions (3 only if truly necessary). The user has already selected the plan duration and exact available weekdays in the planner. Treat available_days and weekly_commitment_target as authoritative: NEVER ask how many sessions per week they can commit to, which days they are available, or what session dates/times they prefer when those are already supplied in this request. Ask only for information that is genuinely missing and cannot be inferred, researched, or taken from the supplied planner settings. Never ask users to supply facts VOW can look up (for example a known book's page count, a food's published nutrition facts, or public information about a named person, place, product, event, or topic). Do not ask users to predict unknowable future measurements such as exact running distance, calorie burn, pace, or future performance; establish a baseline with a simple optional test or use a clearly labelled adjustable estimate. Do not require the user to own a book or product just because they want to plan around it. Accept 'I don't know' and blank answers; treat them as uncertainty to plan around, not as a reason to block generation. Ask only about meaningful personal preferences, current experience, constraints, or desired outcome. Use plain, direct language and briefly explain specialist terms.`,
           available_days: availableDays,
           schedule_times_enabled: scheduleTimesEnabled,
           schedule_mode: scheduleMode,
@@ -794,12 +794,8 @@ export function GoalPlanner({
       }
       if (!Array.isArray(next.questions) || next.questions.length === 0)
         throw new Error('VOW AI returned no follow-up questions.');
-      const filteredQuestions = removeQuestionsAnsweredByPlanner(next.questions);
       const goalDomain = { category, goal_type: goalType };
-      const questions = filteredQuestions.length ? filteredQuestions : [
-        'What is your current starting point for this goal?',
-        'What measurable result would show meaningful progress toward this goal?',
-      ];
+      const questions = clarificationQuestionsForPlanner(next.questions);
       const goalId = await ensureDraft(goalDomain);
       setDomain(goalDomain);
       setClarification({ ...next, questions });
@@ -907,9 +903,13 @@ export function GoalPlanner({
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not build the plan.');
       if (data.structured?.clarification_needed) {
         const followUp = data.structured as Clarification;
-        setClarification(followUp);
+        const questions = clarificationQuestionsForPlanner(
+          Array.isArray(followUp.questions) ? followUp.questions : [],
+        );
+        const sanitizedFollowUp = { ...followUp, questions };
+        setClarification(sanitizedFollowUp);
         setIsPlanFollowup(true);
-        setAnswers(reuseClarificationAnswers(followUp.questions, nextAnswerHistory));
+        setAnswers(reuseClarificationAnswers(questions, nextAnswerHistory));
         setError('VOW needs a bit more detail before it can build a reliable plan — please answer the follow-up below.');
         return;
       }
@@ -1214,7 +1214,7 @@ export function GoalPlanner({
     <div className="vow-goal-stage max-w-xl py-12 text-center" role="status" aria-live="polite">
       <PageHeader title="Preparing your questions" subtitle="VOW is checking your goal and building useful follow-up questions." />
       <div className="vow-loading-dots mx-auto mt-6" aria-hidden="true"><span /><span /><span /></div>
-      <p className="text-xs text-vow-muted mt-5">This can take a little moment. Keep this screen open.</p>
+      <p className="text-xs text-vow-muted mt-5">Preparing your next step…</p>
     </div>
   );
 

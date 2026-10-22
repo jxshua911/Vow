@@ -226,9 +226,11 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
                   aria-label="Session reminders"
                   disabled={updatingNotifications}
                   onClick={() => void (notificationsEnabled ? handleDisableNotifications() : handleEnableNotifications())}
-                  className={`relative h-7 w-12 shrink-0 rounded-full border border-vow-border p-1 transition-colors disabled:opacity-50 ${notificationsEnabled ? 'bg-vow-ink' : 'bg-vow-surface'}`}
+                  className="relative h-11 w-12 shrink-0 p-0 disabled:opacity-50"
                 >
-                  <span className={`absolute left-1 top-1 h-5 w-5 rounded-full shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-5 bg-vow-bg' : 'translate-x-0 bg-vow-muted'}`} />
+                  <span className={`absolute inset-x-0 top-2 h-7 rounded-full border border-vow-border p-1 transition-colors ${notificationsEnabled ? 'bg-vow-ink' : 'bg-vow-surface'}`}>
+                    <span className={`absolute left-1 top-1 h-5 w-5 rounded-full shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-5 bg-vow-bg' : 'translate-x-0 bg-vow-muted'}`} />
+                  </span>
                 </button>
               </div>
               {updatingNotifications && <p className="text-xs text-vow-muted mt-2" role="status">Updating session reminders…</p>}
@@ -254,11 +256,13 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
           <h2 className="vow-label mb-2">My Account</h2>
           {entitlement?.plan === 'premium' && <div className="border border-vow-border rounded-xl p-4 mb-4 flex items-center justify-between gap-3"><div><p className="text-sm text-vow-ink">✦ Premium · Active</p><p className="text-xs text-vow-muted mt-1">Your Premium benefits are active.</p></div><button type="button" onClick={() => window.dispatchEvent(new CustomEvent('vow:navigate', { detail: 'upgrade' }))} className="text-xs text-vow-ink underline underline-offset-4 shrink-0">Manage</button></div>}
           <div className="border border-vow-border rounded-xl p-4 mb-4">
-            <p className="text-xs text-vow-muted">Signed in as</p>
-            <p className="text-sm text-vow-ink mt-1 break-all">{session?.user?.email || 'Account email unavailable'}</p>
-            <div className="flex items-center justify-between gap-3 mt-4">
-              <p className="text-xs text-vow-muted">Current plan</p>
-              {entitlement ? <span className="border border-vow-border rounded-full px-3 py-1 text-xs text-vow-ink">{entitlement.plan === 'premium' ? '✦ Premium · Active' : 'Free'}</span> : <span className="text-xs text-vow-muted">Checking…</span>}
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-vow-ink">Account type</p>
+              {entitlement ? <span className="border border-vow-border rounded-full px-3 py-1 text-xs text-vow-ink">{entitlement.plan === 'premium' ? 'Premium' : 'Free'}</span> : <span className="text-xs text-vow-muted">Checking…</span>}
+            </div>
+            <div className="flex items-center justify-between gap-3 mt-3">
+              <p className="text-sm text-vow-ink">Subscription status</p>
+              <span className="text-xs text-vow-muted">{entitlement?.plan === 'premium' ? 'Premium active' : entitlement ? 'Free plan active' : 'Checking…'}</span>
             </div>
           </div>
           <h2 className="vow-label mb-2">Account settings</h2>
