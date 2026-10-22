@@ -7,7 +7,7 @@ const subscriptionMigration = readFileSync(
   'utf8',
 );
 const hardeningMigration = readFileSync(
-  new URL('../supabase/migrations/20261022120000_harden_subscription_table_privileges.sql', import.meta.url),
+  new URL('../supabase/migrations/20261022103721_harden_subscription_table_privileges.sql', import.meta.url),
   'utf8',
 );
 const webhook = readFileSync(
