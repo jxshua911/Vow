@@ -75,7 +75,7 @@ Deno.serve(async (request) => {
     .eq("user_id", userId)
     .maybeSingle();
   if (entitlementError || entitlement?.plan !== "premium" || entitlement?.status !== "active" || entitlement?.provider !== provider) {
-    console.error("[VOW Premium Email] Current server-side entitlement did not confirm active Stripe Premium.");
+    console.error("[VOW Premium Email] Current server-side entitlement did not confirm active Premium for the requested provider.");
     return json({ error: "An active Premium entitlement could not be verified." }, 409);
   }
 
