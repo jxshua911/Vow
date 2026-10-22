@@ -14,7 +14,7 @@ import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadil
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
 import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
-import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '@/lib/clarification';
+import { answerForPlanning, CLARIFICATION_SKIP, clarificationQuestionsForPlanner, rememberClarificationAnswers, reuseClarificationAnswers } from '@/lib/clarification';
 
 type Clarification = {
   questions: string[];
@@ -794,12 +794,8 @@ export function GoalPlanner({
       }
       if (!Array.isArray(next.questions) || next.questions.length === 0)
         throw new Error('VOW AI returned no follow-up questions.');
-      const filteredQuestions = removeQuestionsAnsweredByPlanner(next.questions);
       const goalDomain = { category, goal_type: goalType };
-      const questions = filteredQuestions.length ? filteredQuestions : [
-        'What is your current starting point for this goal?',
-        'What measurable result would show meaningful progress toward this goal?',
-      ];
+      const questions = clarificationQuestionsForPlanner(next.questions);
       const goalId = await ensureDraft(goalDomain);
       setDomain(goalDomain);
       setClarification({ ...next, questions });
@@ -907,13 +903,9 @@ export function GoalPlanner({
       if (!data?.structured) throw new Error(data?.error || 'VOW AI could not build the plan.');
       if (data.structured?.clarification_needed) {
         const followUp = data.structured as Clarification;
-        const filteredQuestions = removeQuestionsAnsweredByPlanner(
+        const questions = clarificationQuestionsForPlanner(
           Array.isArray(followUp.questions) ? followUp.questions : [],
         );
-        const questions = filteredQuestions.length ? filteredQuestions : [
-          'What is your current starting point for this goal?',
-          'What measurable result would show meaningful progress toward this goal?',
-        ];
         const sanitizedFollowUp = { ...followUp, questions };
         setClarification(sanitizedFollowUp);
         setIsPlanFollowup(true);
