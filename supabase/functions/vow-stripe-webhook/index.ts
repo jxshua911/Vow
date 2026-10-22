@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
           p_auto_renewing: typeof object?.cancel_at_period_end === "boolean" ? !object.cancel_at_period_end : null,
         });
         if (recordError) {
-          console.error("vow-stripe-webhook: canonical subscription write failed", recordError.message);
+          console.error("vow-stripe-webhook: canonical subscription write failed.");
           throw new Error("SUBSCRIPTION_STATE_WRITE_FAILED");
         }
 
@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
 
     return json({ received: true });
   } catch (error) {
-    console.error("vow-stripe-webhook", error);
+    console.error("vow-stripe-webhook: processing failed.");
     return json({ error: "Webhook processing failed." }, 500);
   }
 });
