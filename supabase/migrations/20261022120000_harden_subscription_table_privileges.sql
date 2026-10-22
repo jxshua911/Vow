@@ -20,6 +20,9 @@ GRANT SELECT ON TABLE public.vow_subscription_records TO authenticated;
 
 REVOKE ALL ON TABLE public.vow_payment_events FROM PUBLIC, anon, authenticated;
 
+-- Payment events are a server-side audit ledger, not a client-facing API.
+DROP POLICY IF EXISTS "Users can read their own payment events" ON public.vow_payment_events;
+
 COMMIT;
 
 NOTIFY pgrst, 'reload schema';
