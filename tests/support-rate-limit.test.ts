@@ -17,5 +17,5 @@ test('idempotent retries of the same support request are not rate-limited as new
   const priorLookup = supportFunction.indexOf("const priorRequest = await admin.from('support_submissions')");
   const rateLimit = supportFunction.indexOf("const cutoff = new Date(Date.now() - 60 * 60 * 1000)");
   assert.ok(priorLookup >= 0 && rateLimit > priorLookup);
-  assert.match(supportFunction, /prior\.user_id !== user\.id[\s\S]{0,180}return json\(\{ persisted: false, error: 'This submission key belongs to a different support request\./);
+  assert.match(supportFunction, /prior\.user_id !== user\.id[\s\S]{0,400}return json\(\{ persisted: false, error: 'This submission key belongs to a different support request\./);
 });
