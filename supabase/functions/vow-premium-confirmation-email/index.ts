@@ -81,7 +81,7 @@ Deno.serve(async (request) => {
 
   const rawName = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split("@")[0];
   const displayName = String(rawName).trim().slice(0, 100) || "there";
-  const from = (Deno.env.get("VOW_SUPPORT_FROM_EMAIL") || "VOW Premium <premium@vowglobal.online>").trim();
+  const from = (Deno.env.get("VOW_SUPPORT_FROM_EMAIL") || "VOW Support <support@vowglobal.online>").trim();
   const periodEnd = entitlement.current_period_end ? new Date(entitlement.current_period_end) : null;
   const validPeriodEnd = periodEnd && Number.isFinite(periodEnd.getTime()) ? periodEnd : null;
   const periodText = validPeriodEnd
