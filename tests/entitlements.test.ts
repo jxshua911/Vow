@@ -14,6 +14,10 @@ const webhook = readFileSync(
   new URL('../supabase/functions/vow-stripe-webhook/index.ts', import.meta.url),
   'utf8',
 );
+const googlePlayVerify = readFileSync(
+  new URL('../supabase/functions/vow-google-play-verify/index.ts', import.meta.url),
+  'utf8',
+);
 const premiumEmail = readFileSync(
   new URL('../supabase/functions/vow-premium-confirmation-email/index.ts', import.meta.url),
   'utf8',
@@ -41,7 +45,9 @@ test('Premium email delivery is server-role-only and idempotent by Stripe event'
   assert.match(premiumEmail, /bearerRole\(request\) !== ["']service_role["']/);
   assert.match(premiumEmail, /Idempotency-Key/);
   assert.match(premiumEmail, /status === ["']sent["']/);
-  assert.match(webhook, /premium-email:\$\{String\(event\.id\)\}/);
+  assert.match(webhook, /premium-email:stripe:\$\{String\(event\.id\)\}/);
+  assert.match(googlePlayVerify, /provider: "google_play"[\s\S]{0,180}provider_event_id: purchaseEventId/);
+  assert.match(googlePlayVerify, /vow-premium-confirmation-email/);
 });
 
 
