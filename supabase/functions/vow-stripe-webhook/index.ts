@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         if (status === "active") {
           premiumEmailContext = { userId, billingPeriod };
           if (!wasPremiumActive) {
-            const emailEventKey = `premium-email:${String(event.id)}`;
+            const emailEventKey = `premium-email:stripe:${String(event.id)}`;
             const { error: emailEventInsertError } = await db.from("vow_payment_events").insert({
               user_id: userId,
               provider: "stripe",
@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
     if (paymentEventError) throw new Error("PAYMENT_EVENT_LEDGER_WRITE_FAILED");
 
     if (premiumEmailContext) {
-      const emailEventKey = `premium-email:${String(event.id)}`;
+      const emailEventKey = `premium-email:stripe:${String(event.id)}`;
       const { data: emailEvent, error: emailLookupError } = await db.from("vow_payment_events")
         .select("status")
         .eq("provider", "stripe")
@@ -181,6 +181,7 @@ Deno.serve(async (req) => {
           "vow-premium-confirmation-email",
           { body: {
             user_id: premiumEmailContext.userId,
+            provider: "stripe",
             provider_event_id: String(event.id),
             billing_period: premiumEmailContext.billingPeriod,
           } },
