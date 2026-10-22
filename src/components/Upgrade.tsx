@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { PageHeader } from './AppShell';
 import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { getPremiumProducts, openPremiumManagement, purchasePremium, restorePremium } from '@/lib/premiumPurchases';
-import { VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY } from '@/lib/premiumConfig';
+import { VOW_PREMIUM_MONTHLY } from '@/lib/premiumConfig';
 import { userFacingError } from '@/lib/userFacingError';
 
 type Billing = 'monthly' | 'yearly';
@@ -38,7 +38,6 @@ export function UpgradePage() {
   const monthlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_MONTHLY);
   const yearlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_YEARLY);
   // Approved launch pricing; Google Play's localized catalogue price takes over when available.
-  const monthlyPrice = monthlyProduct && monthlyProduct.price > 0 ? monthlyProduct.price : 9.99;
   const yearlyPrice = yearlyProduct && yearlyProduct.price > 0 ? yearlyProduct.price : 71.99;
   const monthlyAnnualTotal = monthlyPrice * 12;
   const yearlySavings = Math.max(0, monthlyAnnualTotal - yearlyPrice);
