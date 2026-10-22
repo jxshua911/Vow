@@ -90,3 +90,13 @@ export function rememberClarificationAnswers(
   });
   return next;
 }
+
+
+/** Return useful, goal-specific prompts when planner scheduling answers make every AI question redundant. */
+export function clarificationQuestionsForPlanner(questions: string[]): string[] {
+  const filtered = removeQuestionsAnsweredByPlanner(questions);
+  return filtered.length ? filtered : [
+    'What is your current starting point for this goal?',
+    'What measurable result would show meaningful progress toward this goal?',
+  ];
+}
