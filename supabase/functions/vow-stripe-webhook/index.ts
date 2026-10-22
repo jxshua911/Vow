@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
     const metadataUserId = object?.metadata?.user_id || object?.subscription_data?.metadata?.user_id;
     const customerId = typeof object?.customer === "string" ? object.customer : null;
     const subscriptionId = typeof object?.subscription === "string" ? object.subscription : (typeof object?.id === "string" && event.type.startsWith("customer.subscription.") ? object.id : null);
+    let premiumEmailContext: { userId: string; billingPeriod: "monthly" | "yearly" } | null = null;
 
     // Do not grant Premium from checkout completion alone: checkout completion is
     // not authoritative proof that the subscription is active. Subscription
@@ -72,7 +73,7 @@ Deno.serve(async (req) => {
     if (isSubscriptionEvent) {
       const { data: existing, error: lookupError } = await db
         .from("vow_user_entitlements")
-        .select("user_id")
+        .select("user_id,plan,status")
         .eq("stripe_subscription_id", subscriptionId)
         .maybeSingle();
       if (lookupError) throw new Error("SUBSCRIPTION_OWNER_LOOKUP_FAILED");
@@ -105,6 +106,27 @@ Deno.serve(async (req) => {
               : stripeStatus === "incomplete"
                 ? "pending"
                 : "expired";
+
+        const wasPremiumActive = existing?.plan === "premium" && existing?.status === "active";
+        if (status === "active") {
+          premiumEmailContext = { userId, billingPeriod };
+          if (!wasPremiumActive) {
+            const emailEventKey = `premium-email:${String(event.id)}`;
+            const { error: emailEventInsertError } = await db.from("vow_payment_events").insert({
+              user_id: userId,
+              provider: "stripe",
+              provider_event_id: emailEventKey,
+              event_type: "premium_confirmation_email",
+              amount_minor: null,
+              currency: null,
+              status: "pending",
+              metadata: { stripe_event_id: String(event.id), billing_period: billingPeriod },
+            });
+            if (emailEventInsertError && emailEventInsertError.code !== "23505") {
+              throw new Error("PREMIUM_EMAIL_EVENT_CREATE_FAILED");
+            }
+          }
+        }
 
         const { error: recordError } = await db.rpc("vow_set_subscription_record", {
           p_user_id: userId,
@@ -145,6 +167,30 @@ Deno.serve(async (req) => {
       metadata: { customer_id: customerId, subscription_id: subscriptionId },
     }, { onConflict: "provider,provider_event_id" });
     if (paymentEventError) throw new Error("PAYMENT_EVENT_LEDGER_WRITE_FAILED");
+
+    if (premiumEmailContext) {
+      const emailEventKey = `premium-email:${String(event.id)}`;
+      const { data: emailEvent, error: emailLookupError } = await db.from("vow_payment_events")
+        .select("status")
+        .eq("provider", "stripe")
+        .eq("provider_event_id", emailEventKey)
+        .maybeSingle();
+      if (emailLookupError) throw new Error("PREMIUM_EMAIL_EVENT_LOOKUP_FAILED");
+      if (emailEvent && ["pending", "failed"].includes(String(emailEvent.status))) {
+        const { data: emailResult, error: emailInvokeError } = await db.functions.invoke(
+          "vow-premium-confirmation-email",
+          { body: {
+            user_id: premiumEmailContext.userId,
+            provider_event_id: String(event.id),
+            billing_period: premiumEmailContext.billingPeriod,
+          } },
+        );
+        if (emailInvokeError || !emailResult?.sent) {
+          console.error("vow-stripe-webhook: Premium confirmation email will be retried.");
+          throw new Error("PREMIUM_CONFIRMATION_EMAIL_FAILED");
+        }
+      }
+    }
 
     return json({ received: true });
   } catch (error) {
