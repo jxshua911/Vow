@@ -61,6 +61,38 @@ Deno.serve(async (request) => {
   }
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  // Permit idempotent retries of the same request, but rate-limit new submissions.
+  const priorRequest = await admin.from('support_submissions')
+    .select('id,user_id,name,email,issue,message')
+    .eq('client_request_id', requestId)
+    .maybeSingle();
+  if (priorRequest.error) {
+    console.error('[VOW Support] Existing request lookup failed.');
+    return json({ persisted: false, error: 'We could not check your request. Please try again.' }, 500);
+  }
+  if (priorRequest.data) {
+    const prior = priorRequest.data;
+    if (prior.user_id !== user.id || prior.name !== name || prior.email !== email || prior.issue !== issue || prior.message !== message) {
+      return json({ persisted: false, error: 'This submission key belongs to a different support request. Please refresh the form and try again.' }, 409);
+    }
+  } else {
+    const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data: recentSubmission, error: rateLimitError } = await admin
+      .from('support_submissions')
+      .select('id')
+      .eq('user_id', user.id)
+      .gte('created_at', cutoff)
+      .limit(1)
+      .maybeSingle();
+    if (rateLimitError) {
+      console.error('[VOW Support] Rate-limit lookup failed.');
+      return json({ persisted: false, error: 'Support is temporarily unavailable. Please try again later.' }, 503);
+    }
+    if (recentSubmission) {
+      return json({ persisted: false, error: 'Please wait up to an hour before submitting another support request.' }, 429);
+    }
+  }
   let submission: { id: string; created_at: string; delivery_status: string; delivery_id: string | null; user_id: string; name: string; email: string; issue: string; message: string } | null = null;
   const inserted = await admin.from('support_submissions').insert({ client_request_id: requestId, user_id: user.id, name, email, issue, message, delivery_status: 'pending' }).select('id, created_at, delivery_status, delivery_id, user_id, name, email, issue, message').single();
   if (!inserted.error && inserted.data) {
