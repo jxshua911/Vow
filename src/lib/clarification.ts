@@ -10,6 +10,8 @@ export function removeQuestionsAnsweredByPlanner(questions: string[]): string[] 
     /\b(?:available|availability)\b.{0,45}\b(?:days|schedule|sessions per week|weekly commitment)\b/i,
     /\b(?:how long|what duration|duration of|number of weeks|timeframe|time frame)\b.{0,45}\b(?:commit\w*|plan|goal|week|long)\b/i,
     /\b(?:what|which|preferred|preferred session)\s+time\b.{0,45}\b(?:session|train|practice|study|workout|day)?\b/i,
+    /\b(?:what|which|preferred)\s+time\b.{0,50}\b(?:session|train|practice|study|workout|day|week)\b/i,
+    /\bwhen\b.{0,45}\b(?:train|practice|study|workout|session)\b/i,
     /\b(?:schedule|scheduling|session time|session date|timing)\b.{0,45}\b(?:days|times|availability|session|week|date|preference)?\b/i,
   ];
   const seen = new Set<string>();
