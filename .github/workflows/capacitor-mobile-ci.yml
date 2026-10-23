@@ -50,15 +50,23 @@ jobs:
           deno-version: v2.x
       - name: Typecheck Edge Functions
         run: |
-          deno check --node-modules-dir=auto --no-lock supabase/functions/vow-goal-ai/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/vow-create-checkout/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/vow-google-play-verify/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/vow-stripe-webhook/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/vow-account-delete/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/vow-account-deletion-confirmation-email/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/vow-premium-confirmation-email/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/vow-support/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/google-calendar-auth/index.ts
+          status=0
+          for file in \
+            supabase/functions/vow-goal-ai/index.ts \
+            supabase/functions/vow-create-checkout/index.ts \
+            supabase/functions/vow-google-play-verify/index.ts \
+            supabase/functions/vow-stripe-webhook/index.ts \
+            supabase/functions/vow-account-delete/index.ts \
+            supabase/functions/vow-account-deletion-confirmation-email/index.ts \
+            supabase/functions/vow-premium-confirmation-email/index.ts \
+            supabase/functions/vow-support/index.ts \
+            supabase/functions/google-calendar-auth/index.ts
+          do
+            if ! deno check --node-modules-dir=auto --no-lock "$file"; then
+              status=1
+            fi
+          done
+          exit "$status"
       - name: Unit tests
         run: npm test
       - name: ESLint
