@@ -183,6 +183,8 @@ function clarificationFallback(goal: string, category: string, selectedDays: str
     ],
   };
 }
+type CooldownKind = "clarify" | "plan" | "chat" | "review";
+
 async function cooldown(uid: string, k: CooldownKind) {
   try {
     const { data, error } = await db().rpc("vow_claim_ai_cooldown", {
@@ -814,7 +816,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
     for (const provider of providers) {
       try {
         const providerMessages =
-          provider === "groq" || (researchRequired && provider !== "groq")
+          provider === "groq" || researchRequired
             ? [
                 ...messages,
                 {
@@ -945,7 +947,8 @@ async function researchGoalFacts(goalTitle: string, why: string) {
   const webSearchPromise = searchTerms
     ? fetchText("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(searchTerms + researchSuffix))
     : Promise.resolve("");
-  const [bookData, wikiData, foodData, webSearchHtml] = await Promise.all([...jobs, webSearchPromise]);
+  const [bookData, wikiData, foodData, webSearchResult] = await Promise.all([...jobs, webSearchPromise]);
+  const webSearchHtml = typeof webSearchResult === "string" ? webSearchResult : "";
   const docs = Array.isArray((bookData as any)?.docs) ? (bookData as any).docs.slice(0, 3) : [];
   for (const doc of docs) {
     const bookTitle = str(doc?.title, 180);
