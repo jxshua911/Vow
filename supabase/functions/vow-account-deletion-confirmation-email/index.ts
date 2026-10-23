@@ -4,9 +4,12 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-}[character] || character));
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => {
+  const entities: Record<string, string> = {
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  };
+  return entities[character] ?? character;
+});
 
 function bearerRole(request: Request): string | null {
   const token = request.headers.get("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
