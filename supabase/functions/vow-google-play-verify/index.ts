@@ -169,13 +169,33 @@ Deno.serve(async (req) => {
 
     const { data: existing } = await serviceClient
       .from("vow_subscription_records")
-      .select("id, user_id")
+      .select("id, user_id, status")
       .eq("provider", "google_play")
       .eq("provider_purchase_id", purchaseToken)
       .maybeSingle();
 
     if (existing?.user_id && existing.user_id !== user.id) {
       return json(409, { error: "PURCHASE_ALREADY_LINKED" });
+    }
+
+    const purchaseDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(purchaseToken));
+    const purchaseEventId = `gplay_${Array.from(new Uint8Array(purchaseDigest)).map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    const premiumEmailEventKey = `premium-email:google_play:${purchaseEventId}`;
+    const wasPremiumActive = existing?.status === "active" || existing?.status === "grace";
+    if (active && !wasPremiumActive) {
+      const { error: emailEventInsertError } = await serviceClient.from("vow_payment_events").insert({
+        user_id: user.id,
+        provider: "google_play",
+        provider_event_id: premiumEmailEventKey,
+        event_type: "premium_confirmation_email",
+        amount_minor: null,
+        currency: null,
+        status: "pending",
+        metadata: { billing_period: billingPeriod, purchase_token_sha256: purchaseEventId.slice("gplay_".length) },
+      });
+      if (emailEventInsertError && emailEventInsertError.code !== "23505") {
+        throw new Error("PREMIUM_EMAIL_EVENT_CREATE_FAILED");
+      }
     }
 
     const { error: recordError } = await serviceClient.rpc("vow_set_subscription_record", {
@@ -214,6 +234,30 @@ Deno.serve(async (req) => {
       });
 
       if (!ackResponse.ok) throw new Error("GOOGLE_ACKNOWLEDGEMENT_FAILED");
+    }
+
+    if (active) {
+      const { data: emailEvent, error: emailLookupError } = await serviceClient.from("vow_payment_events")
+        .select("status")
+        .eq("provider", "google_play")
+        .eq("provider_event_id", premiumEmailEventKey)
+        .maybeSingle();
+      if (emailLookupError) {
+        console.warn("[VOW Google Play] Premium email status could not be checked.");
+      } else if (emailEvent && ["pending", "failed"].includes(String(emailEvent.status))) {
+        const { data: emailResult, error: emailInvokeError } = await serviceClient.functions.invoke(
+          "vow-premium-confirmation-email",
+          { body: {
+            user_id: user.id,
+            provider: "google_play",
+            provider_event_id: purchaseEventId,
+            billing_period: billingPeriod,
+          } },
+        );
+        if (emailInvokeError || !emailResult?.sent) {
+          console.warn("[VOW Google Play] Premium confirmation email will retry on the next verification.");
+        }
+      }
     }
 
     return json(200, {
