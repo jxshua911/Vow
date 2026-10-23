@@ -103,7 +103,7 @@ export function GoalAI({ goal }: { goal?: Goal | null }) {
   }
 
   return (
-    <section className="border border-vow-border p-5 mt-10">
+    <section className="mt-4 min-w-0">
       <div className="mb-4">
         <p className="text-xs uppercase tracking-wide text-vow-muted">VOW AI</p>
         <h2 className="vow-heading text-lg text-vow-ink mt-1">Most apps help you track what you’re doing. VOW helps you figure out what to do next.</h2>
