@@ -1211,10 +1211,9 @@ export function GoalPlanner({
   );
 
   if (planning && !clarification && !plan) return (
-    <div className="vow-goal-stage max-w-xl py-12 text-center" role="status" aria-live="polite">
+    <div className="vow-goal-stage max-w-xl mx-auto py-12 text-center" role="status" aria-live="polite">
       <PageHeader title="Preparing your questions" subtitle="VOW is checking your goal and building useful follow-up questions." />
       <div className="vow-loading-dots mx-auto mt-6" aria-hidden="true"><span /><span /><span /></div>
-      <p className="text-xs text-vow-muted mt-5">This can take a little moment. Keep this screen open.</p>
     </div>
   );
 
@@ -1450,15 +1449,6 @@ export function GoalPlanner({
           placeholder={`e.g. ${goalPlaceholder}`}
           autoFocus
         />
-
-        {rawInput.trim().length >= 3 && (
-          <div className="border border-vow-border p-4 space-y-1">
-            <p className="text-xs text-vow-muted uppercase tracking-wider">
-              Goal type · {domain?.goal_type ?? previewDomain?.goal_type ?? 'Not identified yet'}
-            </p>
-            <p className="text-sm text-vow-ink">VOW is shaping the plan around this goal type and your available time.</p>
-          </div>
-        )}
 
         <div>
           <label className="vow-label block mb-2">Why does this matter?</label>
