@@ -261,7 +261,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
                 ? <button type="button" onClick={() => { setDeleteError(''); setConfirmDelete(true); }} className="text-sm text-vow-muted hover:text-vow-ink">Delete Account</button>
                 : <div>
                   <p className="text-sm text-vow-ink mb-1">Delete your account?</p>
-                  <p className="text-xs text-vow-muted mb-3">This permanently deletes your account and associated data. This action cannot be undone.</p>
+                  <p className="text-xs text-vow-muted mb-3">Your account will be marked for deletion. You can restore it by signing back in within 30 days; after that, deletion may become permanent.</p>
                   {deleteError && <p className="text-xs text-vow-muted mb-3" role="alert">{deleteError}</p>}
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setConfirmDelete(false)} disabled={deleting} className="vow-btn-ghost">Keep account</button>
