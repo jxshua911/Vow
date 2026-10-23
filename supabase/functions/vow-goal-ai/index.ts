@@ -582,15 +582,16 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
 }
 
 
-type AiProvider = "groq" | "mistral";
+type AiProvider = "groq" | "mistral" | "qwen" | "nova";
 
 function providerWeights(): Record<AiProvider, number> {
-  // Launch defaults favour providers with genuine free/developer access.
-  // Qwen is included only when its free quota is available for the account/region.
-  const defaults: Record<AiProvider, number> = { groq: 0.5, mistral: 0.35 };
+  // Stable priority order: try the primary provider first, then walk the
+  // configured fallbacks. A random first choice makes rate-limit incidents
+  // unpredictable and can repeatedly select a provider with no available quota.
+  const defaults: Record<AiProvider, number> = { groq: 1, mistral: 0.8, qwen: 0.6, nova: 0.4 };
   try {
     const raw = JSON.parse(Deno.env.get("VOW_AI_PROVIDER_WEIGHTS") || "{}");
-    for (const provider of ["groq", "mistral"] as AiProvider[]) {
+    for (const provider of ["groq", "mistral", "qwen", "nova"] as AiProvider[]) {
       const value = Number(raw?.[provider]);
       if (Number.isFinite(value) && value >= 0) defaults[provider] = value;
     }
@@ -602,23 +603,15 @@ function providerWeights(): Record<AiProvider, number> {
 
 function providerOrder(): AiProvider[] {
   const weights = providerWeights();
-  const enabled = (["groq", "mistral"] as AiProvider[]).filter((p) => {
-    if (p === "groq") return Boolean(Deno.env.get("GROQ_API_KEY"));
-    return Boolean(Deno.env.get("MISTRAL_API_KEY"));
-  });
-  if (!enabled.length) return [];
-  const total = enabled.reduce((sum, p) => sum + weights[p], 0);
-  if (total <= 0) return enabled;
-  let pick = Math.random() * total;
-  let selected: AiProvider = enabled[0];
-  for (const provider of enabled) {
-    pick -= weights[provider];
-    if (pick <= 0) {
-      selected = provider;
-      break;
-    }
-  }
-  return [selected, ...enabled.filter((p) => p !== selected)];
+  const keyPresent: Record<AiProvider, boolean> = {
+    groq: Boolean(Deno.env.get("GROQ_API_KEY")),
+    mistral: Boolean(Deno.env.get("MISTRAL_API_KEY")),
+    qwen: Boolean(Deno.env.get("DASHSCOPE_API_KEY")),
+    nova: Boolean(Deno.env.get("AWS_BEARER_TOKEN_BEDROCK")),
+  };
+  return (["groq", "mistral", "qwen", "nova"] as AiProvider[])
+    .filter((provider) => keyPresent[provider] && weights[provider] > 0)
+    .sort((a, b) => weights[b] - weights[a]);
 }
 
 async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX) {
@@ -818,7 +811,11 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
         const result =
           provider === "groq"
             ? await callGroq(req, providerMessages, kind, researchRequired)
-            : await callMistral(req, providerMessages, kind);
+            : provider === "mistral"
+              ? await callMistral(req, providerMessages, kind)
+              : provider === "qwen"
+                ? await callQwen(req, providerMessages, kind)
+                : await callNova(req, providerMessages, kind);
         console.log("[VOW AI] Provider succeeded", { provider });
         return result;
       } catch (providerError) {
