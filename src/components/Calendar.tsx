@@ -160,8 +160,8 @@ export function CalendarPage() {
     // VOW sessions are also written to the device calendar, so merge both
     // sources and suppress their mirrored copies in the calendar-event layer.
     const normalizeTitle = (value: string) => value.trim().toLocaleLowerCase()
-      .replace(/^vow\\s*[·:-]\\s*/i, '')
-      .replace(/\\s+/g, ' ');
+      .replace(/^vow\s*[·:-]\s*/i, '')
+      .replace(/\s+/g, ' ');
     const combined: CalendarEvent[] = [...googleEvents, ...nativeEvents];
     const seen: CalendarEvent[] = [];
     for (const event of combined) {
