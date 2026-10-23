@@ -3,10 +3,10 @@ import { Capacitor } from '@capacitor/core';
 import { PageHeader } from './AppShell';
 import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { getPremiumProducts, openPremiumManagement, purchasePremium, restorePremium } from '@/lib/premiumPurchases';
-import { VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY } from '@/lib/premiumConfig';
+import { VOW_PREMIUM_MONTHLY } from '@/lib/premiumConfig';
 import { userFacingError } from '@/lib/userFacingError';
 
-type Billing = 'monthly' | 'yearly';
+
 
 const premiumBenefits = [
   'Unlimited active goals',
@@ -28,7 +28,6 @@ const freeBenefits = [
 ];
 
 export function UpgradePage() {
-  const [billing, setBilling] = useState<Billing>('monthly');
   const [usage, setUsage] = useState<EntitlementSnapshot | null>(null);
   const [restoreState, setRestoreState] = useState('');
   const [manageState, setManageState] = useState('');
@@ -36,16 +35,9 @@ export function UpgradePage() {
   const [purchaseState, setPurchaseState] = useState('');
   const [products, setProducts] = useState<Array<{ identifier: string; price: number; priceString: string }>>([]);
   const monthlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_MONTHLY);
-  const yearlyProduct = products.find((product) => product.identifier === VOW_PREMIUM_YEARLY);
   // Approved launch pricing; Google Play's localized catalogue price takes over when available.
-  const monthlyPrice = monthlyProduct && monthlyProduct.price > 0 ? monthlyProduct.price : 9.99;
-  const yearlyPrice = yearlyProduct && yearlyProduct.price > 0 ? yearlyProduct.price : 71.99;
-  const monthlyAnnualTotal = monthlyPrice * 12;
-  const yearlySavings = Math.max(0, monthlyAnnualTotal - yearlyPrice);
-  const yearlySavingsPercent = Math.round((yearlySavings / monthlyAnnualTotal) * 100);
-  const isYearly = billing === 'yearly';
   const isPremium = usage?.plan === 'premium';
-  const selectedProduct = isYearly ? yearlyProduct : monthlyProduct;
+  const selectedProduct = monthlyProduct;
 
   useEffect(() => {
     let active = true;
@@ -88,7 +80,7 @@ export function UpgradePage() {
     try {
       const result = await restorePremium();
       if (!result.restored) {
-        setRestoreState('No active Google Play subscription was found. This does not change your VOW account access; this button only restores purchases made through Google Play.');
+        setRestoreState('No Google Play purchase was found.');
         return;
       }
       const snapshot = await refreshEntitlementSnapshot();
@@ -108,8 +100,7 @@ export function UpgradePage() {
       return;
     }
     try {
-      const productId = isYearly ? VOW_PREMIUM_YEARLY : VOW_PREMIUM_MONTHLY;
-      await purchasePremium(productId);
+      await purchasePremium(VOW_PREMIUM_MONTHLY);
       const snapshot = await refreshEntitlementSnapshot();
       setUsage(snapshot);
       setPurchaseState(snapshot?.plan === 'premium'
@@ -196,21 +187,17 @@ export function UpgradePage() {
           <div className="space-y-2.5">{freeBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
         <div className="relative border border-vow-ink rounded-xl p-5 pt-8">
-          {isYearly && <div className="absolute -top-3 right-3 z-10 rounded-full border border-vow-border bg-vow-ink px-3 py-1.5 text-center shadow-sm" aria-label={`Save $${yearlySavings.toFixed(2)} per year, ${yearlySavingsPercent}% off`}><span className="block text-[11px] font-bold uppercase tracking-wide text-vow-bg">SAVE {yearlySavingsPercent}%</span><span className="block text-[10px] font-semibold uppercase tracking-wide text-vow-bg">ANNUAL PLAN</span></div>}
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
-          <div className="text-3xl font-medium text-vow-ink mb-1">{isYearly ? (yearlyProduct?.priceString || '$71.99') : (monthlyProduct?.priceString || '$9.99')}</div>
-          <p className="text-xs text-vow-muted mb-5">{isYearly ? 'per year' : 'per month'}</p>
+          <div className="text-3xl font-medium text-vow-ink mb-1">{monthlyProduct?.priceString || '$4.99'}</div>
+          <p className="text-xs text-vow-muted mb-5">per month</p>
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 p-1 border border-vow-border rounded-xl" role="group" aria-label="Billing interval">
-        <button type="button" onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'monthly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'monthly'}><span className="block font-medium">Monthly</span><span className="block text-xs mt-0.5">{monthlyProduct?.priceString || '$9.99'} / month</span></button>
-        <button type="button" onClick={() => setBilling('yearly')} className={`rounded-lg px-4 py-3 text-sm transition-colors ${billing === 'yearly' ? 'bg-vow-ink text-vow-bg' : 'text-vow-muted hover:text-vow-ink'}`} aria-pressed={billing === 'yearly'}><span className="block font-medium">Yearly</span><span className="block text-xs mt-0.5">{yearlyProduct?.priceString || '$71.99'} / year</span></button>
-      </div>
+      <div className="border border-vow-border rounded-xl p-4 mb-6"><p className="font-medium text-vow-ink">Premium · {monthlyProduct?.priceString || '$4.99'} / month</p><p className="text-xs text-vow-muted mt-1">One simple monthly plan.</p></div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
         {Capacitor.isNativePlatform()
-          ? <><p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the selected billing period unless you cancel in Google Play.</p><button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button></>
+          ? <><p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the monthly billing period unless you cancel in Google Play.</p><button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button></>
           : <p className="text-xs text-vow-muted mt-1">Google Play checkout is available in VOW for Android. Web checkout is not configured in this build. Premium access already linked to your VOW account remains available here.</p>}
       </div>}
       {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
