@@ -157,16 +157,27 @@ export function CalendarPage() {
   const sessionsForDay = (day: Date) => sessions.filter((item) => Boolean(item.scheduled_at) && sameDay(new Date(item.scheduled_at as string), day));
   const allCalendarEvents = useMemo<CalendarEvent[]>(() => {
     // Android commonly mirrors a Google account into the device calendar.
-    // Merge both sources but render the same title/start only once.
+    // VOW sessions are also written to the device calendar, so merge both
+    // sources and suppress their mirrored copies in the calendar-event layer.
+    const normalizeTitle = (value: string) => value.trim().toLocaleLowerCase()
+      .replace(/^vow\\s*[·:-]\\s*/i, '')
+      .replace(/\\s+/g, ' ');
     const combined: CalendarEvent[] = [...googleEvents, ...nativeEvents];
     const seen: CalendarEvent[] = [];
     for (const event of combined) {
-      const title = String(event.summary || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+      const title = normalizeTitle(String(event.summary || ''));
       const start = eventDate(event)?.getTime();
+      if (!title || start == null) continue;
+      const mirrorsVowSession = sessions.some((sessionItem) => {
+        if (!sessionItem.scheduled_at || normalizeTitle(sessionItem.title) !== title) return false;
+        const sessionStart = new Date(sessionItem.scheduled_at).getTime();
+        return Number.isFinite(sessionStart) && Math.abs(start - sessionStart) <= 5 * 60 * 1000;
+      });
+      if (mirrorsVowSession) continue;
       const duplicate = seen.some((candidate) => {
-        const candidateTitle = String(candidate.summary || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+        const candidateTitle = normalizeTitle(String(candidate.summary || ''));
         const candidateStart = eventDate(candidate)?.getTime();
-        if (!title || title !== candidateTitle || start == null || candidateStart == null) return false;
+        if (title !== candidateTitle || candidateStart == null) return false;
         // Ignore source differences and small timestamp rounding, but retain
         // recurring events with different start times.
         return Math.abs(start - candidateStart) <= 5 * 60 * 1000;
@@ -174,7 +185,7 @@ export function CalendarPage() {
       if (!duplicate) seen.push(event);
     }
     return seen;
-  }, [googleEvents, nativeEvents]);
+  }, [googleEvents, nativeEvents, sessions]);
   const flexibleSessions = sessions.filter((item) => item.status === 'scheduled' && !item.scheduled_at && Boolean(item.day_of_week));
   const unscheduledSessions = sessions.filter((item) => item.status === 'scheduled' && !item.scheduled_at && !item.day_of_week);
   const eventsForDay = (day: Date) => allCalendarEvents.filter((event) => { const date = eventDate(event); return date ? sameDay(date, day) : false; });
