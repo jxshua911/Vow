@@ -436,10 +436,6 @@ export function GoalPlanner({
   const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
   const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
   const missingSessionTimes = availableDays.filter((day) => modeForDay(day) === 'timed' && !sessionTimes[day]);
-  const previewDomain = rawInput.trim().length >= 3
-    ? analyseGoalForEvidence({ title: rawInput.trim(), outcome: rawInput.trim(), why_it_matters: why.trim() || null })
-    : null;
-
   useEffect(() => {
     let cancelled = false;
 
