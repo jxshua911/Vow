@@ -46,6 +46,12 @@ export function userFacingError(error: unknown, fallback = 'Something went wrong
   if (!raw) return fallback;
   const code = raw.split(':')[0];
   if (errorMap[code]) return errorMap[code];
+  if (/temporarily busy|rate limit|too many requests|provider capacity/i.test(raw)) {
+    return 'VOW is at capacity right now. Your goal has not been lost. Wait a moment and try again.';
+  }
+  if (/did not meet VOW.s planning quality checks|plan quality/i.test(raw)) {
+    return 'VOW could not build a sufficiently specific plan yet. Your goal is still saved; try again shortly or adjust your answers.';
+  }
   if (/network|fetch|failed to fetch|connection/i.test(raw)) return 'VOW could not connect right now. Check your connection and try again.';
   if (/invalid login credentials/i.test(raw)) return 'That email or password is incorrect.';
   if (/email.*not confirmed/i.test(raw)) return 'Please confirm your email address before signing in.';
