@@ -1137,17 +1137,10 @@ export function GoalPlanner({
         console.warn('[VOW] Session notifications could not be synced.');
       }
 
-      try {
-        if (scheduleTimesEnabled) {
-                const { error: calendarError } = await supabase.functions.invoke('google-calendar-sync-goal', {
-          headers: sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : undefined,
-          body: { goalId: draftGoalId },
-        });
-        if (calendarError) console.warn('[VOW] Google Calendar sync could not be completed:', calendarError.message);
-        }
-      } catch {
-        console.warn('[VOW] Google Calendar sync could not be completed.');
-      }
+      // Phone-calendar syncing is handled independently by NativeCalendarSync.
+      // Do not silently create Google Calendar events during goal creation:
+      // Google Calendar is an optional, separately connected integration, and
+      // Android may already mirror those events into the device calendar.
 
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(activeDraftStorageKey);
