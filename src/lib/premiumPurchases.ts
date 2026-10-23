@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import {
   VOW_PREMIUM_MONTHLY,
   VOW_PREMIUM_MONTHLY_BASE_PLAN,
+  VOW_PREMIUM_LEGACY_YEARLY,
 } from './premiumConfig';
 import { refreshEntitlementSnapshot } from './entitlements';
 
@@ -90,12 +91,15 @@ export async function restorePremium() {
   const purchase = purchases.find(
     (item) =>
       item.purchaseToken &&
-      item.productIdentifier === VOW_PREMIUM_MONTHLY,
+      (item.productIdentifier === VOW_PREMIUM_MONTHLY ||
+        (Boolean(VOW_PREMIUM_LEGACY_YEARLY) && item.productIdentifier === VOW_PREMIUM_LEGACY_YEARLY)),
   );
 
   if (!purchase?.purchaseToken) return { ok: true, restored: false };
 
-  const billingPeriod = 'monthly';
+  // New purchases remain monthly-only; this branch exists only to restore a
+  // subscription purchased before the yearly option was removed.
+  const billingPeriod = purchase.productIdentifier === VOW_PREMIUM_LEGACY_YEARLY ? 'yearly' : 'monthly';
 
   const { data, error: verifyError } = await supabase.functions.invoke(
     'vow-google-play-verify',

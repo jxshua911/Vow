@@ -8,6 +8,9 @@ const env = (name: string) => {
 // the native build is configured with the real Play Console product/base-plan IDs.
 export const VOW_PREMIUM_MONTHLY = env('VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_PRODUCT_ID');
 export const VOW_PREMIUM_MONTHLY_BASE_PLAN = env('VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_BASE_PLAN_ID');
+// Hidden compatibility identifier for restoring an already-owned yearly
+// subscription. It is never offered as a new purchase option.
+export const VOW_PREMIUM_LEGACY_YEARLY = env('VITE_GOOGLE_PLAY_PREMIUM_YEARLY_PRODUCT_ID');
 
 export function premiumCatalogueConfigured(): boolean {
   return Boolean(
