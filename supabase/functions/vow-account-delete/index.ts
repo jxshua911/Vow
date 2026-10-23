@@ -47,9 +47,13 @@ Deno.serve(async(req)=>{
   if(settingsWriteError)return json({error:"ACCOUNT_STATE_WRITE_FAILED"},500);
   // Deletion state is authoritative. Email delivery is best-effort and must
   // never turn a successful deletion request into an apparent failure.
-  const { error: deletionEmailError } = await admin.functions.invoke("vow-account-deletion-confirmation-email", {
-    body: { user_id: user.id, deleted_at: deletedAt, restorable_until: deletionExpiresAt },
-  });
-  if (deletionEmailError) console.warn("[VOW] Account deletion succeeded but confirmation email could not be sent.");
+  try {
+    const { error: deletionEmailError } = await admin.functions.invoke("vow-account-deletion-confirmation-email", {
+      body: { user_id: user.id, deleted_at: deletedAt, restorable_until: deletionExpiresAt },
+    });
+    if (deletionEmailError) console.warn("[VOW] Account deletion succeeded but confirmation email could not be sent.");
+  } catch {
+    console.warn("[VOW] Account deletion succeeded but confirmation email could not be sent.");
+  }
   return json({deleted:true,restorable_until:deletionExpiresAt});
 });
