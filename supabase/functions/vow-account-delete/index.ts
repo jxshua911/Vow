@@ -22,13 +22,14 @@ Deno.serve(async(req)=>{
     admin.from("strava_connections").select("access_token,refresh_token").eq("user_id",user.id).maybeSingle(),
   ]);
   await Promise.all([google?.refresh_token?revokeGoogle(google.refresh_token):Promise.resolve(),google?.access_token?revokeGoogle(google.access_token):Promise.resolve(),strava?.access_token?revokeStrava(strava.access_token):Promise.resolve()]);
+  const deletedAt = new Date().toISOString();
   const deletionExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const {data:existingSettings,error:settingsReadError}=await admin.from("user_settings").select("user_id").eq("user_id",user.id).maybeSingle();
   if(settingsReadError)return json({error:"ACCOUNT_STATE_READ_FAILED"},500);
   const {error:settingsWriteError}=existingSettings
     ? await admin.from("user_settings").update({
         account_status:"deleted",
-        deleted_at:new Date().toISOString(),
+        deleted_at:deletedAt,
         deletion_expires_at:deletionExpiresAt,
         updated_at:new Date().toISOString(),
       }).eq("user_id",user.id)
@@ -39,10 +40,16 @@ Deno.serve(async(req)=>{
         coaching_tone:"honest_encouraging",
         onboarding_complete:false,
         account_status:"deleted",
-        deleted_at:new Date().toISOString(),
+        deleted_at:deletedAt,
         deletion_expires_at:deletionExpiresAt,
         updated_at:new Date().toISOString(),
       });
   if(settingsWriteError)return json({error:"ACCOUNT_STATE_WRITE_FAILED"},500);
+  // Deletion state is authoritative. Email delivery is best-effort and must
+  // never turn a successful deletion request into an apparent failure.
+  const { error: deletionEmailError } = await admin.functions.invoke("vow-account-deletion-confirmation-email", {
+    body: { user_id: user.id, deleted_at: deletedAt, restorable_until: deletionExpiresAt },
+  });
+  if (deletionEmailError) console.warn("[VOW] Account deletion succeeded but confirmation email could not be sent.");
   return json({deleted:true,restorable_until:deletionExpiresAt});
 });
