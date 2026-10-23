@@ -25,17 +25,18 @@ export async function requestNativeCalendarAccess(): Promise<boolean> {
   return result === 'granted';
 }
 
-async function getCalendarId(preferredAccountEmail?: string): Promise<string | undefined> {
+async function getCalendarId(_preferredAccountEmail?: string): Promise<string | undefined> {
   const { result: calendars } = await CapacitorCalendar.listCalendars();
   const { result: defaultCalendar } = await CapacitorCalendar.getDefaultCalendar();
   const writable = calendars.filter((calendar) => calendar.visible !== false && calendar.allowsContentModifications !== false);
-  if (preferredAccountEmail) {
-    const exact = writable.find((calendar) => calendar.accountName?.toLowerCase() === preferredAccountEmail.toLowerCase() || calendar.ownerAccount?.toLowerCase() === preferredAccountEmail.toLowerCase());
-    if (exact) return exact.id;
-  }
-  const googleCalendar = writable.find((calendar) => /@gmail\.com$/i.test(calendar.accountName || '') || /@googlemail\.com$/i.test(calendar.accountName || '') || /@gmail\.com$/i.test(calendar.ownerAccount || '') || /@googlemail\.com$/i.test(calendar.ownerAccount || ''));
-  if (googleCalendar) return googleCalendar.id;
-  return defaultCalendar?.id ?? writable[0]?.id ?? calendars[0]?.id;
+
+  // Phone-calendar sync follows Android's configured default calendar instead
+  // of choosing a Google calendar based on the VOW account's email address.
+  // Google account authorization remains a separate, optional integration.
+  const writableDefault = defaultCalendar
+    ? writable.find((calendar) => calendar.id === defaultCalendar.id)
+    : undefined;
+  return writableDefault?.id ?? writable[0]?.id ?? defaultCalendar?.id ?? calendars[0]?.id;
 }
 
 export async function addSessionToNativeCalendar(session: Session, preferredAccountEmail?: string): Promise<string | null> {
@@ -138,10 +139,21 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
     // Calendar sync. Reuse a matching event rather than creating a duplicate.
     const duplicateWindowStart = new Date(startDate - 60_000);
     const duplicateWindowEnd = new Date(startDate + 60_000);
+    const taskTitle = (session.notes || '').split('\n')
+      .find((line) => line.startsWith('Task: '))?.slice(6)?.trim();
+    const normalizeTitle = (value: string) => value
+      .replace(/^VOW\s*·\s*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLocaleLowerCase();
+    const expectedTitles = new Set(
+      [session.title, taskTitle, nativeTitle(session)]
+        .filter((value): value is string => Boolean(value))
+        .map(normalizeTitle),
+    );
     const matchingEvent = (await listNativeCalendarEvents(duplicateWindowStart, duplicateWindowEnd)).find((event) => {
       const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
-      const normalizedTitle = (value: string) => value.replace(/^VOW · /, '').trim().toLocaleLowerCase();
-      return normalizedTitle(event.summary) === normalizedTitle(session.title)
+      return expectedTitles.has(normalizeTitle(event.summary))
         && Number.isFinite(eventStart)
         && Math.abs(eventStart - startDate) < 60_000;
     });
