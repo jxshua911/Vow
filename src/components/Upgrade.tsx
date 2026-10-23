@@ -184,7 +184,6 @@ export function UpgradePage() {
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
       </div>
-      <div className="border border-vow-border rounded-xl p-4 mb-6"><p className="font-medium text-vow-ink">Premium · {monthlyProduct?.priceString || '$4.99'} / month</p><p className="text-xs text-vow-muted mt-1">One simple monthly plan.</p></div>
       {!isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
         {Capacitor.isNativePlatform()
