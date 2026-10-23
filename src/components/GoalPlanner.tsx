@@ -946,7 +946,7 @@ export function GoalPlanner({
     setSaving(true);
     setError('');
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
+
       const start = nextMonday();
 
       function buildDate(week: number, day: string, preferredTime: string): Date {
