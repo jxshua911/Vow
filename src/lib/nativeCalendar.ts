@@ -25,7 +25,7 @@ export async function requestNativeCalendarAccess(): Promise<boolean> {
   return result === 'granted';
 }
 
-async function getCalendarId(_preferredAccountEmail?: string): Promise<string | undefined> {
+async function getCalendarId(): Promise<string | undefined> {
   const { result: calendars } = await CapacitorCalendar.listCalendars();
   const { result: defaultCalendar } = await CapacitorCalendar.getDefaultCalendar();
   const writable = calendars.filter((calendar) => calendar.visible !== false && calendar.allowsContentModifications !== false);
@@ -42,7 +42,9 @@ async function getCalendarId(_preferredAccountEmail?: string): Promise<string | 
 export async function addSessionToNativeCalendar(session: Session, preferredAccountEmail?: string): Promise<string | null> {
   if (!Capacitor.isNativePlatform() || !session.scheduled_at) return null;
   if (!await requestNativeCalendarAccess()) throw new Error('Calendar access was not granted.');
-  const calendarId = await getCalendarId(preferredAccountEmail);
+  // Keep the optional argument for older callers; the device default calendar wins.
+  void preferredAccountEmail;
+  const calendarId = await getCalendarId();
   const startDate = new Date(session.scheduled_at).getTime();
   const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
   const { id } = await CapacitorCalendar.createEvent({ calendarId, title: nativeTitle(session), description: nativeDescription(session), startDate, endDate, alerts: [-15, 0] });
@@ -84,7 +86,9 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
   if (!Capacitor.isNativePlatform()) return 0;
   const upcoming = sessions.filter((session) => session.status === 'scheduled' && Boolean(session.scheduled_at) && new Date(session.scheduled_at as string).getTime() > Date.now());
   if (!upcoming.length || !await requestNativeCalendarAccess()) return 0;
-  const calendarId = await getCalendarId(preferredAccountEmail);
+  // Keep the optional argument for older callers; the device default calendar wins.
+  void preferredAccountEmail;
+  const calendarId = await getCalendarId();
   let createdOrRefreshed = 0;
 
   for (const session of upcoming) {
