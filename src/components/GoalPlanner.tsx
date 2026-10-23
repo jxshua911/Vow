@@ -1377,12 +1377,6 @@ export function GoalPlanner({
           subtitle="VOW uses your answers to make the commitment genuinely yours."
         />
         <div className="max-w-xl space-y-6">
-          <div className="border border-vow-border p-4 space-y-1">
-            <p className="text-xs text-vow-muted uppercase tracking-wider">
-              {domain?.goal_type ?? 'Goal'}
-            </p>
-            <p className="text-sm text-vow-ink">VOW is preparing questions around your goal.</p>
-          </div>
           <section className="border border-vow-border p-4" aria-live="polite">
             <p className="vow-label mb-1">Recommended YouTube videos</p>
             <p className="text-xs leading-5 text-vow-muted mb-3">A goal-specific video search is available now while VOW prepares your plan.</p>
