@@ -786,10 +786,13 @@ async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
   }
 }
 
-async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
+async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false, preferFallback = false) {
   const requestId = await claimGuardrail(req);
   try {
-    const providers = providerOrder();
+    const configuredProviders = providerOrder();
+    const providers = preferFallback && configuredProviders.length > 1
+      ? [...configuredProviders.slice(1), configuredProviders[0]]
+      : configuredProviders;
     console.log("[VOW AI] Provider routing", {
       selected: providers[0] || "none",
       fallback_order: providers.slice(1),
@@ -1625,7 +1628,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
                 draft_plan: b,
               }),
             },
-          ], "planRetry", false);
+          ], "planRetry", false, true);
           if (retry?.clarification_needed !== true) {
             b = retry;
             validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());
