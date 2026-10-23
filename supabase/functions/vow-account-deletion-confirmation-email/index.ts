@@ -67,7 +67,7 @@ Deno.serve(async (request) => {
 
   const rawName = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split("@")[0];
   const displayName = String(rawName).trim().slice(0, 100) || "there";
-  const from = (Deno.env.get("VOW_SUPPORT_FROM_EMAIL") || "VOW Support <support@vowglobal.online>").trim();
+  const from = (Deno.env.get("VOW_SUPPORT_FROM_EMAIL") || "VOW <noreply@vowglobal.online>").trim();
   const restoreDate = new Date(restorableUntil).toLocaleDateString("en-US", {
     year: "numeric", month: "long", day: "numeric", timeZone: "UTC",
   });
