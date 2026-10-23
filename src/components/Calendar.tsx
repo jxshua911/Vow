@@ -161,10 +161,10 @@ export function CalendarPage() {
     const combined: CalendarEvent[] = [...googleEvents, ...nativeEvents];
     const seen: CalendarEvent[] = [];
     for (const event of combined) {
-      const title = String(event.summary || '').trim().toLocaleLowerCase().replace(/\\s+/g, ' ');
+      const title = String(event.summary || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
       const start = eventDate(event)?.getTime();
       const duplicate = seen.some((candidate) => {
-        const candidateTitle = String(candidate.summary || '').trim().toLocaleLowerCase().replace(/\\s+/g, ' ');
+        const candidateTitle = String(candidate.summary || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
         const candidateStart = eventDate(candidate)?.getTime();
         if (!title || title !== candidateTitle || start == null || candidateStart == null) return false;
         // Ignore source differences and small timestamp rounding, but retain
