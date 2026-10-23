@@ -61,6 +61,35 @@ Deno.serve(async (request) => {
   }
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  // Allow idempotent retries of the same request, but limit new support
+  // submissions to one per account per hour.
+  const { data: priorRequest, error: priorRequestError } = await admin
+    .from('support_submissions')
+    .select('id')
+    .eq('client_request_id', requestId)
+    .maybeSingle();
+  if (priorRequestError) {
+    console.error('[VOW Support] Could not check support request idempotency.');
+    return json({ persisted: false, error: 'We could not check your existing request. Please try again.' }, 500);
+  }
+  if (!priorRequest) {
+    const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data: recentRequests, error: recentRequestError } = await admin
+      .from('support_submissions')
+      .select('id')
+      .eq('user_id', user.id)
+      .gte('created_at', cutoff)
+      .limit(1);
+    if (recentRequestError) {
+      console.error('[VOW Support] Could not check support submission rate limit.');
+      return json({ persisted: false, error: 'Support is temporarily unavailable. Please try again.' }, 503);
+    }
+    if (recentRequests?.length) {
+      return json({ persisted: false, error: 'You can send one support request per hour. Please wait before submitting another.' }, 429);
+    }
+  }
+
   let submission: { id: string; created_at: string; delivery_status: string; delivery_id: string | null; user_id: string; name: string; email: string; issue: string; message: string } | null = null;
   const inserted = await admin.from('support_submissions').insert({ client_request_id: requestId, user_id: user.id, name, email, issue, message, delivery_status: 'pending' }).select('id, created_at, delivery_status, delivery_id, user_id, name, email, issue, message').single();
   if (!inserted.error && inserted.data) {
