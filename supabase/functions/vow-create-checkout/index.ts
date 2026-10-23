@@ -30,13 +30,9 @@ Deno.serve(async (req) => {
     const cancelUrl = Deno.env.get("STRIPE_CANCEL_URL");
     if (!secret || !successUrl || !cancelUrl) return json({ error: "Checkout is not configured yet." }, 503);
 
-    let billing = "monthly";
-    try {
-      const body = await req.json();
-      if (body?.billing === "yearly") billing = "yearly";
-    } catch {
-      // Default to monthly when no JSON body is supplied.
-    }
+    // VOW launch pricing is monthly-only. Ignore client-supplied billing
+    // intervals so callers cannot start a new yearly checkout.
+    const billing = "monthly";
 
     const { data: existingEntitlement } = await supabase
       .from("vow_user_entitlements")
@@ -44,10 +40,8 @@ Deno.serve(async (req) => {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const priceId = billing === "yearly"
-      ? Deno.env.get("STRIPE_PRICE_ID_YEARLY")
-      : Deno.env.get("STRIPE_PRICE_ID_MONTHLY");
-    if (!priceId) return json({ error: `VOW ${billing} pricing is not configured yet.` }, 503);
+    const priceId = Deno.env.get("STRIPE_PRICE_ID_MONTHLY");
+    if (!priceId) return json({ error: "VOW monthly pricing is not configured yet." }, 503);
 
     const body = new URLSearchParams({
       mode: "subscription",
