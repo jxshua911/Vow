@@ -27,7 +27,26 @@ serve(async (req) => {
       const authHeader = req.headers.get("Authorization"); if (!authHeader) return json({ error: "Missing authorization header" }, 401);
       const userClient = createClient(supabaseUrl!, supabaseAnonKey!, { global: { headers: { Authorization: authHeader } } }); const { data: { user }, error: userError } = await userClient.auth.getUser(); if (userError || !user) return json({ error: "Not authenticated" }, 401);
       const admin = createClient(supabaseUrl!, serviceRoleKey!);
-      if (body.action === "status") { const { data: connection, error } = await admin.from("google_calendar_connections").select("id, access_token, scope").eq("user_id", user.id).maybeSingle(); if (error) throw error; const scope = String(connection?.scope || ""); const hasScopes = hasRequiredCalendarScopes(scope); const connected = Boolean(connection?.id && connection?.access_token && hasScopes); return json({ connected, needsReauth: Boolean(connection?.id && !hasScopes), available: true, configured: true }); }
+      if (body.action === "status") {
+        const { data: connection, error } = await admin
+          .from("google_calendar_connections")
+          .select("id, access_token, refresh_token, scope")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (error) throw error;
+        const scope = String(connection?.scope || "");
+        const hasScopes = hasRequiredCalendarScopes(scope);
+        // An access token alone is not a durable connection: it expires.
+        // Without a refresh token, the UI must not report the connection as healthy.
+        const canRefresh = Boolean(connection?.refresh_token);
+        const connected = Boolean(connection?.id && connection?.access_token && hasScopes && canRefresh);
+        return json({
+          connected,
+          needsReauth: Boolean(connection?.id && (!hasScopes || !canRefresh)),
+          available: true,
+          configured: true,
+        });
+      }
       if (body.action !== "start") return json({ error: "Unknown action" }, 400);
       const redirectUri = body.redirectUri; if (redirectUri !== NATIVE_REDIRECT && redirectUri !== WEB_REDIRECT) return json({ error: "Invalid application redirect URI" }, 400);
       const state = crypto.randomUUID(); const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
