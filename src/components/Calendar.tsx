@@ -84,7 +84,7 @@ export function CalendarPage() {
       const connected = await checkGoogleConnection();
       if (!connected) return;
       setError(navigator.onLine ? 'Could not sync Google Calendar right now. Your saved calendar events remain available.' : 'You’re offline. Saved calendar events remain available; reconnect to sync.');
-    } finally { setGoogleLoading(false); } }, [authSession, googleConnected]);
+    } finally { setGoogleLoading(false); } }, [authSession, googleConnected, checkGoogleConnection]);
   useEffect(() => {
     if (!authSession) { setGoogleEvents([]); return; }
     try { setGoogleEvents(JSON.parse(localStorage.getItem(`${CACHE_KEY_PREFIX}${authSession.user.id}`) || '[]')); } catch { setGoogleEvents([]); }
