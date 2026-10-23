@@ -588,7 +588,7 @@ function providerWeights(): Record<AiProvider, number> {
   // Stable priority order: try the primary provider first, then walk the
   // configured fallbacks. A random first choice makes rate-limit incidents
   // unpredictable and can repeatedly select a provider with no available quota.
-  const defaults: Record<AiProvider, number> = { groq: 1, mistral: 0.8, qwen: 0.6, nova: 0.4 };
+  const defaults: Record<AiProvider, number> = { groq: 0.5, mistral: 0.35, qwen: 0.1, nova: 0.05 };
   try {
     const raw = JSON.parse(Deno.env.get("VOW_AI_PROVIDER_WEIGHTS") || "{}");
     for (const provider of ["groq", "mistral", "qwen", "nova"] as AiProvider[]) {
@@ -609,9 +609,14 @@ function providerOrder(): AiProvider[] {
     qwen: Boolean(Deno.env.get("DASHSCOPE_API_KEY")),
     nova: Boolean(Deno.env.get("AWS_BEARER_TOKEN_BEDROCK")),
   };
-  return (["groq", "mistral", "qwen", "nova"] as AiProvider[])
-    .filter((provider) => keyPresent[provider] && weights[provider] > 0)
+  const enabled = (["groq", "mistral", "qwen", "nova"] as AiProvider[])
+    .filter((provider) => keyPresent[provider]);
+  const prioritized = enabled
+    .filter((provider) => weights[provider] > 0)
     .sort((a, b) => weights[b] - weights[a]);
+  // A zero-weight provider is still a fallback; if all weights are zero,
+  // retain the documented deterministic order instead of disabling AI.
+  return [...prioritized, ...enabled.filter((provider) => !prioritized.includes(provider))];
 }
 
 async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX) {
