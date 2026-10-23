@@ -448,6 +448,17 @@ function retryDelayMs(response: Response, _attempt: number) {
   return Math.min(10000, Math.max(0, Math.round(Math.max(...delays))));
 }
 
+function providerErrorCode(raw: string): string {
+  try {
+    const payload = JSON.parse(raw);
+    const code = payload?.error?.code ?? payload?.error?.type ?? payload?.code;
+    if (typeof code === "string" && /^[a-zA-Z0-9_.-]{1,80}$/.test(code)) return code;
+  } catch {
+    // Provider error bodies are intentionally not logged.
+  }
+  return "unspecified";
+}
+
 async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean) {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY_MISSING");
@@ -531,12 +542,12 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
     if (response.status === 400 && jsonMode) {
       jsonMode = false;
       console.warn("Groq JSON-mode request rejected; retrying without response_format", {
-        body: raw.slice(0, 1200),
+        error_code: providerErrorCode(raw),
       });
       continue;
     }
 
-    console.error("Groq provider error", { status: response.status, body: raw.slice(0, 1200) });
+    console.error("Groq provider error", { status: response.status, error_code: providerErrorCode(raw) });
     if (response.status === 429) throw new Error("GROQ_429");
     throw new Error(`GROQ_PROVIDER_ERROR_${response.status}`);
   }
@@ -668,7 +679,7 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
         }
         console.warn("[VOW AI] Mistral rate limit window exceeds the request budget; moving to the next provider", { delay_ms: delay });
       }
-      console.error("[VOW AI] Mistral provider error", { status: response.status, body: raw.slice(0, 1200) });
+      console.error("[VOW AI] Mistral provider error", { status: response.status, error_code: providerErrorCode(raw) });
       throw new Error(response.status === 429 ? "MISTRAL_429" : `MISTRAL_PROVIDER_ERROR_${response.status}`);
     }
 
@@ -723,7 +734,7 @@ async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
     });
     const raw = await r.text();
     if (!r.ok) {
-      console.error("[VOW AI] Qwen provider error", { status: r.status, body: raw.slice(0, 1200) });
+      console.error("[VOW AI] Qwen provider error", { status: r.status, error_code: providerErrorCode(raw) });
       throw new Error(r.status === 429 ? "QWEN_429" : `QWEN_PROVIDER_ERROR_${r.status}`);
     }
     const payload = JSON.parse(raw);
@@ -771,7 +782,7 @@ async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
     );
     const raw = await r.text();
     if (!r.ok) {
-      console.error("[VOW AI] Nova provider error", { status: r.status, body: raw.slice(0, 1200) });
+      console.error("[VOW AI] Nova provider error", { status: r.status, error_code: providerErrorCode(raw) });
       throw new Error(r.status === 429 ? "NOVA_429" : `NOVA_PROVIDER_ERROR_${r.status}`);
     }
     const payload = JSON.parse(raw);
