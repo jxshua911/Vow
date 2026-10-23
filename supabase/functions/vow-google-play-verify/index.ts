@@ -12,7 +12,7 @@ const cors = {
 const PACKAGE_NAME = Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME") ?? "com.vow.app";
 const SERVICE_ACCOUNT_JSON = Deno.env.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON") ?? "";
 const MONTHLY_PRODUCT_ID = Deno.env.get("VOW_PREMIUM_MONTHLY_PRODUCT_ID") ?? "";
-const YEARLY_PRODUCT_ID = Deno.env.get("VOW_PREMIUM_YEARLY_PRODUCT_ID") ?? "";
+// New purchases are monthly-only; existing yearly entitlements can still be read from records.
 const MAX_TOKEN_LENGTH = 4096;
 
 type ServiceAccount = {
@@ -32,8 +32,7 @@ function json(status: number, body: Record<string, unknown>) {
 }
 
 function isAllowedProduct(productId: string, billingPeriod: string) {
-  return (billingPeriod === "monthly" && productId === MONTHLY_PRODUCT_ID)
-    || (billingPeriod === "yearly" && productId === YEARLY_PRODUCT_ID);
+  return billingPeriod === "monthly" && productId === MONTHLY_PRODUCT_ID;
 }
 
 async function googleAccessToken(account: ServiceAccount) {
@@ -69,7 +68,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json(405, { error: "METHOD_NOT_ALLOWED" });
 
-  if (!SERVICE_ACCOUNT_JSON || !MONTHLY_PRODUCT_ID || !YEARLY_PRODUCT_ID) {
+  if (!SERVICE_ACCOUNT_JSON || !MONTHLY_PRODUCT_ID) {
     return json(503, { error: "GOOGLE_PLAY_NOT_CONFIGURED" });
   }
 
