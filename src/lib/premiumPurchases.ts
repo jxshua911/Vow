@@ -3,8 +3,6 @@ import { supabase } from './supabase';
 import {
   VOW_PREMIUM_MONTHLY,
   VOW_PREMIUM_MONTHLY_BASE_PLAN,
-  VOW_PREMIUM_YEARLY,
-  VOW_PREMIUM_YEARLY_BASE_PLAN,
 } from './premiumConfig';
 import { refreshEntitlementSnapshot } from './entitlements';
 
@@ -14,28 +12,25 @@ async function accountToken(userId: string) {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export { VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY };
+export { VOW_PREMIUM_MONTHLY };
 
 export async function getPremiumProducts() {
-  if (!VOW_PREMIUM_MONTHLY || !VOW_PREMIUM_YEARLY) return { products: [] };
+  if (!VOW_PREMIUM_MONTHLY) return { products: [] };
   return NativePurchases.getProducts({
-    productIdentifiers: [VOW_PREMIUM_MONTHLY, VOW_PREMIUM_YEARLY],
+    productIdentifiers: [VOW_PREMIUM_MONTHLY],
     productType: PURCHASE_TYPE.SUBS,
   });
 }
 
 export async function purchasePremium(
-  productId: typeof VOW_PREMIUM_MONTHLY | typeof VOW_PREMIUM_YEARLY,
+  productId: typeof VOW_PREMIUM_MONTHLY,
 ) {
   if (!productId) throw new Error('PREMIUM_NOT_CONFIGURED');
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) throw new Error('UNAUTHORIZED');
 
   const appAccountToken = await accountToken(user.id);
-  const planIdentifier =
-    productId === VOW_PREMIUM_MONTHLY
-      ? VOW_PREMIUM_MONTHLY_BASE_PLAN
-      : VOW_PREMIUM_YEARLY_BASE_PLAN;
+  const planIdentifier = VOW_PREMIUM_MONTHLY_BASE_PLAN;
   if (!planIdentifier) throw new Error('PREMIUM_NOT_CONFIGURED');
 
   const transaction = await NativePurchases.purchaseProduct({
@@ -48,7 +43,7 @@ export async function purchasePremium(
 
   if (!transaction.purchaseToken) throw new Error('PURCHASE_TOKEN_MISSING');
 
-  const billingPeriod = productId === VOW_PREMIUM_MONTHLY ? 'monthly' : 'yearly';
+  const billingPeriod = 'monthly';
   const { data, error: verifyError } = await supabase.functions.invoke(
     'vow-google-play-verify',
     {
@@ -95,14 +90,12 @@ export async function restorePremium() {
   const purchase = purchases.find(
     (item) =>
       item.purchaseToken &&
-      (item.productIdentifier === VOW_PREMIUM_MONTHLY ||
-        item.productIdentifier === VOW_PREMIUM_YEARLY),
+      item.productIdentifier === VOW_PREMIUM_MONTHLY,
   );
 
   if (!purchase?.purchaseToken) return { ok: true, restored: false };
 
-  const billingPeriod =
-    purchase.productIdentifier === VOW_PREMIUM_MONTHLY ? 'monthly' : 'yearly';
+  const billingPeriod = 'monthly';
 
   const { data, error: verifyError } = await supabase.functions.invoke(
     'vow-google-play-verify',
