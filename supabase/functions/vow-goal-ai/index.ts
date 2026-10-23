@@ -1612,6 +1612,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
         .filter(Boolean)
         .join(" ");
       let validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());
+      let validationRetryRateLimited = false;
       if (validationError && (
         validationError === "GENERIC_SESSION_TASK" ||
         validationError === "REPETITIVE_SCHEDULE" ||
@@ -1653,11 +1654,22 @@ Each week's sessions must advance that week's focus rather than repeating the sa
             console.warn("[VOW AI] Plan quality retry requested clarification; retaining the original validation failure.");
           }
         } catch (retryError) {
+          const retryErrorMessage = retryError instanceof Error ? retryError.message : String(retryError);
+          validationRetryRateLimited = ["GROQ_429", "MISTRAL_429", "QWEN_429", "NOVA_429"].includes(retryErrorMessage);
           console.warn("[VOW AI] Plan quality retry failed", {
             validation_error: validationError,
-            error: retryError instanceof Error ? retryError.message : String(retryError),
+            error_code: validationRetryRateLimited ? retryErrorMessage : "PLAN_RETRY_FAILED",
           });
         }
+      }
+      if (validationError && validationRetryRateLimited) {
+        await releasePlanningEntitlement(req, entitlementReservationId);
+        entitlementReservationId = null;
+        return json(
+          { error: "VOW AI is temporarily busy and could not repair the draft plan. Please try again shortly." },
+          429,
+          { "Retry-After": "30" }
+        );
       }
       if (validationError) {
         console.warn("[VOW AI] Plan validation rejected generated output", {
