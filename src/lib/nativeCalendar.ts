@@ -133,6 +133,23 @@ export async function syncSessionsToNativeCalendar(sessions: Session[], preferre
     if (!session.scheduled_at) continue;
     const startDate = new Date(session.scheduled_at).getTime();
     const endDate = startDate + Math.max(15, session.duration_minutes || 60) * 60_000;
+
+    // The device calendar may already contain the same event through Google
+    // Calendar sync. Reuse a matching event rather than creating a duplicate.
+    const duplicateWindowStart = new Date(startDate - 60_000);
+    const duplicateWindowEnd = new Date(startDate + 60_000);
+    const matchingEvent = (await listNativeCalendarEvents(duplicateWindowStart, duplicateWindowEnd)).find((event) => {
+      const eventStart = event.start.dateTime ? new Date(event.start.dateTime).getTime() : NaN;
+      const normalizedTitle = (value: string) => value.replace(/^VOW · /, '').trim().toLocaleLowerCase();
+      return normalizedTitle(event.summary) === normalizedTitle(session.title)
+        && Number.isFinite(eventStart)
+        && Math.abs(eventStart - startDate) < 60_000;
+    });
+    if (matchingEvent) {
+      markSynced(session.id, matchingEvent.id);
+      continue;
+    }
+
     const { id } = await CapacitorCalendar.createEvent({ calendarId, title: desiredTitle, description: nativeDescription(session), startDate, endDate, alerts: [-15, 0] });
     if (id) {
       markSynced(session.id, id);
