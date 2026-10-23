@@ -19,7 +19,7 @@ jobs:
   verify:
     name: Tests, lint, typecheck and production build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out branch
         uses: actions/checkout@v4
@@ -29,6 +29,21 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck Edge Functions
+        run: |
+          deno check --no-lock supabase/functions/vow-goal-ai/index.ts
+          deno check --no-lock supabase/functions/vow-create-checkout/index.ts
+          deno check --no-lock supabase/functions/vow-google-play-verify/index.ts
+          deno check --no-lock supabase/functions/vow-stripe-webhook/index.ts
+          deno check --no-lock supabase/functions/vow-account-delete/index.ts
+          deno check --no-lock supabase/functions/vow-account-deletion-confirmation-email/index.ts
+          deno check --no-lock supabase/functions/vow-premium-confirmation-email/index.ts
+          deno check --no-lock supabase/functions/vow-support/index.ts
+          deno check --no-lock supabase/functions/google-calendar-auth/index.ts
       - name: Unit tests
         run: npm test
       - name: ESLint
