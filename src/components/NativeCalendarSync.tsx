@@ -11,7 +11,6 @@ const DISMISSED_KEY_PREFIX = 'vow:native-calendar-sync-ui-dismissed:';
 export function NativeCalendarSync() {
   const { session } = useAuth();
   const userId = session?.user.id;
-  const accountEmail = session?.user.email;
   const [enabled, setEnabled] = useState(() => localStorage.getItem(ENABLE_KEY) === 'true');
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -83,7 +82,7 @@ export function NativeCalendarSync() {
         return;
       }
       try {
-        const created = await syncSessionsToNativeCalendar(data as Session[], accountEmail);
+        const created = await syncSessionsToNativeCalendar(data as Session[]);
         if (!cancelled) { setSyncing(false); dismissAfterSuccess(created ? created + ' upcoming VOW sessions are synced to your phone calendar.' : 'Phone calendar sync is up to date.', 2500); }
       } catch (error) {
         console.error('[VOW] Native calendar sync failed:', error);
@@ -94,7 +93,7 @@ export function NativeCalendarSync() {
     window.addEventListener('focus', refresh);
     void sync();
     return () => { cancelled = true; window.removeEventListener('focus', refresh); };
-  }, [enabled, userId, accountEmail, dismissAfterSuccess, retryKey]);
+  }, [enabled, userId, dismissAfterSuccess, retryKey]);
 
   if (!Capacitor.isNativePlatform() || !session || !userId || dismissedUserId !== userId || dismissed !== false) return null;
 
