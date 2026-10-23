@@ -29,6 +29,21 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Report npm audit findings
+        run: |
+          npm audit --json > /tmp/vow-npm-audit.json || true
+          node <<'NODE'
+          const fs = require('node:fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/vow-npm-audit.json', 'utf8'));
+          const vulnerabilities = Object.entries(audit.vulnerabilities || {}).map(([name, item]) => ({
+            name,
+            severity: item.severity,
+            range: item.range,
+            fixAvailable: item.fixAvailable,
+            advisories: (item.via || []).map((via) => typeof via === 'string' ? via : via.title),
+          }));
+          console.log(JSON.stringify({ totals: audit.metadata?.vulnerabilities, vulnerabilities }, null, 2));
+          NODE
       - name: Set up Deno
         uses: denoland/setup-deno@v2
         with:
