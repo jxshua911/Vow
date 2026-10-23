@@ -6,6 +6,15 @@ BEGIN;
 
 REVOKE DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.user_settings FROM anon, authenticated;
 
+-- Normalize any active accounts left with stale deletion metadata so the
+-- stricter owner-update policy does not lock them out of ordinary settings.
+UPDATE public.user_settings
+SET deleted_at = NULL,
+    deletion_expires_at = NULL,
+    updated_at = now()
+WHERE account_status = 'active'
+  AND (deleted_at IS NOT NULL OR deletion_expires_at IS NOT NULL);
+
 DROP POLICY IF EXISTS insert_own_settings ON public.user_settings;
 CREATE POLICY insert_own_settings
 ON public.user_settings
