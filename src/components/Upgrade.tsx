@@ -18,15 +18,6 @@ const premiumBenefits = [
   'Full plan history',
 ];
 
-const freeBenefits = [
-  '1 active goal',
-  'Personalised plan with milestones',
-  'Scheduled sessions and progress tracking',
-  '3 planning actions/month',
-  '1 adaptive replan/month',
-  '1 weekly review/month',
-];
-
 export function UpgradePage() {
   const [usage, setUsage] = useState<EntitlementSnapshot | null>(null);
   const [restoreState, setRestoreState] = useState('');
