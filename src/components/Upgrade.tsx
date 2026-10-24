@@ -170,13 +170,7 @@ export function UpgradePage() {
 
     <section className="border border-vow-border bg-vow-bg rounded-2xl p-6 md:p-8 mb-8">
       <p className="vow-label mb-3">Pricing</p>
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
-        <div className="border border-vow-border rounded-xl p-5">
-          <p className="text-sm font-medium text-vow-ink mb-4">Free</p>
-          <div className="text-3xl font-medium text-vow-ink mb-1">$0</div>
-          <p className="text-xs text-vow-muted mb-5">Start planning</p>
-          <div className="space-y-2.5">{freeBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
-        </div>
+      <div className="grid grid-cols-1 gap-4 mb-6">
         <div className="relative border border-vow-ink rounded-xl p-5 pt-8">
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
           <div className="text-3xl font-medium text-vow-ink mb-1">{monthlyProduct?.priceString || '$4.99'}</div>
