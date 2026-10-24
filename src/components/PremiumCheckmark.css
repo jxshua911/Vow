@@ -1,0 +1,29 @@
+.premium-checkmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.premium-checkmark--sm { width: 24px; height: 24px; }
+.premium-checkmark--md { width: 32px; height: 32px; }
+.premium-checkmark--lg { width: 48px; height: 48px; }
+
+.premium-checkmark { color: #10b981; }
+
+@media (prefers-color-scheme: dark) {
+  .premium-checkmark { color: #34d399; }
+}
+
+@keyframes checkmarkPulse {
+  0% { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.checkmark-circle-fill,
+.checkmark-path {
+  animation: checkmarkPulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.checkmark-circle-fill { animation-delay: 0.1s; }
+.checkmark-path { animation-delay: 0.2s; }
