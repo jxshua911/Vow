@@ -26,4 +26,6 @@ dist-ssr
 !.env.example
 !.env.*.example
 
+# Supabase CLI local state and generated caches.
 supabase/.temp/
+.pnpm-store/
