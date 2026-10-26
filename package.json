@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test": "node scripts/run-tests.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:android": "npm run build && cap sync android && node scripts/build-android.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
