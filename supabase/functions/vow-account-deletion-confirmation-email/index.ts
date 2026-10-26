@@ -77,11 +77,11 @@ Deno.serve(async (request) => {
   const text = [
     `Hi ${displayName},`, "",
     "We received your request to delete your VOW account.",
-    `Your account is scheduled for deletion. You can restore it by signing back in before ${restoreDate}.`,
+    `Your account is scheduled for deletion. You have 14 days to restore it by signing back in before ${restoreDate}.`,
     "If you did not request this, sign in to restore your account and contact VOW Support.",
     "", "VOW Support", "https://vowglobal.online",
   ].join("\n");
-  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:auto;color:#202020;line-height:1.6"><p>Hi ${escapeHtml(displayName)},</p><p>We received your request to delete your VOW account.</p><p>Your account is scheduled for deletion. You can restore it by signing back in before <strong>${escapeHtml(restoreDate)}</strong>.</p><p>If you did not request this, sign in to restore your account and contact VOW Support.</p><p>VOW Support<br><a href="https://vowglobal.online">vowglobal.online</a></p></div>`;
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:auto;color:#202020;line-height:1.6"><p>Hi ${escapeHtml(displayName)},</p><p>We received your request to delete your VOW account.</p><p>Your account is scheduled for deletion. You have 14 days to restore it by signing back in before <strong>${escapeHtml(restoreDate)}</strong>.</p><p>If you did not request this, sign in to restore your account and contact VOW Support.</p><p>VOW Support<br><a href="https://vowglobal.online">vowglobal.online</a></p></div>`;
 
   try {
     const response = await fetch("https://api.resend.com/emails", {
