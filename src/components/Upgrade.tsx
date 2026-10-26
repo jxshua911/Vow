@@ -5,6 +5,7 @@ import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementSna
 import { getPremiumProducts, openPremiumManagement, purchasePremium, restorePremium } from '@/lib/premiumPurchases';
 import { VOW_PREMIUM_MONTHLY } from '@/lib/premiumConfig';
 import { userFacingError } from '@/lib/userFacingError';
+import { supabase } from '@/lib/supabase';
 
 
 
@@ -87,7 +88,20 @@ export function UpgradePage() {
   async function handlePurchase() {
     setPurchaseState('');
     if (!Capacitor.isNativePlatform()) {
-      setPurchaseState('Google Play checkout is available in VOW for Android. Web checkout is not configured in this build.');
+      try {
+        const { data, error } = await supabase.functions.invoke('vow-create-checkout', {
+          body: { billing: 'monthly' },
+        });
+        if (error) throw error;
+        if (typeof data?.url !== 'string') throw new Error('Stripe checkout did not return a secure payment URL.');
+        const checkoutUrl = new URL(data.url);
+        if (checkoutUrl.protocol !== 'https:' || checkoutUrl.hostname !== 'checkout.stripe.com') {
+          throw new Error('Stripe returned an unexpected checkout address.');
+        }
+        window.location.assign(checkoutUrl.toString());
+      } catch (err) {
+        setPurchaseState(userFacingError(err, 'We could not start secure checkout. Please try again.'));
+      }
       return;
     }
     try {
@@ -173,7 +187,7 @@ export function UpgradePage() {
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
         {Capacitor.isNativePlatform()
           ? <><p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the monthly billing period unless you cancel in Google Play.</p><button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button></>
-          : <p className="text-xs text-vow-muted mt-1">Google Play checkout is available in VOW for Android. Web checkout is not configured in this build. Premium access already linked to your VOW account remains available here.</p>}
+          : <><p className="text-xs text-vow-muted mt-1">Continue to Stripe’s secure checkout to start your monthly Premium subscription.</p><button type="button" onClick={() => void handlePurchase()} className="vow-btn-primary w-full mt-4">Continue to secure Stripe checkout</button></>}
       </div>}
       {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium is active</p>
