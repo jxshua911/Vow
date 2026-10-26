@@ -119,7 +119,21 @@ export function UpgradePage() {
   async function handleManage() {
     setManageState('');
     if (!Capacitor.isNativePlatform()) {
-      setManageState('Manage or cancel your subscription through the store where you purchased it. Google Play subscription management is available in VOW for Android. Removing VOW does not cancel a subscription.');
+      try {
+        const { data, error } = await supabase.functions.invoke('vow-create-portal', { body: {} });
+        if (error || typeof data?.url !== 'string') {
+          setManageState('We could not open Stripe subscription management. If you subscribed through Google Play, manage it in Google Play; otherwise contact support.');
+          return;
+        }
+        const portalUrl = new URL(data.url);
+        if (portalUrl.protocol !== 'https:' || portalUrl.hostname !== 'billing.stripe.com') {
+          setManageState('Stripe returned an unexpected subscription-management address. Please contact support.');
+          return;
+        }
+        window.location.assign(portalUrl.toString());
+      } catch {
+        setManageState('We could not open Stripe subscription management. If you subscribed through Google Play, manage it in Google Play; otherwise contact support.');
+      }
       return;
     }
     try {
@@ -208,7 +222,7 @@ export function UpgradePage() {
       <div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full rounded-xl">
         <h2 id="cancel-premium-title" className="vow-heading text-xl text-vow-ink mb-2">Are you sure you want to cancel Premium?</h2>
         <p className="text-sm text-vow-muted leading-relaxed mb-6">Google Play will handle the cancellation. You can keep your Premium access for the current billing period, subject to Google Play's subscription rules.</p>
-        <div className="flex gap-3"><button type="button" onClick={() => setConfirmCancel(false)} className="vow-btn-ghost flex-1">Keep Premium</button><button type="button" onClick={() => { setConfirmCancel(false); void handleManage(); }} className="vow-btn-primary flex-1">Continue to Google Play</button></div>
+        <div className="flex gap-3"><button type="button" onClick={() => setConfirmCancel(false)} className="vow-btn-ghost flex-1">Keep Premium</button><button type="button" onClick={() => { setConfirmCancel(false); void handleManage(); }} className="vow-btn-primary flex-1">{Capacitor.isNativePlatform() ? 'Continue to Google Play' : 'Continue to Stripe'}</button></div>
       </div>
     </div>}
   </div>;
