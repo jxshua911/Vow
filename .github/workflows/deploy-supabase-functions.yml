@@ -98,13 +98,12 @@ jobs:
               GOOGLE_PLAY_PACKAGE_NAME
               GOOGLE_PLAY_SERVICE_ACCOUNT_JSON
               VOW_PREMIUM_MONTHLY_PRODUCT_ID
-              VOW_PREMIUM_YEARLY_PRODUCT_ID
               GOOGLE_PUBSUB_AUDIENCE
               GOOGLE_CALENDAR_CLIENT_ID
               GOOGLE_CALENDAR_CLIENT_SECRET
               GOOGLE_CALENDAR_REDIRECT_URI
             )
-            optional_secrets=(OPENAI_API_KEY MISTRAL_API_KEY DASHSCOPE_API_KEY AWS_BEARER_TOKEN_BEDROCK)
+            optional_secrets=(OPENAI_API_KEY MISTRAL_API_KEY DASHSCOPE_API_KEY AWS_BEARER_TOKEN_BEDROCK VOW_PREMIUM_YEARLY_PRODUCT_ID)
             for secret in "${required_secrets[@]}"; do
               if grep -Fxq "$secret" <<< "$secret_names"; then
                 echo "$secret=SET"
