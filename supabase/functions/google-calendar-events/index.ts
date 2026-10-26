@@ -46,7 +46,7 @@ async function hashHex(value: string) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function refreshAccessToken(connection: Record<string, unknown>, admin: ReturnType<typeof createClient>) {
+async function refreshAccessToken(connection: Record<string, unknown>, admin: ReturnType<typeof createClient<any>>) {
   let accessToken = connection.access_token as string | null;
   const expired = Boolean(connection.expires_at && new Date(String(connection.expires_at)).getTime() <= Date.now());
   if (!expired) return accessToken;
@@ -70,7 +70,7 @@ async function refreshAccessToken(connection: Record<string, unknown>, admin: Re
     access_token: accessToken,
     expires_at: data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : connection.expires_at,
     updated_at: new Date().toISOString(),
-  }).eq("user_id", connection.user_id);
+  }).eq("user_id", String(connection.user_id));
   if (error) throw error;
   return accessToken;
 }
