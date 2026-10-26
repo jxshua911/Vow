@@ -23,7 +23,7 @@ Deno.serve(async(req)=>{
   ]);
   await Promise.all([google?.refresh_token?revokeGoogle(google.refresh_token):Promise.resolve(),google?.access_token?revokeGoogle(google.access_token):Promise.resolve(),strava?.access_token?revokeStrava(strava.access_token):Promise.resolve()]);
   let deletedAt = new Date().toISOString();
-  let deletionExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  let deletionExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const {data:existingSettings,error:settingsReadError}=await admin.from("user_settings")
     .select("user_id,account_status,deleted_at,deletion_expires_at")
     .eq("user_id",user.id)
@@ -38,8 +38,8 @@ Deno.serve(async(req)=>{
   let settingsWriteError: { message?: string } | null = null;
 
   if (existingDeletionIsValid) {
-    // Repeated requests must never restart or extend the 30-day grace period.
-    // Reuse the original timestamps so Resend's idempotency key remains stable.
+    // Repeated requests must never restart or extend the 14-day grace period.
+    // Reuse the original timestamps so the confirmation email's idempotency key remains stable.
     deletedAt = new Date(priorDeletedAt).toISOString();
     deletionExpiresAt = new Date(priorDeletionExpiresAt).toISOString();
   } else if(existingSettings) {
