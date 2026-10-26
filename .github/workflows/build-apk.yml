@@ -4,7 +4,16 @@ on:
   push:
     branches:
       - capacitor-mobile
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      release_mode:
+        description: Build a QA APK or a Play-ready production release
+        type: choice
+        options:
+          - qa
+          - production
+        default: qa
+        required: true
 
 permissions:
   contents: read
@@ -49,6 +58,51 @@ jobs:
           else
             echo "VITE_ANDROID_REMOTE_NOTIFICATIONS=false" >> "$GITHUB_ENV"
             echo "::warning::ANDROID_GOOGLE_SERVICES_JSON is not configured; this build will provide on-device reminders only."
+          fi
+      - name: Validate build mode and store configuration
+        env:
+          RELEASE_MODE: ${{ github.event.inputs.release_mode || 'qa' }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_PRODUCT_ID: ${{ secrets.VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_PRODUCT_ID }}
+          VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_BASE_PLAN_ID: ${{ secrets.VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_BASE_PLAN_ID }}
+          ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+          VOW_RELEASE_KEYSTORE_B64: ${{ secrets.VOW_RELEASE_KEYSTORE_B64 }}
+          VOW_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.VOW_RELEASE_KEYSTORE_PASSWORD }}
+          VOW_RELEASE_KEY_ALIAS: ${{ secrets.VOW_RELEASE_KEY_ALIAS }}
+          VOW_RELEASE_KEY_PASSWORD: ${{ secrets.VOW_RELEASE_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for secret in VITE_SUPABASE_URL VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_PRODUCT_ID VITE_GOOGLE_PLAY_PREMIUM_MONTHLY_BASE_PLAN_ID; do
+            if [ -n "${!secret}" ]; then
+              echo "$secret=SET"
+            else
+              echo "$secret=MISSING"
+              missing=1
+            fi
+          done
+          if [ -n "$VITE_SUPABASE_PUBLISHABLE_KEY" ] || [ -n "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "Supabase client key=SET"
+          else
+            echo "Supabase client key=MISSING"
+            missing=1
+          fi
+          if [ "$RELEASE_MODE" = "production" ]; then
+            for secret in ANDROID_GOOGLE_SERVICES_JSON VOW_RELEASE_KEYSTORE_B64 VOW_RELEASE_KEYSTORE_PASSWORD VOW_RELEASE_KEY_ALIAS VOW_RELEASE_KEY_PASSWORD; do
+              if [ -n "${!secret}" ]; then
+                echo "$secret=SET"
+              else
+                echo "$secret=MISSING"
+                missing=1
+              fi
+            done
+            if [ "$missing" -ne 0 ]; then
+              echo "::error::Production release blocked because required Supabase/Google Play/signing configuration is missing."
+              exit 1
+            fi
+          elif [ "$missing" -ne 0 ]; then
+            echo "::warning::This is a QA-only build. Google Play purchase testing will remain disabled until the monthly product ID and base plan are configured."
           fi
       - name: Build web app
         env:
@@ -111,10 +165,10 @@ jobs:
           test -n "$AAPT"
           BADGING="$("$AAPT" dump badging "$APK")"
           echo "$BADGING" | grep -F "package: name='com.vow.app' versionCode='24' versionName='1.8.4'"
-      - name: Upload VOW production release APK
+      - name: Upload VOW APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.8.4 Production CI
+          name: VOW APK 1.8.4 ${{ github.event.inputs.release_mode == 'production' && 'Production Release' || 'QA' }}
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
