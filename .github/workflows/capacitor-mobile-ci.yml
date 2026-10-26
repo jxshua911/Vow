@@ -60,7 +60,10 @@ jobs:
             supabase/functions/vow-account-deletion-confirmation-email/index.ts \
             supabase/functions/vow-premium-confirmation-email/index.ts \
             supabase/functions/vow-support/index.ts \
-            supabase/functions/google-calendar-auth/index.ts
+            supabase/functions/google-calendar-auth/index.ts \
+            supabase/functions/google-calendar-events/index.ts \
+            supabase/functions/strava-oauth/index.ts \
+            supabase/functions/vow-google-play-rtdn/index.ts
           do
             if ! deno check --node-modules-dir=auto --no-lock "$file"; then
               status=1
