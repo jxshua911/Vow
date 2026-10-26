@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { SignJWT, importPKCS8 } from "npm:jose@6.1.0";
 const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS","Content-Type":"application/json"};
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:CORS});
 function adminClient(){return createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"",{auth:{persistSession:false,autoRefreshToken:false}});}
@@ -7,6 +8,38 @@ function authClient(req:Request){return createClient(Deno.env.get("SUPABASE_URL"
 async function revokeGoogle(token:string){try{await fetch("https://oauth2.googleapis.com/revoke",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({token})});}catch{ /* best-effort external revocation */ }}
 async function revokeStrava(token:string){try{await fetch("https://www.strava.com/oauth/deauthorize",{method:"POST",headers:{Authorization:`Bearer ${token}`}});}catch{ /* best-effort external revocation */ }}
 async function cancelStripe(subscriptionId:string,secret:string){const response=await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,{method:"DELETE",headers:{Authorization:`Bearer ${secret}`}});if(!response.ok)throw new Error("STRIPE_SUBSCRIPTION_CANCELLATION_FAILED");}
+type GoogleServiceAccount = { client_email: string; private_key: string; token_uri?: string };
+async function googleAccessToken(account: GoogleServiceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const key = await importPKCS8(account.private_key, "RS256");
+  const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/androidpublisher" })
+    .setProtectedHeader({ alg: "RS256", typ: "JWT" })
+    .setIssuer(account.client_email)
+    .setSubject(account.client_email)
+    .setAudience(account.token_uri ?? "https://oauth2.googleapis.com/token")
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .sign(key);
+  const tokenResponse = await fetch(account.token_uri ?? "https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+  });
+  if (!tokenResponse.ok) throw new Error("GOOGLE_OAUTH_FAILED");
+  const token = await tokenResponse.json();
+  if (typeof token.access_token !== "string" || !token.access_token) throw new Error("GOOGLE_ACCESS_TOKEN_MISSING");
+  return token.access_token as string;
+}
+async function cancelGooglePlaySubscription(purchaseToken: string, packageName: string, account: GoogleServiceAccount) {
+  const accessToken = await googleAccessToken(account);
+  const endpoint = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}:cancel`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ cancellationContext: { cancellationType: "USER_REQUESTED_STOP_RENEWALS" } }),
+  });
+  if (!response.ok) throw new Error("GOOGLE_PLAY_SUBSCRIPTION_CANCELLATION_FAILED");
+}
 Deno.serve(async(req)=>{
   if(req.method==="OPTIONS")return new Response("ok",{headers:CORS});
   if(req.method!=="POST")return json({error:"METHOD_NOT_ALLOWED"},405);
@@ -17,6 +50,30 @@ Deno.serve(async(req)=>{
   const admin=adminClient();
   const {data:billing}=await admin.from("vow_user_entitlements").select("provider,stripe_subscription_id,status").eq("user_id",user.id).maybeSingle();
   if(billing?.provider==="stripe"&&billing.stripe_subscription_id&&["active","grace"].includes(billing.status)){const stripeSecret=Deno.env.get("STRIPE_SECRET_KEY")||"";if(!stripeSecret)return json({error:"STRIPE_CANCELLATION_NOT_CONFIGURED"},503);try{await cancelStripe(billing.stripe_subscription_id,stripeSecret);}catch{return json({error:"STRIPE_SUBSCRIPTION_CANCELLATION_FAILED"},502);}}
+  if(billing?.provider==="google_play"&&["active","grace"].includes(billing.status)){
+    const {data:playSubscription,error:playSubscriptionError}=await admin.from("vow_subscription_records")
+      .select("provider_purchase_id,current_period_end,auto_renewing")
+      .eq("user_id",user.id)
+      .eq("provider","google_play")
+      .in("status",["active","grace"])
+      .order("current_period_end",{ascending:false})
+      .limit(1)
+      .maybeSingle();
+    if(playSubscriptionError)return json({error:"GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED"},500);
+    if(playSubscription?.auto_renewing!==false){
+      const purchaseToken=String(playSubscription?.provider_purchase_id||"").trim();
+      if(!purchaseToken)return json({error:"GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED"},503);
+      const serviceAccountJson=Deno.env.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")||"";
+      const packageName=Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME")||"com.vow.app";
+      if(!serviceAccountJson)return json({error:"GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED"},503);
+      try{
+        const account=JSON.parse(serviceAccountJson) as GoogleServiceAccount;
+        await cancelGooglePlaySubscription(purchaseToken,packageName,account);
+      }catch{
+        return json({error:"GOOGLE_PLAY_SUBSCRIPTION_CANCELLATION_FAILED"},502);
+      }
+    }
+  }
   const [{data:google},{data:strava}]=await Promise.all([
     admin.from("google_calendar_connections").select("access_token,refresh_token").eq("user_id",user.id).maybeSingle(),
     admin.from("strava_connections").select("access_token,refresh_token").eq("user_id",user.id).maybeSingle(),
