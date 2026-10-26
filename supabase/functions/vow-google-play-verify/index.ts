@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { importPKCS8, SignJWT } from "https://esm.sh/jose@6.1.0";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { importPKCS8, SignJWT } from "npm:jose@6.1.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
