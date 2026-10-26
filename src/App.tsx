@@ -153,6 +153,15 @@ function AppContent() {
             await supabase.auth.signOut({ scope: 'local' });
             return;
           }
+        } else if (accountState?.status === 'purge_required') {
+          const { data: purgeResult, error: purgeError } = await supabase.functions.invoke('vow-account-purge-expired', { body: {} });
+          if (purgeError || !['purged', 'already_purged'].includes(String(purgeResult?.status))) {
+            console.warn('[VOW] Expired account cleanup could not finish; signing out until cleanup can be retried.');
+            await supabase.auth.signOut({ scope: 'local' });
+            return;
+          }
+          await supabase.auth.signOut({ scope: 'local' });
+          return;
         } else if (accountState?.status === 'purged') {
           await supabase.auth.signOut({ scope: 'local' });
           return;
