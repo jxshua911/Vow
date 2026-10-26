@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     return json(401, { error: "PUBSUB_AUTH_INVALID" });
   }
 
-  if (!SERVICE_ACCOUNT_JSON || !MONTHLY_PRODUCT_ID || !YEARLY_PRODUCT_ID) {
+  if (!SERVICE_ACCOUNT_JSON || !MONTHLY_PRODUCT_ID) {
     return json(503, { error: "GOOGLE_PLAY_NOT_CONFIGURED" });
   }
 
@@ -136,12 +136,12 @@ Deno.serve(async (req) => {
     if ((purchase.packageName ?? PACKAGE_NAME) !== PACKAGE_NAME) throw new Error("PACKAGE_MISMATCH");
     const lineItem = Array.isArray(purchase.lineItems)
       ? purchase.lineItems.find((item: { productId?: string }) =>
-          item.productId === MONTHLY_PRODUCT_ID || item.productId === YEARLY_PRODUCT_ID)
+          item.productId === MONTHLY_PRODUCT_ID || (Boolean(YEARLY_PRODUCT_ID) && item.productId === YEARLY_PRODUCT_ID))
       : null;
     if (!lineItem) throw new Error("PRODUCT_NOT_ALLOWED");
 
     const productId = lineItem.productId as string;
-    const billingPeriod = productId === YEARLY_PRODUCT_ID ? "yearly" : "monthly";
+    const billingPeriod = YEARLY_PRODUCT_ID && productId === YEARLY_PRODUCT_ID ? "yearly" : "monthly";
     const state = purchase.subscriptionState;
     const expiry = lineItem.expiryTime ? new Date(lineItem.expiryTime) : null;
     const activeStates = new Set(["SUBSCRIPTION_STATE_ACTIVE", "SUBSCRIPTION_STATE_IN_GRACE_PERIOD"]);
