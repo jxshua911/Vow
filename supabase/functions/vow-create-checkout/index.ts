@@ -34,11 +34,32 @@ Deno.serve(async (req) => {
     // intervals so callers cannot start a new yearly checkout.
     const billing = "monthly";
 
-    const { data: existingEntitlement } = await supabase
+    const { data: existingEntitlement, error: entitlementError } = await supabase
       .from("vow_user_entitlements")
-      .select("stripe_customer_id, plan, status")
+      .select("stripe_customer_id, provider, plan, status, current_period_end, grace_until, personal_build_override, personal_build_plan")
       .eq("user_id", user.id)
       .maybeSingle();
+    if (entitlementError) return json({ error: "Could not verify your current Premium status." }, 503);
+
+    const periodEnd = existingEntitlement?.current_period_end
+      ? new Date(existingEntitlement.current_period_end).getTime()
+      : null;
+    const graceEnd = existingEntitlement?.grace_until
+      ? new Date(existingEntitlement.grace_until).getTime()
+      : null;
+    const alreadyPremium = Boolean(
+      (existingEntitlement?.personal_build_override && existingEntitlement.personal_build_plan === "premium") ||
+      (existingEntitlement?.provider && existingEntitlement.plan === "premium" &&
+        ["active", "trialing"].includes(String(existingEntitlement.status)) &&
+        (periodEnd === null || periodEnd > Date.now())) ||
+      (existingEntitlement?.provider && existingEntitlement.plan === "premium" &&
+        existingEntitlement.status === "grace" && graceEnd !== null && graceEnd > Date.now()) ||
+      (existingEntitlement?.provider === "manual" && existingEntitlement.plan === "premium" &&
+        ["active", "trialing"].includes(String(existingEntitlement.status)))
+    );
+    if (alreadyPremium) {
+      return json({ error: "Premium is already active for this account. Manage the existing subscription instead of purchasing again." }, 409);
+    }
 
     const priceId = Deno.env.get("STRIPE_PRICE_ID_MONTHLY");
     if (!priceId) return json({ error: "VOW monthly pricing is not configured yet." }, 503);
