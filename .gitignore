@@ -29,3 +29,8 @@ dist-ssr
 # Supabase CLI local state and generated caches.
 supabase/.temp/
 .pnpm-store/
+
+# Local Gradle build caches.
+.gradle/
+**/.gradle/
+
