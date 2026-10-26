@@ -15,7 +15,6 @@ async function googleAccessToken(account: GoogleServiceAccount) {
   const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/androidpublisher" })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
     .setIssuer(account.client_email)
-    .setSubject(account.client_email)
     .setAudience(account.token_uri ?? "https://oauth2.googleapis.com/token")
     .setIssuedAt(now)
     .setExpirationTime(now + 3600)
