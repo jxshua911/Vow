@@ -57,6 +57,7 @@ jobs:
             supabase/functions/vow-google-play-verify/index.ts \
             supabase/functions/vow-stripe-webhook/index.ts \
             supabase/functions/vow-account-delete/index.ts \
+            supabase/functions/vow-account-purge-expired/index.ts \
             supabase/functions/vow-account-deletion-confirmation-email/index.ts \
             supabase/functions/vow-premium-confirmation-email/index.ts \
             supabase/functions/vow-support/index.ts \
