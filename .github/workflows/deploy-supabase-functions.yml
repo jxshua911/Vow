@@ -120,6 +120,7 @@ jobs:
                 echo "$secret=NOT_SET (optional provider)"
               fi
             done
+            exit "$missing"
 
           elif [ -n "$DEPLOY_FUNCTION" ]; then
             if [[ ! "$DEPLOY_FUNCTION" =~ ^[a-z0-9-]+$ ]] || [ ! -d "supabase/functions/$DEPLOY_FUNCTION" ]; then
