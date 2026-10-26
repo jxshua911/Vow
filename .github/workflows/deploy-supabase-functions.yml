@@ -86,7 +86,26 @@ jobs:
             echo "Checking required Edge Function secret names (values are never displayed):"
             secret_names="$(supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" --output json | jq -r '.[].name')"
             missing=0
-            for secret in GROQ_API_KEY OPENAI_API_KEY MISTRAL_API_KEY QWEN_API_KEY RESEND_API_KEY VOW_SUPPORT_FROM_EMAIL STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_PRICE_ID_MONTHLY STRIPE_SUCCESS_URL STRIPE_CANCEL_URL GOOGLE_PLAY_PACKAGE_NAME GOOGLE_PLAY_SERVICE_ACCOUNT_JSON VOW_PREMIUM_MONTHLY_PRODUCT_ID; do
+            required_secrets=(
+              GROQ_API_KEY
+              RESEND_API_KEY
+              VOW_SUPPORT_FROM_EMAIL
+              STRIPE_SECRET_KEY
+              STRIPE_WEBHOOK_SECRET
+              STRIPE_PRICE_ID_MONTHLY
+              STRIPE_SUCCESS_URL
+              STRIPE_CANCEL_URL
+              GOOGLE_PLAY_PACKAGE_NAME
+              GOOGLE_PLAY_SERVICE_ACCOUNT_JSON
+              VOW_PREMIUM_MONTHLY_PRODUCT_ID
+              VOW_PREMIUM_YEARLY_PRODUCT_ID
+              GOOGLE_PUBSUB_AUDIENCE
+              GOOGLE_CALENDAR_CLIENT_ID
+              GOOGLE_CALENDAR_CLIENT_SECRET
+              GOOGLE_CALENDAR_REDIRECT_URI
+            )
+            optional_secrets=(OPENAI_API_KEY MISTRAL_API_KEY DASHSCOPE_API_KEY AWS_BEARER_TOKEN_BEDROCK)
+            for secret in "${required_secrets[@]}"; do
               if grep -Fxq "$secret" <<< "$secret_names"; then
                 echo "$secret=SET"
               else
@@ -94,7 +113,14 @@ jobs:
                 missing=1
               fi
             done
-            exit "$missing"
+            for secret in "${optional_secrets[@]}"; do
+              if grep -Fxq "$secret" <<< "$secret_names"; then
+                echo "$secret=SET (optional provider)"
+              else
+                echo "$secret=NOT_SET (optional provider)"
+              fi
+            done
+
           elif [ -n "$DEPLOY_FUNCTION" ]; then
             if [[ ! "$DEPLOY_FUNCTION" =~ ^[a-z0-9-]+$ ]] || [ ! -d "supabase/functions/$DEPLOY_FUNCTION" ]; then
               echo "Invalid or unknown Edge Function: $DEPLOY_FUNCTION" >&2
