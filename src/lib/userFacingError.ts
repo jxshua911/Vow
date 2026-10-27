@@ -52,6 +52,7 @@ export function userFacingError(error: unknown, fallback = 'Something went wrong
   if (/did not meet VOW.s planning quality checks|plan quality/i.test(raw)) {
     return 'VOW could not build a sufficiently specific plan yet. Your goal is still saved; try again shortly or adjust your answers.';
   }
+  if (/password safety check/i.test(raw)) return 'VOW could not verify this password against known breaches. Check your connection and try again; account creation is paused until the check succeeds.';
   if (/network|fetch|failed to fetch|connection/i.test(raw)) return 'VOW could not connect right now. Check your connection and try again.';
   if (/invalid login credentials/i.test(raw)) return 'That email or password is incorrect.';
   if (/email.*not confirmed/i.test(raw)) return 'Please confirm your email address before signing in.';
