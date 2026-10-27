@@ -218,7 +218,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 
             <div className="py-5">
               <div className="flex items-center justify-between gap-4">
-                <div><p className="text-sm text-vow-ink">Notifications</p><p className="text-xs text-vow-muted mt-1">Session reminders</p></div>
+                <div><p className="text-sm text-vow-ink">Enable notifications</p><p className="text-xs text-vow-muted mt-1">Session reminders</p></div>
                 <button
                   type="button"
                   role="switch"
