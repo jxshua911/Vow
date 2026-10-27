@@ -8,6 +8,7 @@ import { GoogleIcon } from './GoogleIcon';
 import { BrandLogo } from './BrandLogo';
 import { userFacingError } from '@/lib/userFacingError';
 import { AccountSuspendedPage } from './AccountSuspendedPage';
+import { isPasswordCompromised } from '@/lib/leakedPasswordProtection';
 
 type AuthMode = 'signin' | 'signup'; type AuthMethod = 'options' | 'email';
 type AuthPageProps = { suspended?: boolean; onSuspensionDismiss?: () => void };
