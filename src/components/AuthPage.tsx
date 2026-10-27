@@ -11,13 +11,7 @@ import { AccountSuspendedPage } from './AccountSuspendedPage';
 
 type AuthMode = 'signin' | 'signup'; type AuthMethod = 'options' | 'email';
 type AuthPageProps = { suspended?: boolean; onSuspensionDismiss?: () => void };
-async function isPasswordCompromised(password: string): Promise<boolean> {
-  const data = new TextEncoder().encode(password); const digest = await crypto.subtle.digest('SHA-1', data);
-  const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
-  const response = await fetch('https://api.pwnedpasswords.com/range/' + hash.slice(0, 5), { headers: { 'Add-Padding': 'true' }, cache: 'no-store' });
-  if (!response.ok) throw new Error('Password safety check failed');
-  const suffix = hash.slice(5); return (await response.text()).split('\n').some((line) => line.trim().toUpperCase().startsWith(suffix + ':'));
-}
+
 export function AuthPage({ suspended: accountSuspended = false, onSuspensionDismiss }: AuthPageProps) {
   const [mode, setMode] = useState<AuthMode>('signup'); const [method, setMethod] = useState<AuthMethod>('options');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false); const [suspended, setSuspended] = useState(false);
