@@ -4,9 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const isWindows = process.platform === 'win32';
-const gradleCommand = isWindows ? 'gradlew.bat' : './gradlew';
+// The repository may not preserve the executable bit on gradlew when checked out
+// by GitHub Actions. Invoke it through bash on POSIX runners so CI does not fail
+// with EACCES; Windows uses the batch wrapper through cmd.exe.
+const gradleCommand = isWindows ? 'gradlew.bat' : 'bash';
+const gradleArgs = isWindows ? ['assembleDebug'] : ['./gradlew', 'assembleDebug'];
 
-const result = spawnSync(gradleCommand, ['assembleDebug'], {
+const result = spawnSync(gradleCommand, gradleArgs, {
   cwd: resolve(root, 'android'),
   stdio: 'inherit',
   shell: isWindows,
