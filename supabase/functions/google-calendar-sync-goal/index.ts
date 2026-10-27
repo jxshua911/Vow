@@ -90,14 +90,19 @@ serve(async (req) => {
       if (clearError) throw clearError;
     }
 
-    const { data: planItems, error: planError } = await admin.from("goal_plan_items").select("id, week_number, day_of_week, scheduled_at, task, purpose, target_metric, duration_minutes, status").eq("goal_id", goalId).eq("user_id", user.id).eq("status", "scheduled").order("scheduled_at", { ascending: true });
+    const { data: planItems, error: planError } = await admin.from("goal_plan_items").select("id, week_number, day_of_week, scheduled_at, task, purpose, target_metric, duration_minutes, status").eq("goal_id", goalId).eq("user_id", user.id).eq("status", "scheduled").not("scheduled_at", "is", null).order("scheduled_at", { ascending: true });
     if (planError) throw planError;
 
     const sessionByTime = new Map((sessions || []).filter((session) => session.status === "scheduled").map((session) => [session.scheduled_at, session]));
     let createdCount = 0;
     for (const item of planItems || []) {
       const session = sessionByTime.get(item.scheduled_at);
+      if (!item.scheduled_at) continue; // Flexible, date-less sessions cannot become Google Calendar events yet.
       const start = new Date(item.scheduled_at);
+      if (!Number.isFinite(start.getTime())) {
+        console.warn("[VOW Calendar] Skipping plan item with invalid scheduled_at", item.id);
+        continue;
+      }
       const end = new Date(start.getTime() + Math.max(5, item.duration_minutes || 60) * 60000);
       const noteLines = String(session?.notes || "").split("\n");
       const task = noteLines.find((line) => line.startsWith("Task: "))?.slice(6) || item.task;
