@@ -1,6 +1,6 @@
 apply plugin: 'com.android.application'
 
-def vowVersionCode = System.getenv("VOW_VERSION_CODE") ?: "23"
+def vowVersionCode = System.getenv("VOW_VERSION_CODE") ?: "24"
 def vowVersionName = System.getenv("VOW_VERSION_NAME") ?: "1.8.4"
 def releaseKeystorePath = System.getenv("VOW_RELEASE_KEYSTORE_PATH")
 def releaseKeystorePassword = System.getenv("VOW_RELEASE_KEYSTORE_PASSWORD")
