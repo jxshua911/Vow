@@ -61,7 +61,7 @@ serve(async (req) => {
       "https://www.googleapis.com/auth/calendar.events",
       "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
     ];
-    const grantedScopes = new Set(String(connection.scope || "").split(/\\s+/).filter(Boolean));
+    const grantedScopes = new Set(String(connection.scope || "").split(/\s+/).filter(Boolean));
     if (!requiredScopes.every((scope) => grantedScopes.has(scope))) {
       return json({
         connected: false,
