@@ -216,7 +216,12 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     }
     setLoading(false);
   }, [goalId, session?.user.id]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const refresh = () => { void load(); };
+    window.addEventListener('vow:refresh', refresh);
+    return () => window.removeEventListener('vow:refresh', refresh);
+  }, [load]);
   async function updateSessionStatus(sessId: string, status: Session['status']) {
     const updates: Partial<Session> = { status, updated_at: new Date().toISOString() };
     if (status === 'completed') updates.completed_at = new Date().toISOString();
