@@ -57,9 +57,11 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     void refreshNotificationState();
     const onFocus = () => { void refreshNotificationState(); };
     window.addEventListener('focus', onFocus);
+    window.addEventListener('vow:refresh', onFocus);
     const resumeListener = CapacitorApp.addListener('resume', onFocus);
     return () => {
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('vow:refresh', onFocus);
       resumeListener.then((handle) => handle.remove());
     };
   }, [refreshNotificationState]);
@@ -80,11 +82,13 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     window.addEventListener('vow:entitlement-changed', handleEntitlementChange);
     window.addEventListener('online', refreshEntitlement);
     window.addEventListener('focus', refreshEntitlement);
+    window.addEventListener('vow:refresh', refreshEntitlement);
     return () => {
       active = false;
       window.removeEventListener('vow:entitlement-changed', handleEntitlementChange);
       window.removeEventListener('online', refreshEntitlement);
       window.removeEventListener('focus', refreshEntitlement);
+      window.removeEventListener('vow:refresh', refreshEntitlement);
     };
   }, []);
 
