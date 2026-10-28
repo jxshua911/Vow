@@ -1491,7 +1491,7 @@ export function GoalPlanner({
                   >
                     <span className="min-w-0">
                       <span className="block font-medium">{dayMode === 'timed' ? 'Specific time' : dayMode === 'flexible-day' ? 'Flexible day' : 'Leave in queue'}</span>
-                      <span className="block text-xs text-vow-muted mt-1">{dayMode === 'timed' ? 'Choose a date and time' : dayMode === 'flexible-day' ? 'No fixed time or reminder' : 'No date or time assigned'}</span>
+                      <span className="block text-xs text-vow-muted mt-1">{dayMode === 'timed' ? 'Set a date and time' : dayMode === 'flexible-day' ? 'No set time or reminder' : 'Keep it unscheduled for now'}</span>
                     </span>
                     <svg className={`h-4 w-4 shrink-0 transition-transform ${openScheduleModeDay === day ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" aria-hidden="true">
                       <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -1500,9 +1500,9 @@ export function GoalPlanner({
                   {openScheduleModeDay === day && (
                     <div role="listbox" aria-labelledby={`schedule-mode-${day}`} className="absolute z-20 mt-2 w-full overflow-hidden rounded-lg border border-vow-border bg-vow-bg shadow-xl">
                       {([
-                        { value: 'timed', title: 'Specific time', detail: 'Choose a date and time' },
-                        { value: 'flexible-day', title: 'Flexible day', detail: 'No fixed time or reminder' },
-                        { value: 'unscheduled', title: 'Leave in queue', detail: 'No date or time assigned' },
+                        { value: 'timed', title: 'Specific time', detail: 'Set a date and time' },
+                        { value: 'flexible-day', title: 'Flexible day', detail: 'No set time or reminder' },
+                        { value: 'unscheduled', title: 'Leave in queue', detail: 'Keep it unscheduled for now' },
                       ] as const).map(option => (
                         <button
                           key={option.value}
