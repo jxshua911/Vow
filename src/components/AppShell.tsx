@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import type { ReactNode } from 'react';
@@ -21,6 +21,17 @@ const navItems: { view: Exclude<View, 'legal'>; label: string; icon: ReactNode }
 export function AppShell({ currentView, onNavigate, children }: AppShellProps) {
   const { session } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
+  const touchStartY = useRef<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (refreshTimer.current !== null) window.clearTimeout(refreshTimer.current); }, []);
+  function finishPullRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    window.dispatchEvent(new CustomEvent('vow:refresh', { detail: { view: currentView } }));
+    if (refreshTimer.current !== null) window.clearTimeout(refreshTimer.current);
+    refreshTimer.current = window.setTimeout(() => { setRefreshing(false); refreshTimer.current = null; }, 1200);
+  }
   useEffect(() => {
     let active = true;
     const refresh = () => {
@@ -50,7 +61,7 @@ export function AppShell({ currentView, onNavigate, children }: AppShellProps) {
     </aside>
     <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-vow-bg border-b border-vow-border px-6 flex items-center" style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}><BrandLogo className="w-20 h-auto" /></header>
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-vow-bg border-t border-vow-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}><div className="grid min-h-16" style={{ gridTemplateColumns: `repeat(${visibleNavItems.length}, minmax(0, 1fr))` }}>{visibleNavItems.map((item) => { const active = currentView === item.view; return <button key={item.view} onClick={() => onNavigate(item.view)} className={`flex flex-col items-center justify-center gap-1 px-1 transition-colors ${active ? 'text-vow-ink' : 'text-vow-muted hover:text-vow-ink'}`} aria-label={item.label}><span className={`flex items-center justify-center transition-transform ${active ? 'scale-105' : ''}`}>{item.icon}</span><span className={`text-[9px] tracking-wide ${active ? 'font-medium' : ''}`}>{item.label}</span></button>; })}</div></nav>
-    <main className="md:ml-56 min-h-screen" style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))', paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}><div className="px-6 md:px-12 py-8 md:py-12 max-w-4xl">{children}</div></main>
+    <main className="md:ml-56 min-h-screen" onTouchStart={(event) => { touchStartY.current = window.scrollY <= 2 ? (event.touches[0]?.clientY ?? null) : null; }} onTouchEnd={(event) => { const start = touchStartY.current; touchStartY.current = null; const end = event.changedTouches[0]?.clientY; if (start !== null && typeof end === 'number' && end - start > 90 && window.scrollY <= 2) finishPullRefresh(); }} style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))', paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}><div className="px-6 md:px-12 py-8 md:py-12 max-w-4xl">{refreshing && <div role="status" aria-live="polite" className="mb-4 text-center text-xs text-vow-muted">Refreshing…</div>}{children}</div></main>
   </div>;
 }
 
