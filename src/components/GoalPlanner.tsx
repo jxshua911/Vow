@@ -421,6 +421,7 @@ export function GoalPlanner({
   const [resourceError, setResourceError] = useState('');
   const [calendarConflicts, setCalendarConflicts] = useState<string[]>([]);
   const [expandedScheduleKey, setExpandedScheduleKey] = useState<string | null>(null);
+  const [openScheduleModeDay, setOpenScheduleModeDay] = useState<string | null>(null);
   const [showAllPlanReferences, setShowAllPlanReferences] = useState(false);
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
 
@@ -1479,11 +1480,52 @@ export function GoalPlanner({
               const dayMode = modeForDay(day);
               return <div key={day} className="border-b border-vow-border pb-4 last:border-b-0 last:pb-0">
                 <label className="block text-sm font-medium text-vow-ink mb-2" htmlFor={`schedule-mode-${day}`}>{day}</label>
-                <select id={`schedule-mode-${day}`} value={dayMode} onChange={event => { const mode = event.target.value as 'timed' | 'flexible-day' | 'unscheduled'; setSessionScheduleModes(current => ({ ...current, [day]: mode })); if (mode === 'timed') setSessionTimes(current => current[day] ? current : ({ ...current, [day]: currentLocalTime() })); }} className="w-full border border-vow-border bg-transparent px-3 py-2 text-sm text-vow-ink">
-                  <option value="timed">Specific time</option>
-                  <option value="flexible-day">Flexible day — no fixed time</option>
-                  <option value="unscheduled">No date/time — leave in queue</option>
-                </select>
+<div className="relative">
+                  <button
+                    id={`schedule-mode-${day}`}
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={openScheduleModeDay === day}
+                    onClick={() => setOpenScheduleModeDay(current => current === day ? null : day)}
+                    className="w-full min-h-12 flex items-center justify-between gap-3 border border-vow-border bg-vow-bg px-4 py-3 text-left text-sm text-vow-ink rounded-lg focus:outline-none focus:ring-2 focus:ring-vow-ink/30"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-medium">{dayMode === 'timed' ? 'Specific time' : dayMode === 'flexible-day' ? 'Flexible day' : 'Leave in queue'}</span>
+                      <span className="block text-xs text-vow-muted mt-1">{dayMode === 'timed' ? 'Choose a date and time' : dayMode === 'flexible-day' ? 'No fixed time or reminder' : 'No date or time assigned'}</span>
+                    </span>
+                    <svg className={`h-4 w-4 shrink-0 transition-transform ${openScheduleModeDay === day ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {openScheduleModeDay === day && (
+                    <div role="listbox" aria-labelledby={`schedule-mode-${day}`} className="absolute z-20 mt-2 w-full overflow-hidden rounded-lg border border-vow-border bg-vow-bg shadow-xl">
+                      {([
+                        { value: 'timed', title: 'Specific time', detail: 'Choose a date and time' },
+                        { value: 'flexible-day', title: 'Flexible day', detail: 'No fixed time or reminder' },
+                        { value: 'unscheduled', title: 'Leave in queue', detail: 'No date or time assigned' },
+                      ] as const).map(option => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="option"
+                          aria-selected={dayMode === option.value}
+                          onClick={() => {
+                            setSessionScheduleModes(current => ({ ...current, [day]: option.value }));
+                            if (option.value === 'timed') setSessionTimes(current => current[day] ? current : ({ ...current, [day]: currentLocalTime() }));
+                            setOpenScheduleModeDay(null);
+                          }}
+                          className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-vow-gray/20 focus:bg-vow-gray/20 focus:outline-none ${dayMode === option.value ? 'bg-vow-gray/15' : ''}`}
+                        >
+                          <span>
+                            <span className="block text-sm font-medium text-vow-ink">{option.title}</span>
+                            <span className="mt-1 block text-xs text-vow-muted">{option.detail}</span>
+                          </span>
+                          {dayMode === option.value && <svg className="h-4 w-4 shrink-0 text-vow-ink" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m4 10 4 4 8-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {dayMode === 'timed' && <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="block text-xs text-vow-muted">Date for {day}<input type="date" value={sessionDates[day] || defaultDateForDay(day)} onChange={event => setSessionDates(current => ({ ...current, [day]: event.target.value }))} className="block w-full mt-1 border border-vow-border bg-transparent px-3 py-2 text-sm text-vow-ink" /></label>
                   <div><p className="text-xs text-vow-muted mb-1">Time for {day}</p><TimeWheelPicker value={sessionTimes[day] || currentLocalTime()} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={day + ' session time'} /></div>
