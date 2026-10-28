@@ -35,9 +35,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     };
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('vow:refresh', refresh);
     return () => {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('vow:refresh', refresh);
     };
   }, [load]);
   useEffect(() => {
@@ -50,7 +52,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     };
     window.addEventListener('vow:entitlement-changed', onEntitlementChange);
     window.addEventListener('focus', refresh);
-    return () => { active = false; window.removeEventListener('vow:entitlement-changed', onEntitlementChange); window.removeEventListener('focus', refresh); };
+    window.addEventListener('vow:refresh', refresh);
+    return () => { active = false; window.removeEventListener('vow:entitlement-changed', onEntitlementChange); window.removeEventListener('focus', refresh); window.removeEventListener('vow:refresh', refresh); };
   }, []);
   const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
   // Date-less sessions are supported by VOW's flexible scheduling modes. Count
