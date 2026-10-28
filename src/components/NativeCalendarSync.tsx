@@ -91,8 +91,9 @@ export function NativeCalendarSync() {
     }
     const refresh = () => { if (document.visibilityState === 'visible') void sync(); };
     window.addEventListener('focus', refresh);
+    window.addEventListener('vow:refresh', refresh);
     void sync();
-    return () => { cancelled = true; window.removeEventListener('focus', refresh); };
+    return () => { cancelled = true; window.removeEventListener('focus', refresh); window.removeEventListener('vow:refresh', refresh); };
   }, [enabled, userId, dismissAfterSuccess, retryKey]);
 
   if (!Capacitor.isNativePlatform() || !session || !userId || dismissedUserId !== userId || dismissed !== false) return null;
