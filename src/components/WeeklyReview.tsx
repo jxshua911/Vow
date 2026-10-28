@@ -59,7 +59,12 @@ export function ReviewPage() {
     }
   }, [session, start]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const refresh = () => { void load(); void refreshEntitlementSnapshot(); };
+    window.addEventListener('vow:refresh', refresh);
+    return () => window.removeEventListener('vow:refresh', refresh);
+  }, [load]);
 
   async function generateReview() {
     if (!session || generationInProgress.current) return;
