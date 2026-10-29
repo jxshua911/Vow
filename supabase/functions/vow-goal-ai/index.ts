@@ -601,7 +601,7 @@ function providerWeights(): Record<AiProvider, number> {
   // Stable priority order: try the primary provider first, then walk the
   // configured fallbacks. A random first choice makes rate-limit incidents
   // unpredictable and can repeatedly select a provider with no available quota.
-  const defaults: Record<AiProvider, number> = { groq: 0.5, mistral: 0.35, qwen: 0.1, nova: 0.05 };
+  const defaults: Record<AiProvider, number> = { mistral: 0.6, groq: 0.3, qwen: 0.07, nova: 0.03 };
   try {
     const raw = JSON.parse(Deno.env.get("VOW_AI_PROVIDER_WEIGHTS") || "{}");
     for (const provider of ["groq", "mistral", "qwen", "nova"] as AiProvider[]) {
