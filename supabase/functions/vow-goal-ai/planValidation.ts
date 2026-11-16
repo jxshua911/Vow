@@ -102,7 +102,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
     if (substeps.some((step) => !validText(step, 5, 300))) return false;
 
     const rawType = String(action.type ?? action.action_type ?? "").trim().toLowerCase();
-    const title = action.title.trim();
+    const title = action.title.trim();\n    const genericActionText = /^(?:do (?:this|the task)|work on (?:it|this|the goal)|make progress(?: on (?:it|the goal))?|continue(?: working)?|keep going|practice more|practise more|review your goal|study more|learn more)[.! ]*$/i;\n    if (genericActionText.test(title)) return false;
     const isRest = rawType === "rest" || rawType === "break" || /^(rest|break)\b/i.test(title);
     if (isRest) {
       if (children.length || substeps.length) return false;\n      if (action.instructions != null && action.instructions !== "" && !validText(action.instructions, 8, MAX_INSTRUCTION_LENGTH)) return false;
@@ -122,7 +122,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
 
     if (rawType && !["task", "exercise", "action"].includes(rawType)) return false;
     if (children.length > 0) return false;
-    if (!validText(action.instructions, MIN_INSTRUCTION_LENGTH, MAX_INSTRUCTION_LENGTH)) return false;
+    if (!validText(action.instructions, MIN_INSTRUCTION_LENGTH, MAX_INSTRUCTION_LENGTH)) return false;\n    if (genericActionText.test(action.instructions.trim())) return false;
     if (substeps.length < 2) return false;
 
     executableCount += 1;
