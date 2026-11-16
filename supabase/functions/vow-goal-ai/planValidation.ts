@@ -1,128 +1,129 @@
+const MAX_ACTIONS = 12;
+const MAX_ACTION_DEPTH = 4;
+const MAX_ACTION_NODES = 100;
+const MAX_CHILDREN = 8;
+const MAX_SUBSTEPS = 6;
+const MAX_TITLE_LENGTH = 120;
+const MAX_INSTRUCTION_LENGTH = 1500;
+const MIN_INSTRUCTION_LENGTH = 20;
+
 export function hasMeasurableEvidence(task: string): boolean {
-  return /\b\d+(?:[.,]\d+)?\s*%/i.test(task)
-    || /\b\d+(?:[.,]\d+)?\s*(?:minutes?|mins?|hours?|km|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|seconds?|points?|kg|lb)\b/i.test(task)
-    || /\b\d+\s*[x×]\s*\d+/i.test(task);
+  if (typeof task !== "string" || !task.trim()) return false;
+  const value = task.normalize("NFKC").replace(/,/g, "");
+  return /(?:^|\s)\d+(?:\.\d+)?\s*%(?=\s|$)/i.test(value)
+    || /(?:^|\s)\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?|km|kilomet(?:er|re)s?|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|weeks?|points?|kg|lb|grams?|g|ml|lit(?:er|re)s?|chapters?|questions?|problems?|customers?|calls?|orders?|RM|USD|EUR|GBP)(?=\s|$)/i.test(value)
+    || /\b(?:twice|thrice|once|daily|weekly|monthly|every\s+day|every\s+week)\b/i.test(value)
+    || /\b\d+\s*[x×]\s*\d+(?!\s*\d)/i.test(value)
+    || /\b(?:complete|finish|submit|attend|pass|achieve|publish|deliver|earn|save|score)\s+(?:the\s+)?(?:[a-z][\w-]*\s+){0,4}(?:chapter|module|course|assignment|exam|milestone|project|application|report|certificate|assessment|draft|prototype)\b/i.test(value);
 }
 
 const CATEGORY_ALIASES: Record<string, string> = {
-  learning: 'study',
-  education: 'study',
-  money: 'financial',
-  finance: 'financial',
-  career: 'business',
-  projects: 'business',
-  product: 'business',
-  creative: 'skill',
-  music: 'skill',
-  cooking: 'skill',
-  travel: 'personal',
-  life_admin: 'personal',
-  organisation: 'home',
-  organization: 'home',
+  learning: "study", education: "study", academic: "study",
+  money: "financial", finance: "financial", budgeting: "financial",
+  career: "business", projects: "business", project: "business", product: "business",
+  creative: "skill", music: "skill", cooking: "skill", language: "skill",
+  travel: "personal", life_admin: "personal", lifeadmin: "personal",
+  organisation: "home", organization: "home", household: "home",
+  sport: "fitness", sports: "fitness", exercise: "fitness",
+  wellbeing: "health", wellness: "health",
+  relationships: "relationship", social: "relationship",
+  habits: "mindfulness", mental_wellbeing: "mindfulness",
 };
 
 const CATEGORY_SIGNALS: Record<string, RegExp> = {
-  fitness: /\b(run|walk|cycle|swim|lift|squat|push.?up|pull.?up|plank|exercise|workout|training|mobility|stretch|reps?|sets?|pace|distance|form|technique|rest|rounds?|warm.?up|cool.?down)\b/i,
-  study: /\b(solve|problem|exercise|read|chapter|revise|revision|recall|flashcards?|quiz|test|essay|summari[sz]e|explain|derive|calculate|practice|practise|questions?|notes?|worked example|accuracy|mark scheme|vocabulary|grammar|concept|formula)\b/i,
-  financial: /\b(budget|save|saving|expense|spend|income|cost|price|money|account|deposit|transfer|debt|payment|transaction|invest|financial|currency|track|contribution|balance|quote|purchase)\b/i,
-  business: /\b(customer|client|market|competitor|offer|product|service|sales?|revenue|interview|validate|prototype|launch|distribution|audience|conversion|business|pitch|outreach|feature|acceptance criteria|deliverable|test case|deploy|ship)\b/i,
-  skill: /\b(practice|practise|drill|rehearse|build|create|draw|write|code|debug|compose|perform|record|edit|design|test|feedback|technique|exercise|project|lesson|draft|revision|recipe|ingredient|chop|simmer|bake|chord|scale|tempo|sketch|prototype)\b/i,
-  mindfulness: /\b(breathe|breathing|meditat|mindful|attention|focus|urge|trigger|reflection|reflect|journal|journalling|cue|routine|habit|track|check.?in|grounding|body scan|pause)\b/i,
-  relationship: /\b(listen|conversation|communicat|ask|message|call|boundary|respect|empathy|feedback|conflict|family|friend|partner|relationship|reconnect|follow.?up|active listening|perspective)\b/i,
-  health: /\b(health|wellbeing|wellness|sleep|symptom|appointment|clinician|doctor|professional|hydration|meal|nutrition|mobility|recovery|monitor|log|screening|routine|safe|guidance)\b/i,
-  personal: /\b(habit|routine|cue|trigger|track|checklist|priority|schedule|plan|reflect|review|prepare|book|booking|document|application|route|itinerary|packing|deadline|reminder|organise|organize|declutter|admin|practice|practise)\b/i,
-  home: /\b(clean|declutter|organise|organize|sort|repair|laundry|room|kitchen|storage|inventory|donate|recycle|maintenance|checklist|supplies|household|organis|label|dispose|put away)\b/i,
+  fitness: /\b(?:run|walk|cycle|swim|lift|squat|push.?up|pull.?up|plank|workout|training|mobility|stretch|strength|cardio|technique|warm.?up|cool.?down|interval|drill|pace|distance)\b/i,
+  study: /\b(?:solve|problem|read|chapter|revise|revision|recall|flashcards?|quiz|test|essay|summari[sz]e|explain|derive|calculate|practice|practise|questions?|notes?|worked example|mark scheme|vocabulary|grammar|concept|formula|lecture|lesson|topic)\b/i,
+  financial: /\b(?:budget|save|saving|expense|spend|income|cost|price|money|deposit|transfer|debt|payment|transaction|invest|currency|contribution|balance|quote|purchase|cash.?flow|statement|allocation)\b/i,
+  business: /\b(?:customer|client|market|competitor|offer|product|service|sales?|revenue|interview|validate|prototype|launch|distribution|audience|conversion|pitch|outreach|feature|acceptance criteria|deliverable|test case|deploy|ship|pricing|retention)\b/i,
+  skill: /\b(?:practice|practise|drill|rehearse|build|create|draw|write|code|debug|compose|perform|record|edit|design|feedback|technique|lesson|draft|recipe|ingredient|chop|simmer|bake|chord|scale|tempo|sketch|prototype|translate|pronounce)\b/i,
+  mindfulness: /\b(?:breathe|breathing|meditat\w*|mindful\w*|attention|focus|urge|trigger|reflection|reflect|journal\w*|cue|routine|habit|grounding|body scan|pause|check.?in)\b/i,
+  relationship: /\b(?:listen|conversation|communicat\w*|message|call|boundary|respect|empathy|conflict|family|friend|partner|relationship|reconnect|follow.?up|active listening|perspective|discuss)\b/i,
+  health: /\b(?:health|wellbeing|wellness|sleep|symptom|appointment|clinician|doctor|professional|hydration|meal|nutrition|recovery|monitor|screening|medical guidance|care plan)\b/i,
+  personal: /\b(?:habit|routine|checklist|priority|schedule|plan|reflect|review|prepare|book|booking|document|application|route|itinerary|packing|deadline|reminder|declutter|admin|organise|organize|complete|submit)\b/i,
+  home: /\b(?:clean|declutter|organise|organize|sort|repair|laundry|room|kitchen|storage|inventory|donate|recycle|maintenance|supplies|household|label|dispose|put away|vacuum|dust|wash)\b/i,
 };
+
+function normalizeCategory(category: string): string {
+  const normalized = String(category || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return CATEGORY_ALIASES[normalized] || normalized;
+}
 
 export function validateCategorySpecificDetail(
   category: string,
   detailText: string,
-  plannedSessionCount: number,
+  _plannedSessionCount: number,
 ): string | null {
-  const normalized = String(category || '').trim().toLowerCase();
-  const signalCategory = CATEGORY_ALIASES[normalized] || normalized;
-  const signal = CATEGORY_SIGNALS[signalCategory];
-  if (!signal || plannedSessionCount < 3 || signal.test(detailText)) return null;
-  return 'CATEGORY_DETAIL_' + normalized.toUpperCase();
+  const normalized = normalizeCategory(category);
+  const signal = CATEGORY_SIGNALS[normalized];
+  if (!signal || typeof detailText !== "string" || signal.test(detailText)) return null;
+  return "CATEGORY_DETAIL_" + normalized.toUpperCase();
 }
 
+function validText(value: unknown, min: number, max: number): value is string {
+  return typeof value === "string" && value.trim().length >= min && value.trim().length <= max;
+}
 
 export function hasCompleteActionTree(actions: unknown): boolean {
-  if (!Array.isArray(actions) || actions.length < 3 || actions.length > 12) return false;
+  if (!Array.isArray(actions) || actions.length < 3 || actions.length > MAX_ACTIONS) return false;
+  let nodeCount = 0;
 
-  // Validate a domain-neutral, recursive tree. Group headings may contain
-  // children; executable leaves need actionable instructions and a concrete
-  // ordered breakdown, without forcing fitness-only fields onto other goals.
   const visit = (value: unknown, depth = 0): boolean => {
-    if (!value || typeof value !== "object" || depth > 5) return false;
-    const action = value as Record<string, unknown>;
-    if (typeof action.title !== "string" || action.title.trim().length < 2) return false;
-    if (action.instructions != null && (typeof action.instructions !== "string" || action.instructions.trim().length < 8)) return false;
+    if (!value || typeof value !== "object" || Array.isArray(value) || depth > MAX_ACTION_DEPTH) return false;
+    nodeCount += 1;
+    if (nodeCount > MAX_ACTION_NODES) return false;
 
-    const children = Array.isArray(action.children) ? action.children : [];
-    const substeps = Array.isArray(action.substeps) ? action.substeps : [];
-    if (children.length > 12 || substeps.length > 8) return false;
-    if (substeps.some((step) => typeof step !== "string" || step.trim().length < 3)) return false;
-    const actionType = String(action.type ?? action.action_type ?? "").trim().toLowerCase();
-    const isRest = actionType === "rest" || actionType === "break" || /^(rest|break)\b/i.test(action.title);
+    const action = value as Record<string, unknown>;
+    if (!validText(action.title, 3, MAX_TITLE_LENGTH)) return false;
+    if (action.instructions != null && !validText(action.instructions, MIN_INSTRUCTION_LENGTH, MAX_INSTRUCTION_LENGTH)) return false;
+    if (action.children != null && !Array.isArray(action.children)) return false;
+    if (action.substeps != null && !Array.isArray(action.substeps)) return false;
+
+    const children = (action.children ?? []) as unknown[];
+    const substeps = (action.substeps ?? []) as unknown[];
+    if (children.length > MAX_CHILDREN || substeps.length > MAX_SUBSTEPS) return false;
+    if (substeps.some((step) => !validText(step, 5, 300))) return false;
+
+    const rawType = String(action.type ?? action.action_type ?? "").trim().toLowerCase();
+    const title = action.title.trim();
+    const isRest = rawType === "rest" || rawType === "break" || /^(rest|break)\b/i.test(title);
     if (isRest) {
+      if (children.length || substeps.length) return false;
       const rawDuration = action.rest_seconds ?? action.duration_seconds ??
-        (action.duration_minutes == null ? null : Number(action.duration_minutes) * 60);
-      const seconds = Number(rawDuration);
-      return rawDuration != null && Number.isFinite(seconds) && seconds > 0;
+        (typeof action.duration_minutes === "number" ? action.duration_minutes * 60 : null);
+      return typeof rawDuration === "number" && Number.isFinite(rawDuration) &&
+        rawDuration > 0 && rawDuration <= 86400;
     }
-    if (children.length > 0) {
+
+    const isGroup = rawType === "group" || rawType === "category" ||
+      (rawType === "" && children.length > 0);
+    if (isGroup) {
+      if (children.length < 2 || !validText(action.instructions, 12, MAX_INSTRUCTION_LENGTH)) return false;
       return children.every((child) => visit(child, depth + 1));
     }
-    return typeof action.instructions === "string"
-      && action.instructions.trim().length >= 8
-      && (substeps.length >= 2 || depth > 0);
+
+    if (rawType && !["task", "exercise", "action"].includes(rawType)) return false;
+    if (children.length > 0) return false;
+    if (!validText(action.instructions, MIN_INSTRUCTION_LENGTH, MAX_INSTRUCTION_LENGTH)) return false;
+    if (substeps.length < 2) return false;
+
+    const combined = [title, action.instructions, ...substeps].join(" ").toLowerCase();
+    if (/^(?:do this|work on it|make progress|continue|keep going|practice more|practise more)[.! ]*$/i.test(combined.trim())) return false;
+    return true;
   };
 
   return actions.every((action) => visit(action));
 }
 
-
 /**
- * Preserve model-provided action trees when they pass validation. If a provider
- * omits or truncates the tree, derive a small, domain-neutral execution outline
- * from the session's own task, purpose, target metric and supplied substeps.
- * This is a formatting fallback, not a substitute for plan-level quality checks.
+ * Compatibility helper: never fabricates a successful-looking action tree.
+ * Callers receive the original validated tree or an empty array and must treat
+ * the latter as a validation failure requiring repair.
  */
 export function ensureCompleteActionTree(
   actions: unknown,
-  context: { task: string; purpose?: string; targetMetric?: string; substeps?: string[] },
+  _context: { task: string; purpose?: string; targetMetric?: string; substeps?: string[] },
 ): Array<Record<string, unknown>> {
-  if (hasCompleteActionTree(actions)) return actions as Array<Record<string, unknown>>;
-
-  const task = String(context.task || "the planned task").trim().slice(0, 140) || "the planned task";
-  const purpose = String(context.purpose || "make measurable progress toward the goal").trim().slice(0, 220);
-  const metric = String(context.targetMetric || "the session's stated target").trim().slice(0, 160);
-  const suppliedSteps = Array.isArray(context.substeps)
-    ? context.substeps.map((step) => String(step || "").trim()).filter((step) => step.length >= 3).slice(0, 8)
+  return hasCompleteActionTree(actions)
+    ? actions as Array<Record<string, unknown>>
     : [];
-  const workSteps = suppliedSteps.length >= 2
-    ? suppliedSteps.slice(0, 2)
-    : ["Complete the main part of the task in a focused block.", `Check the result against: ${metric}`];
-
-  return [
-    {
-      type: "task",
-      title: `Prepare: ${task}`.slice(0, 160),
-      instructions: `Prepare to work on ${task}. Keep the purpose in view: ${purpose}`.slice(0, 500),
-      substeps: [`Review the session target: ${metric}`, "Gather the materials or references needed for this task."],
-    },
-    {
-      type: "task",
-      title: `Do: ${task}`.slice(0, 160),
-      instructions: `Work through ${task} in a manageable block, aiming toward: ${metric}`.slice(0, 500),
-      substeps: workSteps,
-    },
-    {
-      type: "task",
-      title: `Review: ${task}`.slice(0, 160),
-      instructions: `Record what you completed for ${task} and compare it with: ${metric}`.slice(0, 500),
-      substeps: ["Record the result or evidence of completion.", "Choose one adjustment for the next session."],
-    },
-  ];
 }
