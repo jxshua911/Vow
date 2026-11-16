@@ -607,41 +607,20 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
 }
 
 
-type AiProvider = "groq" | "mistral" | "qwen" | "nova";
+type AiProvider = "mistral" | "groq" | "qwen" | "nova";
 
-function providerWeights(): Record<AiProvider, number> {
-  // Stable priority order: try the primary provider first, then walk the
-  // configured fallbacks. A random first choice makes rate-limit incidents
-  // unpredictable and can repeatedly select a provider with no available quota.
-  const defaults: Record<AiProvider, number> = { mistral: 0.6, groq: 0.3, qwen: 0.07, nova: 0.03 };
-  try {
-    const raw = JSON.parse(Deno.env.get("VOW_AI_PROVIDER_WEIGHTS") || "{}");
-    for (const provider of ["groq", "mistral", "qwen", "nova"] as AiProvider[]) {
-      const value = Number(raw?.[provider]);
-      if (Number.isFinite(value) && value >= 0) defaults[provider] = value;
-    }
-  } catch {
-    console.warn("[VOW AI] Invalid VOW_AI_PROVIDER_WEIGHTS; using defaults.");
-  }
-  return defaults;
-}
+// Goal generation is Mistral-first by design. Environment weights must not
+// silently route the primary planning workload to a different model.
+const PROVIDER_PRIORITY: readonly AiProvider[] = ["mistral", "groq", "qwen", "nova"];
 
 function providerOrder(): AiProvider[] {
-  const weights = providerWeights();
   const keyPresent: Record<AiProvider, boolean> = {
-    groq: Boolean(Deno.env.get("GROQ_API_KEY")),
     mistral: Boolean(Deno.env.get("MISTRAL_API_KEY")),
+    groq: Boolean(Deno.env.get("GROQ_API_KEY")),
     qwen: Boolean(Deno.env.get("DASHSCOPE_API_KEY")),
     nova: Boolean(Deno.env.get("AWS_BEARER_TOKEN_BEDROCK")),
   };
-  const enabled = (["groq", "mistral", "qwen", "nova"] as AiProvider[])
-    .filter((provider) => keyPresent[provider]);
-  const prioritized = enabled
-    .filter((provider) => weights[provider] > 0)
-    .sort((a, b) => weights[b] - weights[a]);
-  // A zero-weight provider is still a fallback; if all weights are zero,
-  // retain the documented deterministic order instead of disabling AI.
-  return [...prioritized, ...enabled.filter((provider) => !prioritized.includes(provider))];
+  return PROVIDER_PRIORITY.filter((provider) => keyPresent[provider]);
 }
 
 async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX) {
@@ -698,8 +677,23 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
     }
 
     const payload = JSON.parse(raw);
-    const content = payload?.choices?.[0]?.message?.content;
-    if (typeof content !== "string" || !content.trim()) throw new Error("MISTRAL_EMPTY_RESPONSE");
+    const choice = payload?.choices?.[0];
+    const rawContent = choice?.message?.content;
+    const content = typeof rawContent === "string"
+      ? rawContent
+      : Array.isArray(rawContent)
+        ? rawContent.filter((part: any) => typeof part?.text === "string").map((part: any) => part.text).join("")
+        : "";
+    if (!content.trim()) throw new Error("MISTRAL_EMPTY_RESPONSE");
+    console.log("[VOW AI] Mistral completion metadata", {
+      requested_model: model,
+      returned_model: str(payload?.model, 100) || model,
+      finish_reason: str(choice?.finish_reason, 40) || "unknown",
+      prompt_tokens: Number(payload?.usage?.prompt_tokens) || 0,
+      completion_tokens: Number(payload?.usage?.completion_tokens) || 0,
+      content_chars: content.length,
+      task: kind,
+    });
     try {
       return parse(content);
     } catch (parseError) {
@@ -811,17 +805,16 @@ async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
   }
 }
 
-async function ai(req: Request, userId: string, parentRequestId: string, messages: any[], kind: keyof typeof MAX, researchRequired = false, preferFallback = false) {
+async function ai(req: Request, userId: string, parentRequestId: string, messages: any[], kind: keyof typeof MAX, researchRequired = false) {
   const requestId = await claimGuardrail(userId, parentRequestId);
   try {
-    const configuredProviders = providerOrder();
-    const providers = preferFallback && configuredProviders.length > 1
-      ? [...configuredProviders.slice(1), configuredProviders[0]]
-      : configuredProviders;
+    const providers = providerOrder();
     console.log("[VOW AI] Provider routing", {
+      requested_primary: "mistral",
+      mistral_configured: providers.includes("mistral"),
       selected: providers[0] || "none",
       fallback_order: providers.slice(1),
-      weights: providerWeights(),
+      task: kind,
     });
 
     let lastError: unknown = null;
@@ -834,9 +827,7 @@ async function ai(req: Request, userId: string, parentRequestId: string, message
                 {
                   role: "system",
                   content:
-                    provider === "groq"
-                      ? "Groq does not support provider-side web research. Do not claim that web research was performed. Use the supplied research results, VOW knowledge, and user context; no additional provider-side browser search is available. Do not claim extra research, and return the same valid JSON structure requested by the original prompt."
-                      : "Fallback provider mode: provider-side web research is unavailable on this path. Do not claim that web research was performed. Use the supplied research results, VOW knowledge, and user context; no additional provider-side browser search is available on this path. Do not claim extra research, and return the same valid JSON structure requested by the original prompt.",
+                    "No live web-research tool is available inside this model call. Do not claim that you performed additional searches. Use the research results, VOW knowledge and user context already supplied, and return the exact JSON structure requested by the original prompt.",
                 },
               ]
             : messages;
@@ -1647,7 +1638,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
                 draft_plan: b,
               }),
             },
-          ], "planRetry", false, true);
+          ], "planRetry", false);
           if (retry?.clarification_needed !== true) {
             b = retry;
             validationError = validatePlan(b, w, ds, validationContext, g?.schedule_times_enabled === true, str(g?.domain?.category || g?.category || b?.category, 80).toLowerCase());
