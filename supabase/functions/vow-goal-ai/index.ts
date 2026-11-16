@@ -1369,7 +1369,7 @@ Deno.serve(async (req) => {
     const unknown = /^(i\s*(don['']?t|do not)\s*know|not sure|unsure|unknown|n\/a)$/i;
     const isUnanswered = (a: string) => !a || unknown.test(a);
     const unresolved = clean.filter(isUnanswered).length;
-    console.log("[VOW] Clarification answers:", { answers, clean, unresolved });
+    console.log("[VOW] Clarification answer summary:", { answer_count: answers.length, unresolved_count: unresolved });
     const knowledgeQuery = [
       str(g?.title || g?.outcome, 500),
       str(g?.why_it_matters, 300),
