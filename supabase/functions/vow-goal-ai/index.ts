@@ -220,11 +220,12 @@ async function cooldown(uid: string, k: CooldownKind) {
   }
 }
 async function reservePlanningEntitlement(
-  req: Request,
+  userId: string,
   feature: "planning_action" | "adaptive_replan",
   metadata: Record<string, unknown>
 ) {
-  const { data, error } = await client(req).rpc("vow_reserve_entitlement", {
+  const { data, error } = await db().rpc("vow_reserve_entitlement_internal", {
+    p_user_id: userId,
     p_feature: feature,
     p_metadata: metadata,
   });
@@ -244,18 +245,20 @@ async function reservePlanningEntitlement(
   return data as Record<string, unknown>;
 }
 
-async function finalizePlanningEntitlement(req: Request, reservationId: string | null) {
+async function finalizePlanningEntitlement(userId: string, reservationId: string | null) {
   if (!reservationId) return;
-  const { data, error } = await client(req).rpc("vow_finalize_entitlement_reservation", {
+  const { data, error } = await db().rpc("vow_finalize_entitlement_reservation_internal", {
+    p_user_id: userId,
     p_reservation_id: reservationId,
   });
   if (error || !data || (data as Record<string, unknown>).finalized !== true)
     throw new Error("ENTITLEMENT_FINALIZE_FAILED");
 }
 
-async function releasePlanningEntitlement(req: Request, reservationId: string | null) {
+async function releasePlanningEntitlement(userId: string, reservationId: string | null) {
   if (!reservationId) return;
-  const { error } = await client(req).rpc("vow_release_entitlement_reservation", {
+  const { error } = await db().rpc("vow_release_entitlement_reservation_internal", {
+    p_user_id: userId,
     p_reservation_id: reservationId,
   });
   if (error) console.warn("entitlement reservation release failed", error.message);
@@ -278,9 +281,9 @@ async function record(
   });
   if (error) console.warn("AI usage telemetry failed", error.message);
 }
-async function recordQualityAlert(req: Request, uid: string, goalId: string | null, mode: string, alertType: string, validationCode: string, goalTitle: string, details: Record<string, unknown>) {
-  const { error } = await client(req).rpc("vow_record_ai_quality_alert", {
-    p_user_id: uid,
+async function recordQualityAlert(userId: string, goalId: string | null, mode: string, alertType: string, validationCode: string, goalTitle: string, details: Record<string, unknown>) {
+  const { error } = await db().rpc("vow_record_ai_quality_alert_internal", {
+    p_user_id: userId,
     p_goal_id: goalId,
     p_mode: mode,
     p_alert_type: alertType,
@@ -1331,7 +1334,7 @@ Deno.serve(async (req) => {
     };
     if (feature) {
       try {
-        entitlement = await reservePlanningEntitlement(req, feature, {
+        entitlement = await reservePlanningEntitlement(uid, feature, {
           goal_id: typeof p?.goal_id === "string" ? p.goal_id : null,
           prompt_type: feature,
           request_id: crypto.randomUUID(),
@@ -1542,12 +1545,12 @@ Deno.serve(async (req) => {
       );
       r.rationale = str(r.rationale, 500);
       if (usedFallback && entitlementReservationId) {
-        await releasePlanningEntitlement(req, entitlementReservationId);
+        await releasePlanningEntitlement(uid, entitlementReservationId);
         entitlementReservationId = null;
       }
       await record(uid, requestId, "goal-clarify", "success", Date.now() - startedAt);
       if (entitlementReservationId) {
-        await finalizePlanningEntitlement(req, entitlementReservationId);
+        await finalizePlanningEntitlement(uid, entitlementReservationId);
         entitlementFinalized = true;
       }
       return json({ structured: r, text: JSON.stringify(r) });
@@ -1598,7 +1601,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
             "What current skill level, starting point, or constraint should VOW account for?"
           );
         }
-        await releasePlanningEntitlement(req, entitlementReservationId);
+        await releasePlanningEntitlement(uid, entitlementReservationId);
         entitlementReservationId = null;
         return json({
           structured: {
@@ -1664,7 +1667,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
         }
       }
       if (validationError && validationRetryRateLimited) {
-        await releasePlanningEntitlement(req, entitlementReservationId);
+        await releasePlanningEntitlement(uid, entitlementReservationId);
         entitlementReservationId = null;
         return json(
           { error: "VOW AI is temporarily busy and could not repair the draft plan. Please try again shortly." },
@@ -1691,7 +1694,6 @@ Each week's sessions must advance that week's focus rather than repeating the sa
             ? "action_tree_blocked"
             : "plan_quality_blocked";
         await recordQualityAlert(
-          req,
           uid,
           typeof p?.goal_id === "string" ? p.goal_id : null,
           "goal-plan",
@@ -1705,7 +1707,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
             knowledge_entries: knowledge.length,
           }
         );
-        await releasePlanningEntitlement(req, entitlementReservationId);
+        await releasePlanningEntitlement(uid, entitlementReservationId);
         entitlementReservationId = null;
         return json(
           {
@@ -1728,7 +1730,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
             .filter((m: any) => m.title)
         : [];
       if (!milestones.length) {
-        await releasePlanningEntitlement(req, entitlementReservationId);
+        await releasePlanningEntitlement(uid, entitlementReservationId);
         entitlementReservationId = null;
         return json(
           { error: "VOW AI returned a plan without valid milestones. Please try again." },
@@ -1750,7 +1752,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
         ),
       };
       await record(uid, requestId, "goal-plan", "success", Date.now() - startedAt);
-      await finalizePlanningEntitlement(req, entitlementReservationId);
+      await finalizePlanningEntitlement(uid, entitlementReservationId);
       entitlementFinalized = true;
       return json({ structured: result, text: JSON.stringify(result) });
     }
@@ -1773,7 +1775,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
       throw e;
     }
     await record(uid, requestId, "chat", "success", Date.now() - startedAt);
-    await finalizePlanningEntitlement(req, entitlementReservationId);
+    await finalizePlanningEntitlement(uid, entitlementReservationId);
     entitlementFinalized = true;
     const chatText = typeof r === "string"
       ? str(r, 1600)
@@ -1783,7 +1785,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
     });
   } catch (e) {
     if (entitlementReservationId && !entitlementFinalized) {
-      await releasePlanningEntitlement(req, entitlementReservationId);
+      await releasePlanningEntitlement(uid, entitlementReservationId);
       entitlementReservationId = null;
     }
     const m = e instanceof Error ? e.message : String(e);
