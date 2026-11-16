@@ -1,0 +1,31 @@
+name: Plan validation tests
+
+on:
+  push:
+    branches:
+      - capacitor-mobile
+    paths:
+      - "supabase/functions/vow-goal-ai/planValidation.ts"
+      - "tests/planValidation.test.ts"
+      - ".github/workflows/plan-validation.yml"
+  pull_request:
+    paths:
+      - "supabase/functions/vow-goal-ai/planValidation.ts"
+      - "tests/planValidation.test.ts"
+      - ".github/workflows/plan-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  plan-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run plan validation regression tests
+        run: node --experimental-strip-types --test tests/planValidation.test.ts
