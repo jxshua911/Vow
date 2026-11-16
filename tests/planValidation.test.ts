@@ -2,95 +2,110 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ensureCompleteActionTree, hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from '../supabase/functions/vow-goal-ai/planValidation.ts';
 
-test('recognises percentage measurements without requiring a word boundary after percent', () => {
+const task = (title: string) => ({
+  type: 'task',
+  title,
+  instructions: 'Complete ' + title.toLowerCase() + ' using the supplied material, then check the result against the stated objective.',
+  substeps: [
+    'Prepare the materials needed for ' + title.toLowerCase() + '.',
+    'Complete the work and record the result for ' + title.toLowerCase() + '.',
+  ],
+});
+
+test('recognises useful evidence and avoids image-dimension false positives', () => {
   assert.equal(hasMeasurableEvidence('Increase weekly savings by 15%'), true);
   assert.equal(hasMeasurableEvidence('Complete 4 x 8 repetitions'), true);
   assert.equal(hasMeasurableEvidence('Read for 30 minutes'), true);
+  assert.equal(hasMeasurableEvidence('Complete 12 practice questions'), true);
+  assert.equal(hasMeasurableEvidence('Save RM500 each month'), true);
+  assert.equal(hasMeasurableEvidence('Practise twice a week'), true);
+  assert.equal(hasMeasurableEvidence('Create a 1080 × 1440 carousel'), false);
   assert.equal(hasMeasurableEvidence('Make progress'), false);
 });
 
-test('fitness category accepts exercise-specific session detail', () => {
-  assert.equal(validateCategorySpecificDetail('fitness', 'Run 3 km, practise mobility, and record pace', 8), null);
-});
-
-test('learning and study aliases require learning actions', () => {
-  assert.equal(validateCategorySpecificDetail('learning', 'Solve algebra problems and use recall quizzes', 8), null);
-  assert.equal(validateCategorySpecificDetail('study', 'Generic progress on the goal without study actions', 8), 'CATEGORY_DETAIL_STUDY');
-});
-
-test('money and financial aliases require financial actions', () => {
-  assert.equal(validateCategorySpecificDetail('money', 'Track expenses and update the monthly budget', 8), null);
-  assert.equal(validateCategorySpecificDetail('financial', 'Generic progress with no relevant task detail', 8), 'CATEGORY_DETAIL_FINANCIAL');
-});
-
-test('career and business aliases require business actions', () => {
-  assert.equal(validateCategorySpecificDetail('career', 'Interview five potential customers and validate pricing', 8), null);
-  assert.equal(validateCategorySpecificDetail('business', 'Generic progress with no relevant task detail', 8), 'CATEGORY_DETAIL_BUSINESS');
-});
-
-test('creative and skill aliases require practice or production actions', () => {
-  assert.equal(validateCategorySpecificDetail('creative', 'Draw studies and revise technique using feedback', 8), null);
-  assert.equal(validateCategorySpecificDetail('skill', 'Generic progress with no relevant task detail', 8), 'CATEGORY_DETAIL_SKILL');
-});
-
-test('short plans and unknown categories are not rejected by the category matrix', () => {
-  assert.equal(validateCategorySpecificDetail('fitness', 'No category keywords', 2), null);
+test('category aliases are validated even for short plans', () => {
+  assert.equal(validateCategorySpecificDetail('fitness', 'Run 3 km, practise mobility, and record pace', 1), null);
+  assert.equal(validateCategorySpecificDetail('learning', 'Solve algebra problems and use recall quizzes', 2), null);
+  assert.equal(validateCategorySpecificDetail('study', 'Generic progress on the goal without study actions', 1), 'CATEGORY_DETAIL_STUDY');
+  assert.equal(validateCategorySpecificDetail('money', 'Track expenses and update the monthly budget', 1), null);
+  assert.equal(validateCategorySpecificDetail('career', 'Interview five potential customers and validate pricing', 1), null);
+  assert.equal(validateCategorySpecificDetail('creative', 'Draw studies and revise technique using feedback', 1), null);
+  assert.equal(validateCategorySpecificDetail('business', 'Review the plan, practise the routine, and track progress', 1), 'CATEGORY_DETAIL_BUSINESS');
+  assert.equal(validateCategorySpecificDetail('organisation', 'Clean the kitchen and label storage boxes', 1), null);
   assert.equal(validateCategorySpecificDetail('general', 'No category keywords', 8), null);
 });
 
-test('a specific category is rejected only when the whole planned detail lacks its signals', () => {
-  assert.equal(validateCategorySpecificDetail('fitness', 'Review quarterly ledger entries', 8), 'CATEGORY_DETAIL_FITNESS');
+test('accepts a complete domain-neutral executable action tree', () => {
+  assert.equal(hasCompleteActionTree([
+    task('Read the assigned chapter'),
+    task('Answer the practice questions'),
+    task('Check and correct the answers'),
+  ]), true);
 });
 
-
-test('accepts a complete grouped action tree with instructions, measurements and nested steps', () => {
-  const actions = [
-    { title: 'Biceps curls', instructions: 'Keep elbows close and lower under control.', sets: 3, reps: '10–12', rest_seconds: 60, substeps: ['Choose a manageable load', 'Curl without swinging', 'Lower for two seconds'] },
-    { title: 'Triceps extensions', instructions: 'Keep upper arms steady throughout each repetition.', sets: 3, reps: '10', rest_seconds: 60, substeps: ['Set up safely', 'Extend smoothly', 'Record completed repetitions'] },
-    { title: 'Shoulder press', instructions: 'Use a comfortable range and stop if painful.', duration_minutes: 8, substeps: ['Warm up shoulders', 'Press with controlled form', 'Record load and repetitions'] },
-  ];
-  assert.equal(hasCompleteActionTree(actions), true);
-});
-
-test('accepts explicit rest periods inside a structured action tree', () => {
+test('accepts grouped actions and nested rest periods', () => {
   const actions = [
     { title: 'FOUNDATIONS', type: 'category', children: [
-      { title: 'Limits practice', instructions: 'Solve three limit problems and check each answer.', type: 'task' },
+      { ...task('Limits practice') },
       { title: 'Short break', type: 'rest', duration_seconds: 300 },
     ] },
     { title: 'PRACTICE', type: 'category', children: [
-      { title: 'Past exam questions', instructions: 'Solve three past exam questions and mark the working.', type: 'task' },
+      { ...task('Past exam questions') },
     ] },
     { title: 'REVIEW', type: 'category', children: [
-      { title: 'Error review', instructions: 'Record each mistake and write the corrected method.', type: 'task' },
+      { ...task('Error review') },
     ] },
   ];
   assert.equal(hasCompleteActionTree(actions), true);
+});
+
+test('rejects missing, malformed, vague and shallow action breakdowns', () => {
+  assert.equal(hasCompleteActionTree(null), false);
+  assert.equal(hasCompleteActionTree([task('One'), task('Two')]), false);
   assert.equal(hasCompleteActionTree([
-    ...actions.slice(0, 2),
-    { title: 'REVIEW', type: 'category', children: [
-      { title: 'Break with no duration', type: 'rest' },
-    ] },
+    { ...task('Read'), substeps: 'not-an-array' },
+    task('Practise'),
+    task('Review'),
+  ]), false);
+  assert.equal(hasCompleteActionTree([
+    { title: 'Study calculus', instructions: 'Work through the material carefully.' },
+    task('Practise problems'),
+    task('Review answers'),
+  ]), false);
+  assert.equal(hasCompleteActionTree([
+    { title: 'Read this', instructions: 'Do this task.', substeps: ['Read the task carefully', 'Finish the task now'] },
+    task('Practise'),
+    task('Review'),
   ]), false);
 });
 
-test('rejects flat or incomplete action trees that cannot guide a session', () => {
-  assert.equal(hasCompleteActionTree(['Biceps', 'Triceps', 'Shoulders']), false);
-  assert.equal(hasCompleteActionTree([
-    { title: 'Biceps curls', instructions: 'Do the exercise', sets: 3, reps: '10', substeps: ['Curl'] },
-    { title: 'Triceps extensions', instructions: 'Do the exercise', sets: 3, reps: '10', substeps: ['Extend'] },
-    { title: 'Shoulder press', instructions: 'Do the exercise', sets: 3, reps: '10', substeps: ['Press'] },
-  ]), false);
+test('rejects excessive depth and excessive total node counts', () => {
+  const nested = (depth: number): Record<string, unknown> =>
+    depth === 0
+      ? task('Complete the final task')
+      : { type: 'group', title: 'Group level ' + depth, children: [nested(depth - 1), task('Complete sibling ' + depth)] };
+  assert.equal(hasCompleteActionTree([nested(5), task('Second root'), task('Third root')]), false);
+
+  const broad = Array.from({ length: 12 }, (_, index) => ({
+    type: 'group',
+    title: 'Group ' + index,
+    children: Array.from({ length: 8 }, (_, child) => task('Task ' + index + ' ' + child)),
+  }));
+  assert.equal(hasCompleteActionTree(broad), false);
 });
 
+test('validates rest durations strictly', () => {
+  const rest = (duration: unknown) => ({ type: 'rest', title: 'Rest', duration_seconds: duration });
+  assert.equal(hasCompleteActionTree([rest(60), task('Do the work'), task('Review the work')]), true);
+  assert.equal(hasCompleteActionTree([rest(true), task('Do the work'), task('Review the work')]), false);
+  assert.equal(hasCompleteActionTree([rest(0), task('Do the work'), task('Review the work')]), false);
+  assert.equal(hasCompleteActionTree([rest(90000), task('Do the work'), task('Review the work')]), false);
+});
 
-test('repairs a missing action tree from the session task and metric', () => {
-  const actions = ensureCompleteActionTree([], {
-    task: 'Solve five algebra problems',
-    purpose: 'Improve accuracy with linear equations',
-    targetMetric: '5 problems checked',
-  });
-  assert.equal(hasCompleteActionTree(actions), true);
-  assert.equal(actions.length, 3);
-  assert.match(String(actions[1].title), /Solve five algebra problems/);
+test('does not fabricate a successful-looking action tree when output is incomplete', () => {
+  assert.deepEqual(ensureCompleteActionTree([], {
+    task: 'Study calculus',
+    purpose: 'Improve understanding',
+    targetMetric: 'Complete ten problems',
+  }), []);
 });
