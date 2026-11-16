@@ -97,7 +97,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
     const isGroup = rawType === "group" || rawType === "category" ||
       (rawType === "" && children.length > 0);
     if (isGroup) {
-      if (children.length < 2 || !validText(action.instructions, 12, MAX_INSTRUCTION_LENGTH)) return false;
+      if (children.length < 2 || (action.instructions != null && !validText(action.instructions, 12, MAX_INSTRUCTION_LENGTH))) return false;
       return children.every((child) => visit(child, depth + 1));
     }
 
