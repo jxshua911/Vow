@@ -14,7 +14,7 @@ const MEASURE_UNITS =
 export function hasMeasurableEvidence(task: string): boolean {
   if (typeof task !== "string" || !task.trim()) return false;
   const value = task.normalize("NFKC").replace(/,/g, "");
-  const hasSetsAndReps = [...value.matchAll(/\\b\\d{1,2}\\s*[x×]\\s*\\d{1,3}(?!\\d)/gi)].length > 0;
+  const hasSetsAndReps = [...value.matchAll(/\b\d{1,2}\s*[x×]\s*\d{1,3}(?!\d)/gi)].length > 0;
   const hasUnit = new RegExp(
     "(?:^|\\s)\\d+(?:\\.\\d+)?\\s*" + MEASURE_UNITS + "(?=\\s|$)",
     "i",
@@ -61,7 +61,7 @@ const CATEGORY_SIGNALS: Record<string, RegExp> = {
 };
 
 function normalizeCategory(category: string): string {
-  const normalized = String(category || "").trim().toLowerCase().replace(/[\\s\\-/]+/g, "_");
+  const normalized = String(category || "").trim().toLowerCase().replace(/[\s/-]+/g, "_");
   return CATEGORY_ALIASES[normalized] || normalized;
 }
 
@@ -92,7 +92,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
 
     const action = value as Record<string, unknown>;
     if (!validText(action.title, 3, MAX_TITLE_LENGTH)) return false;
-    if (action.instructions != null && !validText(action.instructions, MIN_INSTRUCTION_LENGTH, MAX_INSTRUCTION_LENGTH)) return false;
+    if (action.instructions != null && (typeof action.instructions !== "string" || action.instructions.length > MAX_INSTRUCTION_LENGTH)) return false;
     if (action.children != null && !Array.isArray(action.children)) return false;
     if (action.substeps != null && !Array.isArray(action.substeps)) return false;
 
@@ -102,10 +102,13 @@ export function hasCompleteActionTree(actions: unknown): boolean {
     if (substeps.some((step) => !validText(step, 5, 300))) return false;
 
     const rawType = String(action.type ?? action.action_type ?? "").trim().toLowerCase();
-    const title = action.title.trim();\n    const genericActionText = /^(?:do (?:this|the task)|work on (?:it|this|the goal)|make progress(?: on (?:it|the goal))?|continue(?: working)?|keep going|practice more|practise more|review your goal|study more|learn more)[.! ]*$/i;\n    if (genericActionText.test(title)) return false;
+    const title = action.title.trim();
+    const genericActionText = /^(?:do (?:this|the task)|work on (?:it|this|the goal)|make progress(?: on (?:it|the goal))?|continue(?: working)?|keep going|practice more|practise more|review your goal|study more|learn more)[.! ]*$/i;
+    if (genericActionText.test(title)) return false;
     const isRest = rawType === "rest" || rawType === "break" || /^(rest|break)\b/i.test(title);
     if (isRest) {
-      if (children.length || substeps.length) return false;\n      if (action.instructions != null && action.instructions !== "" && !validText(action.instructions, 8, MAX_INSTRUCTION_LENGTH)) return false;
+      if (children.length || substeps.length) return false;
+      if (action.instructions != null && action.instructions !== "" && !validText(action.instructions, 8, MAX_INSTRUCTION_LENGTH)) return false;
       const rawDuration = action.rest_seconds ?? action.duration_seconds ??
         (typeof action.duration_minutes === "number" ? action.duration_minutes * 60 : null);
       return typeof rawDuration === "number" && Number.isFinite(rawDuration) &&
@@ -122,7 +125,8 @@ export function hasCompleteActionTree(actions: unknown): boolean {
 
     if (rawType && !["task", "exercise", "action"].includes(rawType)) return false;
     if (children.length > 0) return false;
-    if (!validText(action.instructions, MIN_INSTRUCTION_LENGTH, MAX_INSTRUCTION_LENGTH)) return false;\n    if (genericActionText.test(action.instructions.trim())) return false;
+    if (!validText(action.instructions, MIN_INSTRUCTION_LENGTH, MAX_INSTRUCTION_LENGTH)) return false;
+    if (genericActionText.test(action.instructions.trim())) return false;
     if (substeps.length < 2) return false;
 
     executableCount += 1;
