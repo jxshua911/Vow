@@ -261,13 +261,16 @@ async function releasePlanningEntitlement(req: Request, reservationId: string | 
   if (error) console.warn("entitlement reservation release failed", error.message);
 }
 async function record(
-  req: Request,
+  userId: string,
+  requestId: string,
   mode: "goal-clarify" | "goal-plan" | "chat",
   outcome: "success" | "error" | "blocked",
   latencyMs: number,
   errorCode?: string
 ) {
-  const { error } = await client(req).rpc("vow_record_ai_usage", {
+  const { error } = await db().rpc("vow_record_ai_usage_internal", {
+    p_request_id: requestId,
+    p_user_id: userId,
     p_mode: mode,
     p_outcome: outcome,
     p_latency_ms: latencyMs,
@@ -354,12 +357,17 @@ async function searchKnowledge(query: string) {
     return [];
   }
 }
-async function claimGuardrail(req: Request) {
+async function claimGuardrail(userId: string, parentRequestId: string) {
   const requestId = crypto.randomUUID();
-  const reservation = Number(Deno.env.get("VOW_AI_RESERVATION_USD") || "0.01");
-  const { data, error } = await client(req).rpc("vow_claim_ai_guardrail", {
+  const configuredReservation = Number(Deno.env.get("VOW_AI_RESERVATION_USD") || "0.01");
+  const reservation = Number.isFinite(configuredReservation) && configuredReservation > 0
+    ? configuredReservation
+    : 0.01;
+  const { data, error } = await db().rpc("vow_claim_ai_guardrail_internal", {
     p_request_id: requestId,
-    p_reservation_usd: Number.isFinite(reservation) && reservation > 0 ? reservation : 0.01,
+    p_parent_request_id: parentRequestId,
+    p_user_id: userId,
+    p_reservation_usd: reservation,
   });
   if (error) throw new Error("AI_GUARDRAIL_CHECK_FAILED");
   if (!data || typeof data !== "object" || (data as Record<string, unknown>).allowed !== true) {
@@ -371,9 +379,10 @@ async function claimGuardrail(req: Request) {
   return requestId;
 }
 
-async function releaseGuardrail(req: Request, requestId: string) {
-  const { error } = await client(req).rpc("vow_release_ai_guardrail", {
+async function releaseGuardrail(userId: string, requestId: string) {
+  const { error } = await db().rpc("vow_release_ai_guardrail_internal", {
     p_request_id: requestId,
+    p_user_id: userId,
   });
   if (error) console.warn("AI guardrail release failed", error.message);
 }
@@ -799,8 +808,8 @@ async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
   }
 }
 
-async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false, preferFallback = false) {
-  const requestId = await claimGuardrail(req);
+async function ai(req: Request, userId: string, parentRequestId: string, messages: any[], kind: keyof typeof MAX, researchRequired = false, preferFallback = false) {
+  const requestId = await claimGuardrail(userId, parentRequestId);
   try {
     const configuredProviders = providerOrder();
     const providers = preferFallback && configuredProviders.length > 1
@@ -879,7 +888,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
 
     throw lastError instanceof Error ? lastError : new Error("AI_PROVIDER_UNAVAILABLE");
   } finally {
-    await releaseGuardrail(req, requestId);
+    await releaseGuardrail(userId, requestId);
   }
 }
 async function researchGoalFacts(goalTitle: string, why: string) {
@@ -1231,6 +1240,7 @@ Deno.serve(async (req) => {
   let mode = "chat";
   let uid = "";
   const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
   let entitlementReservationId: string | null = null;
   let entitlementFinalized = false;
   try {
@@ -1431,7 +1441,7 @@ Deno.serve(async (req) => {
     if (!fallbackCategory || fallbackCategory === "Unknown" || fallbackCategory === "General") {
       try {
         console.log("[VOW AI] Calling AI classification...");
-        const classResult = await ai(req, [
+        const classResult = await ai(req, uid, requestId, [
           {
             role: "system",
             content: `Classify the user's goal into exactly one of these supported categories: Sports, Languages, Crafts/Hobbies, Education, Reading, Mindfulness, Technology/Projects, Career/Projects, Personal Development, Life Admin, Communication, Wellbeing, Creative Skills, Travel, Learning, Practical Skills, Finance, Productivity. Based on the goal title and any provided research or context, determine the single best-fitting category. Return ONLY JSON: {"category": "string"}. Do not return 'General'.`
@@ -1468,7 +1478,7 @@ Deno.serve(async (req) => {
       let r: any;
       let usedFallback = false;
       try {
-        r = await ai(req,
+        r = await ai(req, uid, requestId,
           [
             {
               role: "system",
@@ -1535,7 +1545,7 @@ Deno.serve(async (req) => {
         await releasePlanningEntitlement(req, entitlementReservationId);
         entitlementReservationId = null;
       }
-      await record(req, "goal-clarify", "success", Date.now() - startedAt);
+      await record(uid, requestId, "goal-clarify", "success", Date.now() - startedAt);
       if (entitlementReservationId) {
         await finalizePlanningEntitlement(req, entitlementReservationId);
         entitlementFinalized = true;
@@ -1572,7 +1582,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
           ];
       let b: any;
       try {
-        b = await ai(req, planMessages, "plan", researchRequired);
+        b = await ai(req, uid, requestId, planMessages, "plan", researchRequired);
       } catch (e) {
         console.warn("plan AI failed", e);
         throw e;
@@ -1617,7 +1627,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
           validation_error: validationError,
         });
         try {
-          const retry = await ai(req, [
+          const retry = await ai(req, uid, requestId, [
             {
               role: "system",
               content: "You are repairing a VOW plan that failed a quality check. Return the complete corrected JSON object only. Preserve the goal, duration, selected days, required fields, and supported references. Repair the stated validation error directly. Every session must be concrete, distinct, domain-specific, and measurable. Use 3-5 meaningful actions with clear instructions and at least two ordered substeps per executable action. Do not invent research, facts, or URLs. Keep JSON compact without omitting required fields.",
@@ -1739,14 +1749,14 @@ Each week's sessions must advance that week's focus rather than repeating the sa
           g?.schedule_times_enabled === true
         ),
       };
-      await record(req, "goal-plan", "success", Date.now() - startedAt);
+      await record(uid, requestId, "goal-plan", "success", Date.now() - startedAt);
       await finalizePlanningEntitlement(req, entitlementReservationId);
       entitlementFinalized = true;
       return json({ structured: result, text: JSON.stringify(result) });
     }
     let r: any;
     try {
-      r = await ai(req,
+      r = await ai(req, uid, requestId,
         [
           {
             role: "system",
@@ -1762,7 +1772,7 @@ Each week's sessions must advance that week's focus rather than repeating the sa
       console.warn("chat AI failed", e);
       throw e;
     }
-    await record(req, "chat", "success", Date.now() - startedAt);
+    await record(uid, requestId, "chat", "success", Date.now() - startedAt);
     await finalizePlanningEntitlement(req, entitlementReservationId);
     entitlementFinalized = true;
     const chatText = typeof r === "string"
@@ -1819,7 +1829,8 @@ Each week's sessions must advance that week's focus rather than repeating the sa
           : "AI_REQUEST_FAILED";
     if (uid) {
       await record(
-        req,
+        uid,
+        requestId,
         telemetryMode,
         blocked ? "blocked" : "error",
         Date.now() - startedAt,
