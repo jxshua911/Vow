@@ -130,3 +130,37 @@ test('accepts currency symbols and common frequency measures', () => {
   assert.equal(hasMeasurableEvidence('Complete 3 times per week'), true);
   assert.equal(hasMeasurableEvidence('Create a 1080 x 1440 design'), false);
 });
+
+test('accepts normalized empty optional fields on group and rest nodes', () => {
+  const normalizedGroup = (title: string, child: unknown) => ({
+    type: 'category',
+    title,
+    instructions: '',
+    substeps: [],
+    children: [child],
+  });
+  const normalizedRest = {
+    type: 'rest',
+    title: 'Rest',
+    instructions: '',
+    substeps: [],
+    rest_seconds: 90,
+    children: [],
+  };
+  assert.equal(hasCompleteActionTree([
+    normalizedGroup('Preparation', task('Prepare the required materials')),
+    normalizedGroup('Execution', task('Complete the planned exercise')),
+    normalizedGroup('Review', task('Record and assess the outcome')),
+    normalizedRest,
+  ]), true);
+});
+
+test('maps every AI classifier category family to a supported validator', () => {
+  assert.equal(validateCategorySpecificDetail('Languages', 'Translate ten phrases and practise pronunciation', 1), null);
+  assert.equal(validateCategorySpecificDetail('Crafts/Hobbies', 'Create a sketch and refine the drawing technique', 1), null);
+  assert.equal(validateCategorySpecificDetail('Technology/Projects', 'Build the feature and run the acceptance tests', 1), null);
+  assert.equal(validateCategorySpecificDetail('Career/Projects', 'Interview clients and revise the portfolio', 1), null);
+  assert.equal(validateCategorySpecificDetail('Personal Development', 'Build a daily routine and review the habit', 1), null);
+  assert.equal(validateCategorySpecificDetail('Creative Skills', 'Compose a draft and rehearse the performance', 1), null);
+  assert.equal(validateCategorySpecificDetail('Practical Skills', 'Practise the technique and prepare the materials', 1), null);
+});
