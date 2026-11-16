@@ -70,7 +70,7 @@ begin
     user_id, feature, period_start, status, expires_at, metadata
   )
   values (
-    uid, p_feature, period, 'reserved', expiry, pg_catalog.coalesce(p_metadata, '{}'::jsonb)
+    uid, p_feature, period, 'reserved', expiry, coalesce(p_metadata, '{}'::jsonb)
   )
   returning id into reservation_id;
 
@@ -125,7 +125,7 @@ begin
   insert into public.vow_entitlement_usage (user_id, feature, period_start, metadata)
   values (
     uid, r.feature, r.period_start,
-    pg_catalog.coalesce(r.metadata, '{}'::jsonb) || pg_catalog.jsonb_build_object('reservation_id', r.id)
+    coalesce(r.metadata, '{}'::jsonb) || pg_catalog.jsonb_build_object('reservation_id', r.id)
   );
 
   update public.vow_entitlement_reservations
@@ -193,8 +193,8 @@ begin
   )
   values (
     p_user_id, p_goal_id, p_mode, p_alert_type, p_validation_code,
-    pg_catalog.left(pg_catalog.coalesce(p_goal_title, ''), 300),
-    pg_catalog.coalesce(p_details, '{}'::jsonb)
+    pg_catalog.left(coalesce(p_goal_title, ''), 300),
+    coalesce(p_details, '{}'::jsonb)
   )
   returning id into v_id;
 
