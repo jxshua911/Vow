@@ -14,7 +14,7 @@ const MEASURE_UNITS =
 export function hasMeasurableEvidence(task: string): boolean {
   if (typeof task !== "string" || !task.trim()) return false;
   const value = task.normalize("NFKC").replace(/,/g, "");
-  const hasImageDimensions = /\b\d{3,}\s*[x×]\s*\d{3,}\b/i.test(value);
+  const hasSetsAndReps = [...value.matchAll(/\\b\\d{1,2}\\s*[x×]\\s*\\d{1,3}(?!\\d)/gi)].length > 0;
   const hasUnit = new RegExp(
     "(?:^|\\s)\\d+(?:\\.\\d+)?\\s*" + MEASURE_UNITS + "(?=\\s|$)",
     "i",
@@ -22,7 +22,7 @@ export function hasMeasurableEvidence(task: string): boolean {
   const hasCurrency = /(?:\b(?:RM|MYR|USD|EUR|GBP|SGD|TZS|KES)\s*\d+(?:\.\d{1,2})?\b|[$€£]\s*\d+(?:\.\d{1,2})?)/i.test(value);
   const hasFrequency = /\b(?:once|twice|thrice|daily|weekly|monthly|every\s+(?:day|week|month)|\d+\s+times?\s+(?:a|per)\s+(?:day|week|month))\b/i.test(value);
   const hasCountedWork = /\b(?:complete|finish|submit|attend|pass|achieve|publish|deliver|earn|save|score|answer|solve|read|write|call|contact|interview)\s+(?:the\s+)?\d+\b/i.test(value);
-  const hasSetsAndReps = !hasImageDimensions && /\b\d{1,2}\s*[x×]\s*\d{1,3}(?!\d)/i.test(value);
+
   const hasNamedDeliverable = /\b(?:complete|finish|submit|attend|pass|achieve|publish|deliver|earn|save|score)\s+(?:the\s+)?(?:[a-z][\w-]*\s+){0,4}(?:chapter|module|course|assignment|exam|milestone|project|application|report|certificate|assessment|draft|prototype|portfolio|presentation|lesson)\b/i.test(value);
   return /(?:^|\s)\d+(?:\.\d+)?\s*%(?=\s|$)/i.test(value)
     || hasUnit
