@@ -61,7 +61,7 @@ const CATEGORY_SIGNALS: Record<string, RegExp> = {
 };
 
 function normalizeCategory(category: string): string {
-  const normalized = String(category || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const normalized = String(category || "").trim().toLowerCase().replace(/[\\s\\-/]+/g, "_");
   return CATEGORY_ALIASES[normalized] || normalized;
 }
 
