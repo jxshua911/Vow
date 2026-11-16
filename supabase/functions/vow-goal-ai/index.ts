@@ -809,6 +809,7 @@ async function ai(req: Request, userId: string, parentRequestId: string, message
   try {
     const providers = providerOrder();
     console.log("[VOW AI] Provider routing", {
+      request_id: parentRequestId,
       requested_primary: "groq",
       groq_configured: providers.includes("groq"),
       selected: providers[0] || "none",
@@ -837,12 +838,18 @@ async function ai(req: Request, userId: string, parentRequestId: string, message
             : provider === "mistral"
               ? await callMistral(req, providerMessages, kind)
               : await callNova(req, providerMessages, kind);
-        console.log("[VOW AI] Provider succeeded", { provider });
+        console.log("[VOW AI] Provider succeeded", {
+          request_id: parentRequestId,
+          provider,
+          task: kind,
+        });
         return result;
       } catch (providerError) {
         lastError = providerError;
         console.warn("[VOW AI] Provider failed; trying next provider", {
+          request_id: parentRequestId,
           provider,
+          task: kind,
           error: providerError instanceof Error ? providerError.message : String(providerError),
         });
       }
