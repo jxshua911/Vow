@@ -9,7 +9,7 @@ const MIN_INSTRUCTION_LENGTH = 20;
 const MIN_EXECUTABLE_ACTIONS = 3;
 
 const MEASURE_UNITS =
-  "(?:minutes?|mins?|hours?|hrs?|seconds?|secs?|km|kilomet(?:er|re)s?|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|weeks?|months?|points?|kg|lbs?|grams?|g|ml|millilit(?:er|re)s?|lit(?:er|re)s?|chapters?|questions?|problems?|customers?|calls?|orders?|lessons?|lessons?|visits?|kilograms?)";
+  "(?:minutes?|mins?|hours?|hrs?|seconds?|secs?|km|kilomet(?:er|re)s?|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|weeks?|months?|points?|kg|lbs?|grams?|g|ml|millilit(?:er|re)s?|lit(?:er|re)s?|chapters?|questions?|problems?|customers?|calls?|orders?|lessons?|visits?|kilograms?)";
 
 export function hasMeasurableEvidence(task: string): boolean {
   if (typeof task !== "string" || !task.trim()) return false;
@@ -36,9 +36,9 @@ export function hasMeasurableEvidence(task: string): boolean {
 const CATEGORY_ALIASES: Record<string, string> = {
   learning: "study", education: "study", academic: "study", reading: "study",
   money: "financial", finance: "financial", budgeting: "financial",
-  career: "business", projects: "business", project: "business", product: "business",
-  creative: "skill", music: "skill", cooking: "skill", language: "skill", crafts: "skill",
-  travel: "personal", life_admin: "personal", lifeadmin: "personal",
+  career: "business", career_projects: "business", technology_projects: "business", projects: "business", project: "business", product: "business",
+  creative: "skill", music: "skill", cooking: "skill", language: "skill", languages: "skill", crafts: "skill", crafts_hobbies: "skill", creative_skills: "skill", practical_skills: "skill",
+  travel: "personal", personal_development: "personal", productivity: "personal", life_admin: "personal", lifeadmin: "personal",
   organisation: "home", organization: "home", household: "home",
   sport: "fitness", sports: "fitness", exercise: "fitness",
   wellbeing: "health", wellness: "health",
@@ -105,7 +105,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
     const title = action.title.trim();
     const isRest = rawType === "rest" || rawType === "break" || /^(rest|break)\b/i.test(title);
     if (isRest) {
-      if (children.length || substeps.length || action.instructions != null) return false;
+      if (children.length || substeps.length) return false;\n      if (action.instructions != null && action.instructions !== "" && !validText(action.instructions, 8, MAX_INSTRUCTION_LENGTH)) return false;
       const rawDuration = action.rest_seconds ?? action.duration_seconds ??
         (typeof action.duration_minutes === "number" ? action.duration_minutes * 60 : null);
       return typeof rawDuration === "number" && Number.isFinite(rawDuration) &&
@@ -116,7 +116,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
       (rawType === "" && children.length > 0);
     if (isGroup) {
       if (children.length < 1 || substeps.length > 0) return false;
-      if (action.instructions != null && !validText(action.instructions, 12, MAX_INSTRUCTION_LENGTH)) return false;
+      if (action.instructions != null && action.instructions !== "" && !validText(action.instructions, 12, MAX_INSTRUCTION_LENGTH)) return false;
       return children.every((child) => visit(child, depth + 1));
     }
 
