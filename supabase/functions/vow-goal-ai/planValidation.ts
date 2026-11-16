@@ -12,6 +12,7 @@ export function hasMeasurableEvidence(task: string): boolean {
   const value = task.normalize("NFKC").replace(/,/g, "");
   return /(?:^|\s)\d+(?:\.\d+)?\s*%(?=\s|$)/i.test(value)
     || /(?:^|\s)\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?|km|kilomet(?:er|re)s?|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|weeks?|points?|kg|lb|grams?|g|ml|lit(?:er|re)s?|chapters?|questions?|problems?|customers?|calls?|orders?|questions?|problems?)(?=\s|$)/i.test(value)
+    || /\\b(?:RM|USD|EUR|GBP)\\s*\\d+(?:\\.\\d{1,2})?\\b/i.test(value)
     || /\b(?:twice|thrice|once|daily|weekly|monthly|every\s+day|every\s+week)\b/i.test(value)
     || /\b\d+\s*[x×]\s*\d+(?!\s*\d)/i.test(value)
     || /\b(?:complete|finish|submit|attend|pass|achieve|publish|deliver|earn|save|score)\s+(?:the\s+)?(?:[a-z][\w-]*\s+){0,4}(?:chapter|module|course|assignment|exam|milestone|project|application|report|certificate|assessment|draft|prototype)\b/i.test(value);
