@@ -10,6 +10,7 @@ const MIN_INSTRUCTION_LENGTH = 20;
 export function hasMeasurableEvidence(task: string): boolean {
   if (typeof task !== "string" || !task.trim()) return false;
   const value = task.normalize("NFKC").replace(/,/g, "");
+  const isImageDimension = /\\b\\d{3,}\\s*[x×]\\s*\\d{3,}\\b/.test(value);
   return /(?:^|\s)\d+(?:\.\d+)?\s*%(?=\s|$)/i.test(value)
     || /(?:^|\s)\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?|km|kilomet(?:er|re)s?|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|weeks?|points?|kg|lb|grams?|g|ml|lit(?:er|re)s?|chapters?|questions?|problems?|customers?|calls?|orders?|questions?|problems?)(?=\s|$)/i.test(value)
     || /\\b(?:RM|USD|EUR|GBP)\\s*\\d+(?:\\.\\d{1,2})?\\b/i.test(value)
