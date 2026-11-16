@@ -61,9 +61,9 @@ begin
 
   -- The configured default is a floor; the daily global budget is the ceiling.
   -- The only caller is the trusted Edge Function, not a client-controlled RPC.
-  v_reservation := pg_catalog.least(
-    pg_catalog.greatest(
-      pg_catalog.coalesce(p_reservation_usd, v_cfg.default_reservation_usd),
+  v_reservation := least(
+    greatest(
+      coalesce(p_reservation_usd, v_cfg.default_reservation_usd),
       v_cfg.default_reservation_usd
     ),
     v_cfg.global_daily_budget_usd
@@ -233,7 +233,7 @@ begin
     p_mode,
     p_outcome,
     p_latency_ms,
-    pg_catalog.nullif(pg_catalog.left(pg_catalog.coalesce(p_error_code, ''), 64), '')
+    nullif(pg_catalog.left(coalesce(p_error_code, ''), 64), '')
   )
   on conflict (request_id) do nothing;
 end;
