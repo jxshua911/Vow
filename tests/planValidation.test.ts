@@ -128,7 +128,8 @@ test('accepts currency symbols and common frequency measures', () => {
   assert.equal(hasMeasurableEvidence('Save $250 per month'), true);
   assert.equal(hasMeasurableEvidence('Set aside €40 weekly'), true);
   assert.equal(hasMeasurableEvidence('Complete 3 times per week'), true);
-  assert.equal(hasMeasurableEvidence('Create a 1080 x 1440 design'), false);\n  assert.equal(hasMeasurableEvidence('Create a 1080 x 1440 design and complete 4 x 8 sets'), true);
+  assert.equal(hasMeasurableEvidence('Create a 1080 x 1440 design'), false);
+  assert.equal(hasMeasurableEvidence('Create a 1080 x 1440 design and complete 4 x 8 sets'), true);
 });
 
 test('accepts normalized empty optional fields on group and rest nodes', () => {
