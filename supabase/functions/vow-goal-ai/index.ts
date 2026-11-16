@@ -607,17 +607,16 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
 }
 
 
-type AiProvider = "mistral" | "groq" | "qwen" | "nova";
+type AiProvider = "groq" | "mistral" | "nova";
 
-// Goal generation is Mistral-first by design. Environment weights must not
-// silently route the primary planning workload to a different model.
-const PROVIDER_PRIORITY: readonly AiProvider[] = ["mistral", "groq", "qwen", "nova"];
+// Groq is the proven primary provider; Mistral is the first fallback, and
+// Amazon Nova is the final configured fallback. Keep this order deterministic.
+const PROVIDER_PRIORITY: readonly AiProvider[] = ["groq", "mistral", "nova"];
 
 function providerOrder(): AiProvider[] {
   const keyPresent: Record<AiProvider, boolean> = {
-    mistral: Boolean(Deno.env.get("MISTRAL_API_KEY")),
     groq: Boolean(Deno.env.get("GROQ_API_KEY")),
-    qwen: Boolean(Deno.env.get("DASHSCOPE_API_KEY")),
+    mistral: Boolean(Deno.env.get("MISTRAL_API_KEY")),
     nova: Boolean(Deno.env.get("AWS_BEARER_TOKEN_BEDROCK")),
   };
   return PROVIDER_PRIORITY.filter((provider) => keyPresent[provider]);
@@ -810,8 +809,8 @@ async function ai(req: Request, userId: string, parentRequestId: string, message
   try {
     const providers = providerOrder();
     console.log("[VOW AI] Provider routing", {
-      requested_primary: "mistral",
-      mistral_configured: providers.includes("mistral"),
+      requested_primary: "groq",
+      groq_configured: providers.includes("groq"),
       selected: providers[0] || "none",
       fallback_order: providers.slice(1),
       task: kind,
@@ -837,9 +836,7 @@ async function ai(req: Request, userId: string, parentRequestId: string, message
             ? await callGroq(req, providerMessages, kind, researchRequired)
             : provider === "mistral"
               ? await callMistral(req, providerMessages, kind)
-              : provider === "qwen"
-                ? await callQwen(req, providerMessages, kind)
-                : await callNova(req, providerMessages, kind);
+              : await callNova(req, providerMessages, kind);
         console.log("[VOW AI] Provider succeeded", { provider });
         return result;
       } catch (providerError) {
