@@ -156,6 +156,10 @@ test('accepts normalized empty optional fields on group and rest nodes', () => {
   ]), true);
 });
 
+test('does not accept generic verbs as skill-specific evidence', () => {
+  assert.equal(validateCategorySpecificDetail('Creative Skills', 'Build something, create something, and practise more.', 1), 'CATEGORY_DETAIL_SKILL');
+});
+
 test('maps every AI classifier category family to a supported validator', () => {
   assert.equal(validateCategorySpecificDetail('Languages', 'Translate ten phrases and practise pronunciation', 1), null);
   assert.equal(validateCategorySpecificDetail('Crafts/Hobbies', 'Create a sketch and refine the drawing technique', 1), null);
