@@ -116,6 +116,8 @@ jobs:
         run: npm run build
       - name: Sync Capacitor Android
         run: npx cap sync android
+      - name: Build Android debug APK (npm run build:android)
+        run: npm run build:android
       - name: Prepare release signing key
         env:
           VOW_RELEASE_KEYSTORE_B64: ${{ secrets.VOW_RELEASE_KEYSTORE_B64 }}
