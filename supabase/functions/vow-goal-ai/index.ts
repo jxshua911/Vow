@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { ensureCompleteActionTree, hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from "./planValidation.ts";
+import { hasCompleteActionTree, hasMeasurableEvidence, validateCategorySpecificDetail } from "./planValidation.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -1220,18 +1220,9 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
       });
     }
   }
-  // Repair missing or incomplete model action trees deterministically from the
-  // already validated session task, purpose, metric and substeps. This avoids
-  // a second expensive model call just to format executable steps.
-  return out.map((item: any) => ({
-    ...item,
-    actions: ensureCompleteActionTree(item.actions, {
-      task: item.task,
-      purpose: item.purpose,
-      targetMetric: item.target_metric,
-      substeps: item.substeps,
-    }),
-  }));
+  // Preserve the model's actual actions. Validation must reject incomplete
+  // trees rather than making them appear complete with generic placeholders.
+  return out;
 }
 
 Deno.serve(async (req) => {
@@ -1744,7 +1735,8 @@ Each week's sessions must advance that week's focus rather than repeating the sa
           b,
           w,
           ds,
-          str(g?.start_date) || new Date().toISOString().slice(0, 10)
+          str(g?.start_date) || new Date().toISOString().slice(0, 10),
+          g?.schedule_times_enabled === true
         ),
       };
       await record(req, "goal-plan", "success", Date.now() - startedAt);
