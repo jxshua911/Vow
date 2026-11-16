@@ -11,7 +11,7 @@ export function hasMeasurableEvidence(task: string): boolean {
   if (typeof task !== "string" || !task.trim()) return false;
   const value = task.normalize("NFKC").replace(/,/g, "");
   return /(?:^|\s)\d+(?:\.\d+)?\s*%(?=\s|$)/i.test(value)
-    || /(?:^|\s)\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?|km|kilomet(?:er|re)s?|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|weeks?|points?|kg|lb|grams?|g|ml|lit(?:er|re)s?|chapters?|questions?|problems?|customers?|calls?|orders?|RM|USD|EUR|GBP)(?=\s|$)/i.test(value)
+    || /(?:^|\s)\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?|km|kilomet(?:er|re)s?|miles?|reps?|sets?|pages?|words?|items?|sessions?|days?|weeks?|points?|kg|lb|grams?|g|ml|lit(?:er|re)s?|chapters?|questions?|problems?|customers?|calls?|orders?|questions?|problems?)(?=\s|$)/i.test(value)
     || /\b(?:twice|thrice|once|daily|weekly|monthly|every\s+day|every\s+week)\b/i.test(value)
     || /\b\d+\s*[x×]\s*\d+(?!\s*\d)/i.test(value)
     || /\b(?:complete|finish|submit|attend|pass|achieve|publish|deliver|earn|save|score)\s+(?:the\s+)?(?:[a-z][\w-]*\s+){0,4}(?:chapter|module|course|assignment|exam|milestone|project|application|report|certificate|assessment|draft|prototype)\b/i.test(value);
@@ -97,7 +97,7 @@ export function hasCompleteActionTree(actions: unknown): boolean {
     const isGroup = rawType === "group" || rawType === "category" ||
       (rawType === "" && children.length > 0);
     if (isGroup) {
-      if (children.length < 2 || (action.instructions != null && !validText(action.instructions, 12, MAX_INSTRUCTION_LENGTH))) return false;
+      if (children.length < 1 || (action.instructions != null && !validText(action.instructions, 12, MAX_INSTRUCTION_LENGTH))) return false;
       return children.every((child) => visit(child, depth + 1));
     }
 
