@@ -96,10 +96,10 @@ test('rejects excessive depth and excessive total node counts', () => {
 
 test('validates rest durations strictly', () => {
   const rest = (duration: unknown) => ({ type: 'rest', title: 'Rest', duration_seconds: duration });
-  assert.equal(hasCompleteActionTree([rest(60), task('Do the work'), task('Review the work')]), true);
-  assert.equal(hasCompleteActionTree([rest(true), task('Do the work'), task('Review the work')]), false);
-  assert.equal(hasCompleteActionTree([rest(0), task('Do the work'), task('Review the work')]), false);
-  assert.equal(hasCompleteActionTree([rest(90000), task('Do the work'), task('Review the work')]), false);
+  assert.equal(hasCompleteActionTree([rest(60), task('Do the work'), task('Review the work'), task('Record the result')]), true);
+  assert.equal(hasCompleteActionTree([rest(true), task('Do the work'), task('Review the work'), task('Record the result')]), false);
+  assert.equal(hasCompleteActionTree([rest(0), task('Do the work'), task('Review the work'), task('Record the result')]), false);
+  assert.equal(hasCompleteActionTree([rest(90000), task('Do the work'), task('Review the work'), task('Record the result')]), false);
 });
 
 test('does not fabricate a successful-looking action tree when output is incomplete', () => {
@@ -108,4 +108,25 @@ test('does not fabricate a successful-looking action tree when output is incompl
     purpose: 'Improve understanding',
     targetMetric: 'Complete ten problems',
   }), []);
+});
+
+test('requires three executable leaves; rest periods do not count as work', () => {
+  assert.equal(hasCompleteActionTree([
+    { title: 'Break', type: 'rest', duration_seconds: 120 },
+    task('Complete the first work block'),
+    task('Complete the second work block'),
+  ]), false);
+  assert.equal(hasCompleteActionTree([
+    { title: 'Break', type: 'rest', duration_seconds: 120 },
+    task('Complete the first work block'),
+    task('Complete the second work block'),
+    task('Record and review the result'),
+  ]), true);
+});
+
+test('accepts currency symbols and common frequency measures', () => {
+  assert.equal(hasMeasurableEvidence('Save $250 per month'), true);
+  assert.equal(hasMeasurableEvidence('Set aside €40 weekly'), true);
+  assert.equal(hasMeasurableEvidence('Complete 3 times per week'), true);
+  assert.equal(hasMeasurableEvidence('Create a 1080 x 1440 design'), false);
 });
