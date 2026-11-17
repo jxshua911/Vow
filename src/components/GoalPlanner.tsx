@@ -1624,7 +1624,7 @@ export function GoalPlanner({
           </button>
           <button
             onClick={askQuestions}
-            disabled={!rawInput.trim() || planning || availableDays.length === 0 || !selectedDurationWeeks || missingSessionTimes.length > 0}
+            disabled={!rawInput.trim() || planning || availableDays.length === 0 || !selectedDurationWeeks || (selectedDurationMonths !== null && selectedDurationMonths > 12) || missingSessionTimes.length > 0}
             className="vow-btn-primary flex-1"
           >
             {planning ? 'VOW is preparing questions…' : missingSessionTimes.length > 0 ? `Choose time for ${missingSessionTimes.length} day${missingSessionTimes.length === 1 ? '' : 's'}` : !selectedDurationWeeks ? 'Choose a duration' : 'Continue'}
