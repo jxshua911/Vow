@@ -44,7 +44,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   wellbeing: "health", wellness: "health",
   relationships: "relationship", social: "relationship", communication: "relationship",
   habits: "mindfulness", mental_wellbeing: "mindfulness",
-  technology: "business",
+  technology: "business", productivity: "personal",
 };
 
 const CATEGORY_SIGNALS: Record<string, RegExp> = {
