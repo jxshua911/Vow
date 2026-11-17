@@ -468,7 +468,7 @@ export function GoalPlanner({
   const selectedDurationLabel = durationMonths
     ? `${durationMonths} months`
     : selectedDurationWeeks
-      ? `${customDurationValue.trim()} ${customDurationUnit}`
+      ? `${customDurationValue.trim()} ${Number(customDurationValue) === 1 ? customDurationUnit.slice(0, -1) : customDurationUnit}`
       : 'Choose a duration';
   const missingSessionTimes = availableDays.filter((day) => modeForDay(day) === 'timed' && !sessionTimes[day]);
   useEffect(() => {
