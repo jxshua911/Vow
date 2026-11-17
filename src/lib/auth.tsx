@@ -15,38 +15,43 @@ export function getDisplayName(session: Session | null) {
 }
 
 async function loadSavedDisplayName(userSession: Session): Promise<string> {
-  const { data, error } = await supabase
-    .from('user_settings')
-    .select('display_name')
-    .eq('user_id', userSession.user.id)
-    .maybeSingle();
-
-  if (error) {
-    console.warn('[VOW] Could not load the saved profile name:', error);
+  try {
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('display_name')
+      .eq('user_id', userSession.user.id)
+      .maybeSingle();
+  
+    if (error) {
+      console.warn('[VOW] Could not load the saved profile name:', error);
+      return getDisplayName(userSession);
+    }
+  
+    const savedName = typeof data?.display_name === 'string' ? data.display_name.trim() : '';
+    if (savedName) return savedName;
+  
+    // Migrate an existing name from Auth metadata into the durable profile field.
+    // OAuth providers can refresh user metadata on later sign-ins; user_settings
+    // remains VOW's source of truth for a name chosen inside the app.
+    const metadata = userSession.user.user_metadata as Record<string, unknown> | undefined;
+    const metadataName = typeof metadata?.full_name === 'string' && metadata.full_name.trim()
+      ? metadata.full_name.trim()
+      : typeof metadata?.name === 'string' ? metadata.name.trim() : '';
+    if (metadataName) {
+      const { error: seedError } = await supabase.from('user_settings').upsert({
+        user_id: userSession.user.id,
+        display_name: metadataName.slice(0, 80),
+        updated_at: new Date().toISOString(),
+      });
+      if (seedError) console.warn('[VOW] Could not migrate the Auth name into the saved profile:', seedError);
+      return metadataName.slice(0, 80);
+    }
+  
+    return getDisplayName(userSession);
+  } catch (error) {
+    console.warn('[VOW] Profile name hydration failed:', error);
     return getDisplayName(userSession);
   }
-
-  const savedName = typeof data?.display_name === 'string' ? data.display_name.trim() : '';
-  if (savedName) return savedName;
-
-  // Migrate an existing name from Auth metadata into the durable profile field.
-  // OAuth providers can refresh user metadata on later sign-ins; user_settings
-  // remains VOW's source of truth for a name chosen inside the app.
-  const metadata = userSession.user.user_metadata as Record<string, unknown> | undefined;
-  const metadataName = typeof metadata?.full_name === 'string' && metadata.full_name.trim()
-    ? metadata.full_name.trim()
-    : typeof metadata?.name === 'string' ? metadata.name.trim() : '';
-  if (metadataName) {
-    const { error: seedError } = await supabase.from('user_settings').upsert({
-      user_id: userSession.user.id,
-      display_name: metadataName.slice(0, 80),
-      updated_at: new Date().toISOString(),
-    });
-    if (seedError) console.warn('[VOW] Could not migrate the Auth name into the saved profile:', seedError);
-    return metadataName.slice(0, 80);
-  }
-
-  return getDisplayName(userSession);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
