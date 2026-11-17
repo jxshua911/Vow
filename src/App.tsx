@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { SplashScreen } from '@capacitor/splash-screen';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/theme';
@@ -86,8 +85,7 @@ function AppContent() {
   useEffect(() => {
     if (!splashMounted) return;
     const timer = window.setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS);
-    const timeout = window.setTimeout(() => { setSplashFadingOut(true); setSplashMounted(false); }, 6000);
-    return () => { window.clearTimeout(timer); window.clearTimeout(timeout); };
+    return () => { window.clearTimeout(timer); };
   }, [splashMounted]);
   useEffect(() => {
     const listener = (event: Event) => {
@@ -355,12 +353,6 @@ function AppContent() {
   }
 
   const contentReady = !loading && !settingsLoading && !termsLoading;
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !contentReady) return;
-    // Keep the native branded launch screen visible until the React app and its
-    // initial account state are ready, then reveal the already-mounted web splash.
-    void SplashScreen.hide().catch((error) => console.warn('[VOW] Native splash could not be hidden:', error));
-  }, [contentReady]);
   useEffect(() => { if (splashMounted && splashMinElapsed && contentReady && !splashFadingOut) { setSplashFadingOut(true); const timer = window.setTimeout(() => setSplashMounted(false), SPLASH_FADE_OUT_MS); return () => window.clearTimeout(timer); } }, [splashMounted, splashMinElapsed, contentReady, splashFadingOut]);
 
   let content: React.ReactNode;
