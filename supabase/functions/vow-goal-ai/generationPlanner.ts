@@ -28,8 +28,8 @@ export function estimateOutputTokens(input: {
   const multiplier = Math.max(0.75, Math.min(1.8, Number.isFinite(complexity) ? complexity : 1));
   const raw = stage === "skeleton"
     ? 900 + safeWeeks * 65 + safeDays * 90
-    : 700 + safeWeeks * 180 + safeWeeks * safeDays * 700 * multiplier;
-  return Math.min(providerOutputLimit, Math.max(MIN_OUTPUT_TOKENS, Math.ceil(raw)));
+    : 500 + safeWeeks * 120 + safeWeeks * safeDays * 300 * multiplier;
+  return Math.max(MIN_OUTPUT_TOKENS, Math.ceil(raw));
 }
 
 export function buildGenerationWindows(input: {
@@ -49,8 +49,14 @@ export function buildGenerationWindows(input: {
       sessionsPerWeek: input.sessionsPerWeek,
       complexity: input.complexity,
       providerOutputLimit: input.providerOutputLimit,
-    }) >= input.providerOutputLimit
+    }) > input.providerOutputLimit && windowWeeks > MIN_WINDOW_WEEKS
   ) windowWeeks = Math.max(MIN_WINDOW_WEEKS, Math.floor(windowWeeks / 2));
+
+  if (estimateOutputTokens({
+    stage: "window", weeks: Math.min(windowWeeks, totalWeeks),
+    sessionsPerWeek: input.sessionsPerWeek, complexity: input.complexity,
+    providerOutputLimit: input.providerOutputLimit,
+  }) > input.providerOutputLimit) throw new Error("WINDOW_EXCEEDS_PROVIDER_LIMIT");
 
   const windows: GenerationWindow[] = [];
   for (let startWeek = 1, index = 0; startWeek <= totalWeeks; index += 1) {
