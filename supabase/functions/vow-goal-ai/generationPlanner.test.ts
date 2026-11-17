@@ -19,9 +19,15 @@ Deno.test("token budgets scale with task size and respect provider limit", () =>
     stage: "window", weeks: 8, sessionsPerWeek: 5, complexity: 1.4, providerOutputLimit: 32768,
   });
   assertEquals(large > small, true);
-  assertEquals(estimateOutputTokens({
-    stage: "window", weeks: 8, sessionsPerWeek: 7, complexity: 1.8, providerOutputLimit: 5000,
-  }) <= 5000, true);
+  const constrained = buildGenerationWindows({
+    totalWeeks: 8, sessionsPerWeek: 7, complexity: 1.8, providerOutputLimit: 5000,
+  });
+  assertEquals(constrained.every(window =>
+    estimateOutputTokens({
+      stage: "window", weeks: window.weeks, sessionsPerWeek: 7,
+      complexity: 1.8, providerOutputLimit: 5000,
+    }) <= 5000
+  ), true);
 });
 
 Deno.test("token estimator fails closed when provider limit is unknown", () => {
