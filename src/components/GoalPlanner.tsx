@@ -141,6 +141,9 @@ function customDurationMonths(value: string, unit: DurationUnit): number | null 
   if (unit === 'years') return Math.round(amount * 12);
   return null;
 }
+function monthsForLegacyWeeks(weeks: number): number {
+  return Math.max(1, Math.min(12, Math.round((weeks * 7) / 30.4375)));
+}
 function customDurationWeeks(value: string, unit: DurationUnit, start = nextMonday()): number | null {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -178,10 +181,6 @@ function deadlineForDuration(start: Date, months: number | null, weeks: number):
 function milestoneDeadlineFor(start: Date, week: number, dayOfWeek?: string | null) {
   const dayIndex = dayOfWeek ? DAYS.indexOf(dayOfWeek) : -1;
   return toDateString(addDays(start, (Math.max(1, week) - 1) * 7 + (dayIndex >= 0 ? dayIndex : 6)));
-}
-function durationLabel(w: number) {
-  const option = DURATION_OPTIONS.find(x => x.weeks === w);
-  return option?.label || `${w} weeks`;
 }
 function canonicalDay(day: unknown): string | null {
   const value = String(day ?? '').trim().toLowerCase();
@@ -511,7 +510,7 @@ export function GoalPlanner({
           if (typeof savedDraft.why === 'string') setWhy(savedDraft.why);
           if (typeof savedDraft.durationMonths === 'number') setDurationMonths(savedDraft.durationMonths);
           else if (typeof savedDraft.durationWeeks === 'number') {
-            const matchingPreset = DURATION_OPTIONS.find((option) => calendarDurationWeeks(nextMonday(), option.months) === savedDraft.durationWeeks);
+            const matchingPreset = DURATION_OPTIONS.find((option) => option.months === monthsForLegacyWeeks(savedDraft.durationWeeks as number));
             if (matchingPreset) setDurationMonths(matchingPreset.months);
             else if (savedDraft.customDurationValue?.trim()) setShowCustomDuration(true);
           } else if (savedDraft.durationWeeks === null && typeof savedDraft.customDurationValue === 'string' && savedDraft.customDurationValue.trim()) {
@@ -551,8 +550,10 @@ export function GoalPlanner({
           if (!savedMatchesRequestedDraft) {
             setRawInput(String(goal.title || goal.outcome || ''));
             setWhy(String(goal.why_it_matters || ''));
+            const monthMatch = /^(\d+)m$/i.exec(String(goal.duration || ''));
             const durationMatch = /^(\d+)w$/i.exec(String(goal.duration || ''));
-            if (durationMatch) setDurationWeeks(Math.max(1, Math.min(52, Number(durationMatch[1]))));
+            if (monthMatch) setDurationMonths(Math.max(1, Math.min(12, Number(monthMatch[1]))));
+            else if (durationMatch) setDurationMonths(monthsForLegacyWeeks(Number(durationMatch[1])));
             setAvailableDays([]);
             setSessionTimes({});
             setClarification(null);
@@ -571,7 +572,7 @@ export function GoalPlanner({
             const restoredPlan = storedPlan as Plan;
             setPlan(restoredPlan);
             if (Number.isFinite(Number(restoredPlan.duration_weeks)) && Number(restoredPlan.duration_weeks) > 0) {
-              setDurationWeeks(Math.max(1, Math.min(52, Number(restoredPlan.duration_weeks))));
+              setDurationMonths(Number.isFinite(Number((restoredPlan as Plan & { duration_months?: number }).duration_months)) ? Math.max(1, Math.min(12, Number((restoredPlan as Plan & { duration_months?: number }).duration_months))) : monthsForLegacyWeeks(Number(restoredPlan.duration_weeks)));
             }
             const restoredDays = Array.isArray(restoredPlan.available_days) && restoredPlan.available_days.length
               ? restoredPlan.available_days.filter((day): day is string => DAYS.includes(day))
