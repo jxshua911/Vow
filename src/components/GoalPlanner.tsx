@@ -421,7 +421,6 @@ export function GoalPlanner({
   const [resourceError, setResourceError] = useState('');
   const [calendarConflicts, setCalendarConflicts] = useState<string[]>([]);
   const [expandedScheduleKey, setExpandedScheduleKey] = useState<string | null>(null);
-  const [openScheduleModeDay, setOpenScheduleModeDay] = useState<string | null>(null);
   const [expandedScheduleDay, setExpandedScheduleDay] = useState<string | null>(null);
   const [showAllPlanReferences, setShowAllPlanReferences] = useState(false);
   const [upgrade, setUpgrade] = useState<EntitlementResult | null>(null);
