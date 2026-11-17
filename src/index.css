@@ -127,3 +127,8 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 @media (min-width: 768px) {
   .vow-content-dense .vow-dashboard-populated { max-width: 100%; }
 }
+
+@media (max-width: 767px) {
+  .vow-content-dense .vow-goals-populated .vow-heading { line-height: 1.08; }
+  .vow-content-dense .vow-goals-populated .mb-6 { margin-bottom: 0.9rem; }
+}
