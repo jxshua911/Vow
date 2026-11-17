@@ -1422,7 +1422,7 @@ export function GoalPlanner({
         title="New goal"
         subtitle="Tell VOW what you want to accomplish. It will ask the right questions before building your plan."
       />
-      <div className="max-w-xl space-y-6">
+      <div className="max-w-xl space-y-4 sm:space-y-5">
         <textarea
           value={rawInput}
           onChange={e => setRawInput(e.target.value)}
