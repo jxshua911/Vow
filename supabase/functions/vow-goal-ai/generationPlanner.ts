@@ -9,7 +9,6 @@ export type WindowValidationInput = {
 };
 
 const MIN_OUTPUT_TOKENS = 1200;
-const MAX_WINDOW_WEEKS = 8;
 const MIN_WINDOW_WEEKS = 1;
 
 export function estimateOutputTokens(input: {
