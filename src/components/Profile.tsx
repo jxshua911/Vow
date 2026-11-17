@@ -7,6 +7,7 @@ import { useTheme } from '@/lib/theme';
 import { userFacingError } from '@/lib/userFacingError';
 import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { PageHeader } from './AppShell';
+import { getDemoModeEnabled, isDemoModeEligible, setDemoModeEnabled } from '@/lib/demoMode';
 import {
   cancelAllVowNotifications,
   clearCloudPushRegistration,
@@ -33,6 +34,22 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [signOutError, setSignOutError] = useState('');
+  const demoModeEligible = isDemoModeEligible(session?.user.email);
+  const [demoModeEnabled, setDemoModeEnabledState] = useState(false);
+
+  useEffect(() => {
+    if (!session || !demoModeEligible) {
+      setDemoModeEnabledState(false);
+      return;
+    }
+    setDemoModeEnabledState(getDemoModeEnabled(session.user.id));
+    const handleDemoModeChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string; enabled?: boolean }>).detail;
+      if (detail?.userId === session.user.id) setDemoModeEnabledState(Boolean(detail.enabled));
+    };
+    window.addEventListener('vow:demo-mode-changed', handleDemoModeChange);
+    return () => window.removeEventListener('vow:demo-mode-changed', handleDemoModeChange);
+  }, [session?.user.id, session?.user.email, demoModeEligible]);
 
   useEffect(() => { setName(displayName); }, [displayName]);
 
@@ -239,6 +256,31 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
               {updatingNotifications && <p className="text-xs text-vow-muted mt-2" role="status">Updating session reminders…</p>}
               {notificationError && <p className="text-xs text-vow-muted mt-2" role="alert">{notificationError}</p>}
             </div>
+
+            {demoModeEligible && session && <div className="py-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm text-vow-ink">Demo dashboard</p>
+                  <p className="text-xs text-vow-muted mt-1">Preview a populated multi-goal dashboard. Demo data stays separate from your real goals and Free limits.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={demoModeEnabled}
+                  aria-label={demoModeEnabled ? 'Turn off demo dashboard' : 'Turn on demo dashboard'}
+                  onClick={() => {
+                    const next = !demoModeEnabled;
+                    setDemoModeEnabled(session.user.id, next);
+                    setDemoModeEnabledState(next);
+                  }}
+                  className="relative h-11 w-12 shrink-0 p-0"
+                >
+                  <span className={`absolute inset-x-0 top-1/2 h-7 -translate-y-1/2 rounded-full border border-vow-border transition-colors ${demoModeEnabled ? 'bg-vow-ink' : 'bg-vow-surface'}`} />
+                  <span className={`absolute left-1 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full shadow-sm transition-transform ${demoModeEnabled ? 'translate-x-5 bg-vow-bg' : 'translate-x-0 bg-vow-muted'}`} />
+                </button>
+              </div>
+              <p className="text-[11px] text-vow-muted mt-2">{demoModeEnabled ? 'Demo dashboard is on for this account on this device.' : 'Off — your real dashboard is shown.'}</p>
+            </div>}
           </div>
         </div>
 
