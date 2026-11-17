@@ -21,15 +21,15 @@ async function loadSavedDisplayName(userSession: Session): Promise<string> {
       .select('display_name')
       .eq('user_id', userSession.user.id)
       .maybeSingle();
-  
+
     if (error) {
       console.warn('[VOW] Could not load the saved profile name:', error);
       return getDisplayName(userSession);
     }
-  
+
     const savedName = typeof data?.display_name === 'string' ? data.display_name.trim() : '';
     if (savedName) return savedName;
-  
+
     // Migrate an existing name from Auth metadata into the durable profile field.
     // OAuth providers can refresh user metadata on later sign-ins; user_settings
     // remains VOW's source of truth for a name chosen inside the app.
@@ -46,7 +46,7 @@ async function loadSavedDisplayName(userSession: Session): Promise<string> {
       if (seedError) console.warn('[VOW] Could not migrate the Auth name into the saved profile:', seedError);
       return metadataName.slice(0, 80);
     }
-  
+
     return getDisplayName(userSession);
   } catch (error) {
     console.warn('[VOW] Profile name hydration failed:', error);
@@ -72,6 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         const { data: latest } = await supabase.auth.getSession();
         if (latest.session?.user.id === nextSession.user.id) setDisplayName(resolvedName);
+      }).catch((error) => {
+        console.warn('[VOW] Could not finish profile name hydration:', error);
       });
     };
 
