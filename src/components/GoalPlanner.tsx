@@ -629,7 +629,7 @@ export function GoalPlanner({
       window.localStorage.setItem(activeDraftStorageKey, JSON.stringify({
         rawInput,
         why,
-        durationMonths,
+        durationMonths: selectedDurationMonths,
         durationWeeks: selectedDurationWeeks,
         customDurationValue,
         customDurationUnit,
@@ -780,7 +780,7 @@ export function GoalPlanner({
       return;
     }
     if (selectedDurationWeeks < 1 || selectedDurationWeeks > 52 || (selectedDurationMonths !== null && selectedDurationMonths > 12)) {
-      setError('Please choose a duration between 1 and 52 weeks.');
+      setError('Please choose a duration of up to 12 calendar months.');
       return;
     }
     if (availableDays.length < 1 || availableDays.length > 7 || missingSessionTimes.length > 0) {
@@ -880,7 +880,7 @@ export function GoalPlanner({
         return;
       }
       if (selectedDurationWeeks < 1 || selectedDurationWeeks > 52 || (selectedDurationMonths !== null && selectedDurationMonths > 12)) {
-        setError('Please choose a duration between 1 and 52 weeks.');
+        setError('Please choose a duration of up to 12 calendar months.');
         return;
       }
       if (availableDays.length < 1 || availableDays.length > 7 || missingSessionTimes.length > 0) {
