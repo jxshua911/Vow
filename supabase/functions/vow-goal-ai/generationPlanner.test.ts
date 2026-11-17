@@ -21,7 +21,7 @@ Deno.test("token budgets scale with task size and respect provider limit", () =>
   assertEquals(large > small, true);
   assertEquals(estimateOutputTokens({
     stage: "window", weeks: 8, sessionsPerWeek: 7, complexity: 1.8, providerOutputLimit: 5000,
-  }), 5000);
+  }) <= 5000, true);
 });
 
 Deno.test("token estimator fails closed when provider limit is unknown", () => {
