@@ -14,7 +14,7 @@ export function getDisplayName(session: Session | null) {
   return emailName || 'there';
 }
 
-export async function loadSavedDisplayName(userSession: Session): Promise<string> {
+async function loadSavedDisplayName(userSession: Session): Promise<string> {
   const { data, error } = await supabase
     .from('user_settings')
     .select('display_name')
