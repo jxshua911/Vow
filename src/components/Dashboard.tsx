@@ -10,6 +10,124 @@ import type { View } from './AppShell';
 
 interface DashboardProps { onNavigate: (view: View) => void; }
 
+const DEMO_ACCOUNT_EMAIL = 'joshuakasanga9@gmail.com';
+
+function createAccountScopedDemoData(): { goals: Goal[]; sessions: Session[]; weekSessions: Session[] } {
+  const now = new Date();
+  const dateAt = (offsetDays: number, hour = 9) => {
+    const date = new Date(now);
+    date.setDate(date.getDate() + offsetDays);
+    date.setHours(hour, 0, 0, 0);
+    return date.toISOString();
+  };
+  const definitions = [
+    { id: 'demo-goal-fitness', title: 'Build consistent fitness', outcome: 'Complete 12 structured training sessions', completed: 5, total: 9 },
+    { id: 'demo-goal-arabic', title: 'Learn conversational Arabic', outcome: 'Hold a 10-minute everyday conversation', completed: 4, total: 9 },
+    { id: 'demo-goal-reading', title: 'Read more consistently', outcome: 'Finish 4 books and record key takeaways', completed: 5, total: 8 },
+    { id: 'demo-goal-project', title: 'Build a personal project', outcome: 'Ship a working project milestone', completed: 4, total: 8 },
+  ];
+  const goals: Goal[] = definitions.map((item) => ({
+    id: item.id,
+    user_id: 'demo-only',
+    title: item.title,
+    outcome: item.outcome,
+    why_it_matters: null,
+    start_date: dateAt(-28).slice(0, 10),
+    duration: '3m',
+    deadline: dateAt(62).slice(0, 10),
+    status: 'active',
+    weekly_commitment_target: 3,
+    plan_json: null,
+    plan_version: 1,
+    plan_generated_at: dateAt(-28),
+    planning_horizon_weeks: 13,
+    planning_timezone: 'Asia/Kuala_Lumpur',
+    created_at: dateAt(-28),
+    updated_at: dateAt(-1),
+  }));
+  const sessions: Session[] = [];
+  let completedIndex = 0;
+  definitions.forEach((goal) => {
+    for (let index = 0; index < goal.completed; index += 1) {
+      completedIndex += 1;
+      sessions.push({
+        id: `demo-completed-${goal.id}-${index}`,
+        goal_id: goal.id,
+        milestone_id: null,
+        user_id: 'demo-only',
+        title: ['Focused practice', 'Progress session', 'Weekly checkpoint'][index % 3],
+        day_of_week: null,
+        scheduled_at: dateAt(-completedIndex - 1, 9),
+        duration_minutes: 30,
+        status: 'completed',
+        moved_count: 0,
+        plan_version: 1,
+        external_event_id: null,
+        completed_at: dateAt(-completedIndex - 1, 10),
+        notes: null,
+        created_at: dateAt(-completedIndex - 1),
+        updated_at: dateAt(-completedIndex - 1),
+      });
+    }
+    for (let index = goal.completed; index < goal.total - 1; index += 1) {
+      const offset = 30 + index + completedIndex;
+      sessions.push({
+        id: `demo-skipped-${goal.id}-${index}`,
+        goal_id: goal.id,
+        milestone_id: null,
+        user_id: 'demo-only',
+        title: 'Previous planned session',
+        day_of_week: null,
+        scheduled_at: dateAt(-offset, 9),
+        duration_minutes: 30,
+        status: 'skipped',
+        moved_count: 0,
+        plan_version: 1,
+        external_event_id: null,
+        completed_at: null,
+        notes: null,
+        created_at: dateAt(-offset),
+        updated_at: dateAt(-offset),
+      });
+    }
+  });
+  definitions.forEach((goal, index) => {
+    sessions.push({
+      id: `demo-upcoming-${goal.id}`,
+      goal_id: goal.id,
+      milestone_id: null,
+      user_id: 'demo-only',
+      title: ['Easy run and mobility', 'Everyday conversation practice', 'Read and reflect', 'Build the next feature'][index],
+      day_of_week: null,
+      scheduled_at: dateAt(index + 1, 9 + (index % 3)),
+      duration_minutes: [35, 20, 25, 45][index],
+      status: 'scheduled',
+      moved_count: 0,
+      plan_version: 1,
+      external_event_id: null,
+      completed_at: null,
+      notes: null,
+      created_at: dateAt(-1),
+      updated_at: dateAt(-1),
+    });
+  });
+  const weekSessions: Session[] = [
+    ...[0, 1, 2].map((index) => ({
+      ...sessions[index],
+      id: `demo-week-completed-${index}`,
+      scheduled_at: dateAt(-Math.max(1, now.getDay() - index), 9),
+    })),
+    ...[0, 1].map((index) => ({
+      ...sessions[sessions.length - 4 + index],
+      id: `demo-week-upcoming-${index}`,
+      scheduled_at: dateAt(index + 1, 9),
+      status: 'scheduled' as const,
+      completed_at: null,
+    })),
+  ];
+  return { goals, sessions, weekSessions };
+}
+
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { session, displayName } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -55,18 +173,24 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     window.addEventListener('vow:refresh', refresh);
     return () => { active = false; window.removeEventListener('vow:entitlement-changed', onEntitlementChange); window.removeEventListener('focus', refresh); window.removeEventListener('vow:refresh', refresh); };
   }, []);
-  const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'locked');
+  // This read-only presentation layer is enabled only for the explicitly authorised demo account.
+  // Demo rows are created in memory and are never inserted into Supabase or entitlement records.
+  const isDemoMode = session?.user.email?.trim().toLowerCase() === DEMO_ACCOUNT_EMAIL;
+  const demoData = isDemoMode ? createAccountScopedDemoData() : null;
+  const dashboardGoals = demoData?.goals ?? goals;
+  const dashboardSessions = demoData?.sessions ?? sessions;
+  const activeGoals = dashboardGoals.filter((g) => g.status === 'active' || g.status === 'locked');
   // Date-less sessions are supported by VOW's flexible scheduling modes. Count
   // them against the active goal's current plan week instead of silently
   // displaying 0/0 for a valid weekly commitment.
-  const thisWeekSessions = sessions.filter((s) => isSessionInCurrentPlanWeek(s, goals));
+  const thisWeekSessions = demoData?.weekSessions ?? dashboardSessions.filter((s) => isSessionInCurrentPlanWeek(s, dashboardGoals));
   const completedThisWeek = thisWeekSessions.filter((s) => s.status === 'completed');
   const completionPct = thisWeekSessions.length > 0 ? Math.round((completedThisWeek.length / thisWeekSessions.length) * 100) : 0;
-  const completedSessions = sessions.filter((s) => s.status === 'completed').length;
+  const completedSessions = dashboardSessions.filter((s) => s.status === 'completed').length;
   const now = new Date();
   const planningLimit = Math.min(entitlement?.planning_limit ?? FREE_PLANNING_ACTION_LIMIT, FREE_PLANNING_ACTION_LIMIT);
-  const timedUpcoming = sessions.filter((s) => Boolean(s.scheduled_at) && new Date(s.scheduled_at as string) >= now && s.status === 'scheduled');
-  const flexibleUpcoming = sessions.filter((s) => isFlexibleUpcomingSession(s as Session & { day_of_week?: string | null }, goals));
+  const timedUpcoming = dashboardSessions.filter((s) => Boolean(s.scheduled_at) && new Date(s.scheduled_at as string) >= now && s.status === 'scheduled');
+  const flexibleUpcoming = dashboardSessions.filter((s) => isFlexibleUpcomingSession(s as Session & { day_of_week?: string | null }, dashboardGoals));
   const allUpcoming = [...timedUpcoming, ...flexibleUpcoming];
   const upcoming = allUpcoming.slice(0, 5);
   if (loading) return <div><PageHeader title={`Welcome back, ${displayName}`} /><div className="text-vow-muted text-sm">Loading...</div></div>;
@@ -78,11 +202,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     <div className="grid min-w-0 md:grid-cols-2 gap-4 md:gap-8">
       <div>
         <h2 className="vow-label mb-2.5">Upcoming sessions</h2>
-        {upcoming.length === 0 ? <div className="border border-vow-border p-5 md:p-7 text-center"><div className="w-7 h-7 mx-auto mb-3 border border-vow-border rounded-full" /><p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity">Schedule sessions</button></div> : <div className="space-y-px border border-vow-border">{upcoming.map((s) => { const goal = goals.find((g) => g.id === s.goal_id); const day = (s as Session & { day_of_week?: string | null }).day_of_week; return <div key={s.id} className="bg-vow-bg px-3.5 py-2.5 flex items-center gap-2.5"><div className="w-2 h-2 rounded-full border border-vow-muted flex-shrink-0" /><div className="flex-1 min-w-0"><div className="text-sm text-vow-ink whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">{s.title}</div><div className="text-xs text-vow-muted mt-1 break-words">{goal?.title || ''}</div></div><div className="text-right flex-shrink-0 max-w-[7.5rem]"><div className="text-xs text-vow-ink font-medium whitespace-normal break-words">{s.scheduled_at ? formatRelative(s.scheduled_at) : `${day || 'Flexible schedule'} · No fixed time`}</div>{s.scheduled_at && <div className="text-xs text-vow-muted whitespace-normal break-words">{formatTime(s.scheduled_at)}</div>}</div></div>; })}</div>}
+        {upcoming.length === 0 ? <div className="border border-vow-border p-5 md:p-7 text-center"><div className="w-7 h-7 mx-auto mb-3 border border-vow-border rounded-full" /><p className="text-vow-muted text-sm mb-3">No sessions scheduled.</p><button onClick={() => onNavigate('goals')} className="text-vow-ink text-sm font-medium border-b border-vow-ink pb-0.5 hover:opacity-70 transition-opacity">Schedule sessions</button></div> : <div className="space-y-px border border-vow-border">{upcoming.map((s) => { const goal = dashboardGoals.find((g) => g.id === s.goal_id); const day = (s as Session & { day_of_week?: string | null }).day_of_week; return <div key={s.id} className="bg-vow-bg px-3.5 py-2.5 flex items-center gap-2.5"><div className="w-2 h-2 rounded-full border border-vow-muted flex-shrink-0" /><div className="flex-1 min-w-0"><div className="text-sm text-vow-ink whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">{s.title}</div><div className="text-xs text-vow-muted mt-1 break-words">{goal?.title || ''}</div></div><div className="text-right flex-shrink-0 max-w-[7.5rem]"><div className="text-xs text-vow-ink font-medium whitespace-normal break-words">{s.scheduled_at ? formatRelative(s.scheduled_at) : `${day || 'Flexible schedule'} · No fixed time`}</div>{s.scheduled_at && <div className="text-xs text-vow-muted whitespace-normal break-words">{formatTime(s.scheduled_at)}</div>}</div></div>; })}</div>}
       </div>
       <div>
         <h2 className="vow-label mb-4">Active goals</h2>
-        {activeGoals.length === 0 ? <div className="border border-vow-border p-8 text-center"><p className="text-vow-muted text-sm">No active goals yet.</p></div> : <div className="space-y-px border border-vow-border">{activeGoals.map((g) => { const goalSessions = sessions.filter((s) => s.goal_id === g.id); const completed = goalSessions.filter((s) => s.status === 'completed').length; const total = goalSessions.length; const pct = total > 0 ? Math.round((completed / total) * 100) : 0; return <button key={g.id} onClick={() => onNavigate('goals')} className="w-full text-left bg-vow-bg px-3.5 py-2.5 hover:opacity-70 transition-opacity"><div className="flex min-w-0 items-start justify-between gap-2 mb-2"><div className="text-sm text-vow-ink min-w-0 flex-1 [overflow-wrap:anywhere]">{g.outcome}</div><div className="text-xs text-vow-muted flex-shrink-0">{pct}%</div></div><div className="h-px bg-vow-border relative"><div className="absolute inset-y-0 left-0 bg-vow-ink transition-all duration-500" style={{ width: `${pct}%`, height: '1px' }} /></div><div className="text-xs text-vow-muted mt-1.5 [overflow-wrap:anywhere]">{g.weekly_commitment_target} sessions/week — {completed}/{total} all-time</div></button>; })}</div>}
+        {activeGoals.length === 0 ? <div className="border border-vow-border p-8 text-center"><p className="text-vow-muted text-sm">No active goals yet.</p></div> : <div className="space-y-px border border-vow-border">{activeGoals.map((g) => { const goalSessions = dashboardSessions.filter((s) => s.goal_id === g.id); const completed = goalSessions.filter((s) => s.status === 'completed').length; const total = goalSessions.length; const pct = total > 0 ? Math.round((completed / total) * 100) : 0; return <button key={g.id} onClick={() => onNavigate('goals')} className="w-full text-left bg-vow-bg px-3.5 py-2.5 hover:opacity-70 transition-opacity"><div className="flex min-w-0 items-start justify-between gap-2 mb-2"><div className="text-sm text-vow-ink min-w-0 flex-1 [overflow-wrap:anywhere]">{g.outcome}</div><div className="text-xs text-vow-muted flex-shrink-0">{pct}%</div></div><div className="h-px bg-vow-border relative"><div className="absolute inset-y-0 left-0 bg-vow-ink transition-all duration-500" style={{ width: `${pct}%`, height: '1px' }} /></div><div className="text-xs text-vow-muted mt-1.5 [overflow-wrap:anywhere]">{g.weekly_commitment_target} sessions/week — {completed}/{total} all-time</div></button>; })}</div>}
       </div>
     </div>
   </div>;
