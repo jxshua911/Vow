@@ -113,3 +113,17 @@ body,
 .vow-btn-primary, .vow-btn-ghost, .vow-btn-soft { border-radius: 0.55rem; }
 .vow-label { letter-spacing: 0.065em; }
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+
+
+/* Adaptive content density: use viewport space efficiently without shrinking type. */
+@media (max-width: 767px) {
+  .vow-content-dense .vow-dashboard-populated .vow-heading { line-height: 1.08; }
+  .vow-content-dense .vow-dashboard-populated .vow-label { font-size: 0.65rem; }
+  .vow-content-dense .vow-dashboard-populated .text-3xl { font-size: 1.55rem; line-height: 1.9rem; }
+  .vow-content-dense .vow-dashboard-populated .text-xs { line-height: 1.2rem; }
+  .vow-content-dense .vow-dashboard-populated .text-sm { line-height: 1.3rem; }
+  .vow-content-dense .vow-dashboard-populated .mb-6 { margin-bottom: 0.9rem; }
+}
+@media (min-width: 768px) {
+  .vow-content-dense .vow-dashboard-populated { max-width: 100%; }
+}
