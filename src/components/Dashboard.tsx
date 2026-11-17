@@ -7,10 +7,9 @@ import { formatTime, formatRelative, dayName } from '@/lib/dates';
 import { isFlexibleUpcomingSession, isSessionInCurrentPlanWeek } from '@/lib/dashboardSessions';
 import { PageHeader } from './AppShell';
 import type { View } from './AppShell';
+import { getDemoModeEnabled, isDemoModeEligible } from '@/lib/demoMode';
 
 interface DashboardProps { onNavigate: (view: View) => void; }
-
-const DEMO_ACCOUNT_EMAIL = 'joshuakasanga9@gmail.com';
 
 function createAccountScopedDemoData(): { goals: Goal[]; sessions: Session[]; weekSessions: Session[] } {
   const now = new Date();
@@ -134,6 +133,22 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
+  const demoModeEligible = isDemoModeEligible(session?.user.email);
+  const [demoModeEnabled, setDemoModeEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!session || !demoModeEligible) {
+      setDemoModeEnabled(false);
+      return;
+    }
+    setDemoModeEnabled(getDemoModeEnabled(session.user.id));
+    const handleDemoModeChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string; enabled?: boolean }>).detail;
+      if (detail?.userId === session.user.id) setDemoModeEnabled(Boolean(detail.enabled));
+    };
+    window.addEventListener('vow:demo-mode-changed', handleDemoModeChange);
+    return () => window.removeEventListener('vow:demo-mode-changed', handleDemoModeChange);
+  }, [session?.user.id, session?.user.email, demoModeEligible]);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -175,7 +190,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   }, []);
   // This read-only presentation layer is enabled only for the explicitly authorised demo account.
   // Demo rows are created in memory and are never inserted into Supabase or entitlement records.
-  const isDemoMode = session?.user.email?.trim().toLowerCase() === DEMO_ACCOUNT_EMAIL;
+  const isDemoMode = demoModeEligible && demoModeEnabled;
   const demoData = isDemoMode ? createAccountScopedDemoData() : null;
   const dashboardGoals = demoData?.goals ?? goals;
   const dashboardSessions = demoData?.sessions ?? sessions;
