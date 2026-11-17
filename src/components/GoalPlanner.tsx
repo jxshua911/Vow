@@ -1445,24 +1445,42 @@ export function GoalPlanner({
           />
         </div>
 
-        <div className="bg-vow-gray/10 border border-vow-border p-4">
-          <label className="vow-label block mb-3">How long are you committing?</label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {DURATION_OPTIONS.map(option => (
-              <button key={option.weeks} type="button" onClick={() => setDurationWeeks(option.weeks)} className={`text-left border px-3 py-3 transition-colors ${durationWeeks === option.weeks ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>
-                <span className="block text-sm font-medium">{option.label}</span>
-                <span className="block text-[10px] mt-1 text-vow-muted">{option.detail}</span>
-              </button>
-            ))}
-            <button type="button" onClick={() => setDurationWeeks(null)} className={`text-left border px-3 py-3 transition-colors ${durationWeeks === null ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>
-              <span className="block text-sm font-medium">Custom</span><span className="block text-[10px] mt-1 text-vow-muted">Any duration</span>
-            </button>
+        <div className="border border-vow-border bg-vow-gray/10 p-3 sm:p-3.5">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <label className="vow-label">How long are you committing?</label>
+            <span className="text-[10px] text-vow-muted">Choose one</span>
           </div>
-          {durationWeeks === null && <div className="grid grid-cols-[1fr_auto] gap-2 mt-3">
-            <input type="number" min="1" max="3650" value={customDurationValue} onChange={e => setCustomDurationValue(e.target.value)} placeholder="e.g. 4" className="vow-input" aria-label="Custom duration amount" />
-            <select value={customDurationUnit} onChange={e => setCustomDurationUnit(e.target.value as DurationUnit)} className="vow-input" aria-label="Custom duration unit"><option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option></select>
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+            {DURATION_OPTIONS.map(option => {
+              const compactLabel = option.weeks === 1 ? '1 wk'
+                : option.weeks === 2 ? '2 wks'
+                : option.weeks === 4 ? '1 mo'
+                : option.weeks === 8 ? '2 mos'
+                : option.weeks === 12 ? '3 mos'
+                : option.weeks === 26 ? '6 mos'
+                : '1 yr';
+              const selected = durationWeeks === option.weeks;
+              return <button
+                key={option.weeks}
+                type="button"
+                onClick={() => setDurationWeeks(option.weeks)}
+                aria-label={option.label}
+                aria-pressed={selected}
+                className={`flex min-h-10 items-center justify-center rounded-md border px-1.5 py-2 text-xs font-semibold transition-colors sm:text-sm ${selected ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}
+              >{compactLabel}</button>;
+            })}
+            <button
+              type="button"
+              onClick={() => setDurationWeeks(null)}
+              aria-pressed={durationWeeks === null}
+              className={`flex min-h-10 items-center justify-center rounded-md border px-1.5 py-2 text-xs font-semibold transition-colors sm:text-sm ${durationWeeks === null ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}
+            >Custom</button>
+          </div>
+          {durationWeeks === null && <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+            <input type="number" min="1" max="3650" value={customDurationValue} onChange={e => setCustomDurationValue(e.target.value)} placeholder="Amount" className="vow-input min-h-10 py-2 text-sm" aria-label="Custom duration amount" />
+            <select value={customDurationUnit} onChange={e => setCustomDurationUnit(e.target.value as DurationUnit)} className="vow-input min-h-10 py-2 text-sm" aria-label="Custom duration unit"><option value="days">Days</option><option value="weeks">Weeks</option><option value="months">Months</option></select>
           </div>}
-          <p className="text-xs text-vow-muted mt-3">{selectedDurationWeeks ? `Selected: ${selectedDurationLabel} · VOW plans in ${selectedDurationWeeks} week${selectedDurationWeeks === 1 ? '' : 's'}.` : 'Choose a duration before continuing.'}</p>
+          <p className="mt-2 text-[11px] text-vow-muted">{selectedDurationWeeks ? `Selected · ${selectedDurationLabel} (${selectedDurationWeeks} week${selectedDurationWeeks === 1 ? '' : 's'})` : 'Enter a custom duration to continue.'}</p>
         </div>
 
         <div className="border border-vow-border bg-vow-gray/10 p-3 sm:p-4">
