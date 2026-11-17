@@ -116,7 +116,7 @@ const DURATION_OPTIONS = [
   { weeks: 8, label: '2 months', value: '2' },
   { weeks: 12, label: '3 months', value: '3' },
   { weeks: 26, label: '6 months', value: '6' },
-  { weeks: 52, label: '1 year', value: '12' },
+  { weeks: 52, label: '12 months', value: '12' },
 ];
 
 type DurationUnit = 'days' | 'weeks' | 'months' | 'years';
