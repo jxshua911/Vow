@@ -150,8 +150,8 @@ jobs:
       - name: Assemble VOW production release APK
         working-directory: android
         env:
-          VOW_VERSION_CODE: "25"
-          VOW_VERSION_NAME: "1.8.5"
+          VOW_VERSION_CODE: "26"
+          VOW_VERSION_NAME: "1.9"
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace
@@ -166,11 +166,11 @@ jobs:
           AAPT="$(find "$SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           test -n "$AAPT"
           BADGING="$("$AAPT" dump badging "$APK")"
-          echo "$BADGING" | grep -F "package: name='com.vow.app' versionCode='25' versionName='1.8.5'"
+          echo "$BADGING" | grep -F "package: name='com.vow.app' versionCode='26' versionName='1.9'"
       - name: Upload VOW APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VOW APK 1.8.5 ${{ github.event.inputs.release_mode == 'production' && 'Production Release' || 'QA' }}
+          name: VOW APK 1.9 ${{ github.event.inputs.release_mode == 'production' && 'Production Release' || 'QA' }}
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
