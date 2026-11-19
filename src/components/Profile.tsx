@@ -26,7 +26,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState('');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => getNotificationPreferences().enabled);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => getNotificationPreferences(session?.user.id ?? null).enabled);
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const [notificationError, setNotificationError] = useState('');
   const [updatingNotifications, setUpdatingNotifications] = useState(false);
@@ -54,7 +54,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   useEffect(() => { setName(displayName); }, [displayName]);
 
   const refreshNotificationState = useCallback(async () => {
-    const preferences = getNotificationPreferences();
+    const preferences = getNotificationPreferences(session?.user.id ?? null);
     if (!Capacitor.isNativePlatform()) {
       setNotificationsEnabled(preferences.enabled);
       return;
@@ -140,7 +140,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       }
       // Do not send users into Android's separate Alarms & reminders
       // settings page just to enable ordinary session notifications.
-      const preferences = await setNotificationPreferences({ enabled: true });
+      const preferences = await setNotificationPreferences({ enabled: true }, session?.user.id ?? null);
       setNotificationsEnabled(preferences.enabled && permission === 'granted');
       await refreshNotificationState();
       if (Capacitor.getPlatform() === 'android' && isRemotePushConfigured()) {
@@ -153,7 +153,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     } catch (error) {
       console.error('[VOW] Enabling session reminders failed:', error);
       void refreshNotificationState();
-      setNotificationError(getNotificationPreferences().enabled
+      setNotificationError(getNotificationPreferences(session?.user.id ?? null).enabled
         ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
         : 'Could not enable session reminders. Please try again.');
     } finally {
@@ -165,7 +165,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     setUpdatingNotifications(true);
     setNotificationError('');
     try {
-      const preferences = await setNotificationPreferences({ enabled: false });
+      const preferences = await setNotificationPreferences({ enabled: false }, session?.user.id ?? null);
       setNotificationsEnabled(preferences.enabled);
       await refreshNotificationState();
     } catch (error) {
@@ -179,10 +179,9 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   async function handleSignOut() {
     setSignOutError('');
     try {
+      await Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()]);
       const { error } = await supabase.auth.signOut({ scope: 'local' });
       if (error) throw error;
-      void Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()])
-        .catch((error) => console.warn('[VOW] Post-sign-out reminder cleanup failed:', error));
     } catch (error) {
       console.error('[VOW] Sign out failed:', error);
       setSignOutError('Could not sign out. Please try again.');
@@ -239,7 +238,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 
             <div className="py-5">
               <div className="flex items-center justify-between gap-4">
-                <div><p className="text-sm text-vow-ink">Enable notifications</p><p className="text-xs text-vow-muted mt-1">Session reminders</p></div>
+                <div><p className="text-sm text-vow-ink">Enable notifications</p><p className="text-xs text-vow-muted mt-1">Scheduled reminders for your commitments. VOW asks for device permission only after you switch this on.</p></div>
                 <button
                   type="button"
                   role="switch"
