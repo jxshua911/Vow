@@ -30,6 +30,46 @@ import { LanguageContext } from '@/lib/i18n';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { VOW_BUILD_TIER } from '@/lib/buildTier';
 
+const LAST_AUTH_USER_KEY = 'vow:last-auth-user-id';
+
+function clearUserLocalData(userId: string, clearIdentity = false): void {
+  if (typeof window === 'undefined' || !userId) return;
+  const userPrefixes = [
+    `vow:offline-settings:${userId}`,
+    `vow:offline-goals:${userId}`,
+    `vow:offline-goal-detail:${userId}:`,
+    `vow:offline-milestones:${userId}:`,
+    `vow:offline-sessions:${userId}:`,
+    `vow:goal-planner-draft:${userId}`,
+    `vow:calendar-events:${userId}`,
+    `vow:last-known-entitlement:${userId}`,
+    `vow:notification-preferences:${userId}`,
+    `vow:demo-mode:${userId}`,
+    `vow:terms-accepted:${userId}:`,
+  ];
+  const accountWideKeys = new Set([
+    'vow:connections',
+    'vow:native-calendar-sync',
+    'vow:google-calendar-oauth-result',
+    'vow:icon-colour',
+    'vow:fcm-token',
+    'vow:calendar-events',
+  ]);
+  try {
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (!key) continue;
+      if (accountWideKeys.has(key) || key.startsWith('vow:native-calendar-session:')
+        || userPrefixes.some((prefix) => key.startsWith(prefix))) {
+        window.localStorage.removeItem(key);
+      }
+    }
+    if (clearIdentity) window.localStorage.removeItem(LAST_AUTH_USER_KEY);
+  } catch (error) {
+    console.warn('[VOW] Local account data cleanup could not complete:', error);
+  }
+}
+
 const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
 
@@ -45,6 +85,7 @@ function AppContent() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
   const accountStateReady = useRef(false);
+  const lastKnownUserId = useRef<string | null>(null);
   const [viewHistory, setViewHistory] = useState<View[]>(['dashboard']);
   const viewHistoryRef = useRef<View[]>(['dashboard']);
   const [splashMounted, setSplashMounted] = useState(true);
@@ -133,6 +174,15 @@ function AppContent() {
 
   useEffect(() => {
     let cancelled = false;
+    if (session?.user.id) {
+      lastKnownUserId.current = session.user.id;
+      try { localStorage.setItem(LAST_AUTH_USER_KEY, session.user.id); } catch { /* best-effort local identity marker */ }
+    } else if (!loading) {
+      let previousUserId = lastKnownUserId.current;
+      try { previousUserId = previousUserId || localStorage.getItem(LAST_AUTH_USER_KEY); } catch { /* storage may be unavailable */ }
+      if (previousUserId) clearUserLocalData(previousUserId, true);
+      lastKnownUserId.current = null;
+    }
     if (!session) {
       accountStateReady.current = false;
       setSettings(null);
@@ -164,6 +214,7 @@ function AppContent() {
           // device and remove its local push registration immediately.
           await cancelAllVowNotifications();
           await clearCloudPushRegistration();
+          clearUserLocalData(session.user.id);
           return;
         } else if (accountState?.status === 'purge_pending' || accountState?.status === 'purge_required' || accountState?.status === 'purged') {
           // The scheduled server-side purge owns permanent deletion. The client
