@@ -23,7 +23,7 @@ import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
 import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, setNotificationPreferences, isRemotePushConfigured, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications, setNotificationUser } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, isRemotePushConfigured, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications, setNotificationUser } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
