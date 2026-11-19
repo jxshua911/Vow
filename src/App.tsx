@@ -22,7 +22,7 @@ import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
 import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, requestNotificationPermission, setNotificationPreferences, isRemotePushConfigured, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, setNotificationPreferences, isRemotePushConfigured, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications, setNotificationUser } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
@@ -276,33 +276,8 @@ function AppContent() {
   }, [session]);
 
   useEffect(() => {
-    if (!session || !termsAccepted || !Capacitor.isNativePlatform()) return;
-    const promptKey = `vow:notification-permission-prompted:${session.user.id}`;
-    try {
-      if (localStorage.getItem(promptKey) === 'true') return;
-    } catch {
-      // Continue; the OS permission state remains authoritative.
-    }
-
-    void requestNotificationPermission()
-      .then(async (permission) => {
-        // The first-run OS prompt is also the user's choice to enable VOW
-        // reminders. Keep the in-app preference aligned on that first grant;
-        // later manual opt-outs are respected because this prompt runs once.
-        if (permission === 'granted') {
-          try {
-            await setNotificationPreferences({ enabled: true });
-          } catch (preferenceError) {
-            console.warn('[VOW] Notification permission was granted, but the reminder preference could not be enabled:', preferenceError);
-          }
-        }
-        try { localStorage.setItem(promptKey, 'true'); } catch { /* ignore */ }
-      })
-      .catch((err) => {
-        console.warn('[VOW] Notification permission request failed:', err);
-        try { localStorage.setItem(promptKey, 'true'); } catch { /* ignore */ }
-      });
-  }, [session, termsAccepted]);
+    setNotificationUser(session?.user.id ?? null);
+  }, [session?.user.id]);
 
   useEffect(() => {
     if (!session || !termsAccepted) return;
