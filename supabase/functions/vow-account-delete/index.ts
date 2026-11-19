@@ -78,6 +78,9 @@ Deno.serve(async(req)=>{
     admin.from("strava_connections").select("access_token,refresh_token").eq("user_id",user.id).maybeSingle(),
   ]);
   await Promise.all([google?.refresh_token?revokeGoogle(google.refresh_token):Promise.resolve(),google?.access_token?revokeGoogle(google.access_token):Promise.resolve(),strava?.access_token?revokeStrava(strava.access_token):Promise.resolve()]);
+  const { error: pushDeviceCleanupError } = await admin.from("vow_push_devices").delete().eq("user_id", user.id);
+  if (pushDeviceCleanupError) return json({error:"PUSH_REGISTRATION_CLEANUP_FAILED"},500);
+  await admin.from("reminder_preferences").update({enabled:false,updated_at:new Date().toISOString()}).eq("user_id",user.id);
   let deletedAt = new Date().toISOString();
   let deletionExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const {data:existingSettings,error:settingsReadError}=await admin.from("user_settings")
