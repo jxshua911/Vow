@@ -260,7 +260,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm text-vow-ink">Demo dashboard</p>
-                  <p className="text-xs text-vow-muted mt-1">Preview a populated multi-goal dashboard. Demo data stays separate from your real goals and Free limits.</p>
+                  <p className="text-xs text-vow-muted mt-1">Preview one illustrative goal with 1 of 3 planning actions used. Demo figures never change your real goals, usage or entitlements.</p>
                 </div>
                 <button
                   type="button"
