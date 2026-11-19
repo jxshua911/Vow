@@ -72,15 +72,22 @@ export function getNotificationPreferences(userId: string | null = activeNotific
 
 export async function setNotificationPreferences(preferences: Partial<NotificationPreferences>, userId: string | null = activeNotificationUserId): Promise<NotificationPreferences> {
   const next = { ...getNotificationPreferences(userId), ...preferences };
-  try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
 
-  if (!Capacitor.isNativePlatform()) return next;
-
-  if (!next.enabled) {
-    await cancelAllVowNotifications();
-    await clearCloudPushRegistration();
+  if (!Capacitor.isNativePlatform()) {
+    try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
     return next;
   }
+
+  if (!next.enabled) {
+    // Keep the setting visibly enabled if server-side token removal fails;
+    // otherwise a user could believe remote notifications were disabled.
+    await clearCloudPushRegistration();
+    await cancelAllVowNotifications();
+    try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
+    return next;
+  }
+
+  try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
 
   if (await getNotificationPermission() === 'granted') {
     const token = await getStoredPushToken();
