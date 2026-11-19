@@ -24,17 +24,22 @@ function createAccountScopedDemoData(): { goals: Goal[]; sessions: Session[]; we
   const definitions = [
     {
       id: 'demo-goal-project',
-      title: 'Build a personal project',
-      outcome: 'Ship a working first version that solves one clearly defined problem',
+      title: 'Build a personal finance tracker',
+      outcome: 'Build a working app that records expenses, categorises spending and displays monthly summaries',
       completed: 4,
       total: 8,
       completedTitles: [
-        'Choose one problem worth solving',
-        'Define the first-version scope',
-        'Map the core user journey',
-        'Create the project structure',
+        "Define the app's purpose and users",
+        'Sketch the dashboard',
+        'Design the expense categories',
+        'Set up the project structure',
       ],
-      upcomingTitle: 'Build the core user flow',
+      skippedTitles: [
+        'Review the first dashboard sketch',
+        'Compare expense category options',
+        'Refine the first-version feature list',
+      ],
+      upcomingTitle: 'Build the expense-entry screen',
     },
   ];
   const goals: Goal[] = definitions.map((item) => ({
@@ -87,7 +92,7 @@ function createAccountScopedDemoData(): { goals: Goal[]; sessions: Session[]; we
         goal_id: goal.id,
         milestone_id: null,
         user_id: 'demo-only',
-        title: 'Previous planned session',
+        title: goal.skippedTitles[index - goal.completed] || 'Review the project plan',
         day_of_week: null,
         scheduled_at: dateAt(-offset, 9),
         duration_minutes: 30,
