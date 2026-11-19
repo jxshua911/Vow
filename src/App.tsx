@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { track } from '@/lib/telemetry';
 import { getEntitlementSnapshot, subscribeToEntitlementChanges } from '@/lib/entitlements';
 import { AuthPage } from '@/components/AuthPage';
+import { AccountDeletionPendingPage } from '@/components/AccountDeletionPending';
 import { Onboarding } from '@/components/Onboarding';
 import { TermsAcceptance, VOW_TERMS_VERSION } from '@/components/TermsAcceptance';
 import { AppShell, type View } from '@/components/AppShell';
@@ -38,6 +39,8 @@ function AppContent() {
   const { session, loading } = useAuth();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [accountSuspended, setAccountSuspended] = useState(false);
+  const [accountDeletionPending, setAccountDeletionPending] = useState(false);
+  const [deletionExpiresAt, setDeletionExpiresAt] = useState<string | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
@@ -133,6 +136,8 @@ function AppContent() {
     if (!session) {
       accountStateReady.current = false;
       setSettings(null);
+      setAccountDeletionPending(false);
+      setDeletionExpiresAt(null);
       setSettingsLoading(false);
       setTermsAccepted(false);
       setTermsLoading(false);
@@ -151,16 +156,14 @@ function AppContent() {
             await supabase.auth.signOut({ scope: 'local' });
             return;
           }
-        } else if (accountState?.status === 'purge_required') {
-          const { data: purgeResult, error: purgeError } = await supabase.functions.invoke('vow-account-purge-expired', { body: {} });
-          if (purgeError || !['purged', 'already_purged'].includes(String(purgeResult?.status))) {
-            console.warn('[VOW] Expired account cleanup could not finish; signing out until cleanup can be retried.');
-            await supabase.auth.signOut({ scope: 'local' });
-            return;
-          }
-          await supabase.auth.signOut({ scope: 'local' });
+        } else if (accountState?.status === 'deletion_pending') {
+          setAccountDeletionPending(true);
+          setDeletionExpiresAt(typeof accountState.deletion_expires_at === 'string' ? accountState.deletion_expires_at : null);
+          accountStateReady.current = false;
           return;
-        } else if (accountState?.status === 'purged') {
+        } else if (accountState?.status === 'purge_pending' || accountState?.status === 'purge_required' || accountState?.status === 'purged') {
+          // The scheduled server-side purge owns permanent deletion. The client
+          // must not try to purge through a user JWT or restore an expired account.
           await supabase.auth.signOut({ scope: 'local' });
           return;
         }
@@ -319,6 +322,25 @@ function AppContent() {
     return () => { listener.then((handle) => handle.remove()); };
   }, [session, termsAccepted]);
 
+  async function handleRestoreAccount() {
+    const { data, error } = await supabase.rpc('vow_restore_account');
+    if (error) throw error;
+    if (!['restored', 'active'].includes(String(data?.status))) {
+      throw new Error('The restoration window has expired. VOW can no longer restore this account.');
+    }
+    const [settingsResult, termsResult] = await Promise.all([
+      supabase.from('user_settings').select('*').eq('user_id', session!.user.id).maybeSingle(),
+      supabase.from('vow_terms_acceptances').select('id').eq('user_id', session!.user.id).eq('terms_version', VOW_TERMS_VERSION).maybeSingle(),
+    ]);
+    if (settingsResult.error) throw settingsResult.error;
+    if (termsResult.error) throw termsResult.error;
+    setSettings(settingsResult.data as UserSettings | null);
+    setTermsAccepted(Boolean(termsResult.data));
+    setAccountDeletionPending(false);
+    setDeletionExpiresAt(null);
+    accountStateReady.current = true;
+  }
+
   async function handleOnboardingComplete() {
     if (!session) return;
     setSettingsLoading(true);
@@ -333,6 +355,7 @@ function AppContent() {
   let content: React.ReactNode;
   if (loading || (session && (settingsLoading || termsLoading))) content = <AppLoading />;
   else if (!session) content = <AuthPage suspended={accountSuspended} onSuspensionDismiss={() => setAccountSuspended(false)} />;
+  else if (accountDeletionPending) content = <AccountDeletionPendingPage expiresAt={deletionExpiresAt} onRestore={handleRestoreAccount} onSignOut={async () => { const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; }} />;
   else content = (
     <ProtectedRoute fallback={<AuthPage suspended={accountSuspended} onSuspensionDismiss={() => setAccountSuspended(false)} />}>
       {!termsAccepted ? (
