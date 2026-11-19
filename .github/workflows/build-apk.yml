@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - capacitor-mobile
+      - compact-goal-duration-selector
   workflow_dispatch:
     inputs:
       release_mode:
