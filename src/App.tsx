@@ -160,6 +160,10 @@ function AppContent() {
           setAccountDeletionPending(true);
           setDeletionExpiresAt(typeof accountState.deletion_expires_at === 'string' ? accountState.deletion_expires_at : null);
           accountStateReady.current = false;
+          // A deletion requested from the website must also silence this
+          // device and remove its local push registration immediately.
+          await cancelAllVowNotifications();
+          await clearCloudPushRegistration();
           return;
         } else if (accountState?.status === 'purge_pending' || accountState?.status === 'purge_required' || accountState?.status === 'purged') {
           // The scheduled server-side purge owns permanent deletion. The client
