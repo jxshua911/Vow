@@ -13,6 +13,7 @@ import { userFacingError } from '@/lib/userFacingError';
 import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadillo';
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
+import { VowDatePicker } from './VowControls';
 import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
 import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '@/lib/clarification';
 
@@ -1645,7 +1646,7 @@ export function GoalPlanner({
                     ))}
                   </div>
                   {dayMode === 'timed' && <div className="grid grid-cols-2 gap-2">
-                    <label className="block min-w-0 text-[11px] text-vow-muted">Date<input type="date" value={sessionDates[day] || defaultDateForDay(day)} onChange={event => setSessionDates(current => ({ ...current, [day]: event.target.value }))} className="mt-1 block w-full min-w-0 border border-vow-border bg-vow-bg px-2 py-2 text-xs text-vow-ink" /></label>
+                    <label className="block min-w-0 text-[11px] text-vow-muted">Date<VowDatePicker value={sessionDates[day] || defaultDateForDay(day)} onChange={value => setSessionDates(current => ({ ...current, [day]: value }))} label={day + " session date"} placeholder="Choose date" className="mt-1" /></label>
                     <div className="min-w-0"><p className="mb-1 text-[11px] text-vow-muted">Time</p><TimeWheelPicker value={selectedTime} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={day + ' session time'} /></div>
                   </div>}
                   {dayMode === 'flexible-day' && <p className="text-[11px] text-vow-muted">Sessions stay on {day}, without a fixed clock time.</p>}
