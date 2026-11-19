@@ -115,6 +115,20 @@ Deno.serve(async (req) => {
           if (storageError) throw new Error("STORAGE_OBJECT_PURGE_FAILED");
         }
 
+        // Remove user-linked moderation/IP records. Preserve only a minimal,
+        // unlinked payment audit record where accounting history is required.
+        const { error: moderationCleanupError } = await admin
+          .from("moderation_ip_bans")
+          .delete()
+          .eq("user_id", userId);
+        if (moderationCleanupError) throw new Error("MODERATION_DATA_PURGE_FAILED");
+
+        const { error: paymentAuditCleanupError } = await admin
+          .from("vow_payment_events")
+          .update({ user_id: null, metadata: {} })
+          .eq("user_id", userId);
+        if (paymentAuditCleanupError) throw new Error("PAYMENT_AUDIT_ANONYMIZATION_FAILED");
+
         const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
         if (deleteError) throw new Error("AUTH_USER_DELETE_FAILED");
         purged += 1;
