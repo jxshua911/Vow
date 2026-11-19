@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal } from '@/types/database';
 import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { useVowDialog } from './VowControls';
 
 export function GoalHistoryActions() {
   const { session } = useAuth();
@@ -10,6 +11,7 @@ export function GoalHistoryActions() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useVowDialog();
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -21,7 +23,7 @@ export function GoalHistoryActions() {
   useEffect(() => { load(); }, [load]);
 
   async function deleteGoal(goal: Goal) {
-    if (!confirm(`Delete “${goal.outcome}”? This permanently removes the goal and its dependent milestones and sessions.`)) return;
+    if (!await confirm(`Delete “${goal.outcome}”? This permanently removes the goal and its dependent milestones and sessions.`, 'Delete goal', 'Delete permanently')) return;
     setDeleting(goal.id);
     const { error: deleteError } = await supabase.from('goals').delete().eq('id', goal.id).eq('user_id', session!.user.id);
     if (deleteError) {
@@ -42,6 +44,7 @@ export function GoalHistoryActions() {
 
   return (
     <section className="mt-12 border-t border-vow-border pt-8">
+      {dialog}
       <h2 className="vow-label mb-2">Goal history</h2>
       <p className="text-xs text-vow-muted mb-4">Completed and abandoned goals stay here until you choose to permanently delete them.</p>
       {error && <p className="text-sm text-vow-ink leading-relaxed border-l-2 border-vow-ink pl-3 mb-4">{error}</p>}
