@@ -35,19 +35,23 @@ Deno.serve(async (req) => {
   try {
     const serviceAccount = JSON.parse(serviceAccountRaw) as { project_id: string; client_email: string; private_key: string };
     const supabaseAdmin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data: devices, error: devicesError } = await supabaseAdmin.from("vow_push_devices").select("id, token").eq("user_id", payload.user_id);
+    const { data: devices, error: devicesError } = await supabaseAdmin.from("vow_push_devices").select("id, token, channel_id").eq("user_id", payload.user_id);
     if (devicesError) throw new Error("Unable to load push devices");
     const accessToken = await createGoogleAccessToken(serviceAccount);
     const results = await Promise.all((devices ?? []).map(async (device) => {
       const response = await fetch("https://fcm.googleapis.com/v1/projects/" + serviceAccount.project_id + "/messages:send", {
         method: "POST", headers: { authorization: "Bearer " + accessToken, "content-type": "application/json" },
-        body: JSON.stringify({ message: { token: device.token, notification: { title: payload.title, body: payload.body }, data: payload.data ?? {}, android: { priority: "HIGH", notification: { channel_id: "vow-reminders-sound-vibrate-v1", icon: "ic_vow_monochrome" } } } }),
+        body: JSON.stringify({ message: { token: device.token, notification: { title: payload.title, body: payload.body }, data: payload.data ?? {}, android: { priority: "HIGH", notification: { channel_id: device.channel_id || "vow-reminders-sound-vibrate-v1", icon: "ic_vow_monochrome" } } } }),
       });
-      if (response.ok) return { id: device.id, ok: true };
-      return { id: device.id, ok: false };
+      if (response.ok) return { id: device.id, ok: true, remove: false };
+      const failure = await response.json().catch(() => null);
+      const details = Array.isArray(failure?.error?.details) ? failure.error.details : [];
+      const permanentTokenFailure = details.some((item: { errorCode?: string }) => item?.errorCode === "UNREGISTERED");
+      console.warn("[VOW] FCM delivery failed for a registered device:", response.status, failure?.error?.status || "UNKNOWN");
+      return { id: device.id, ok: false, remove: permanentTokenFailure };
     }));
-    const invalidIds = results.filter((result) => !result.ok).map((result) => result.id);
+    const invalidIds = results.filter((result) => result.remove).map((result) => result.id);
     if (invalidIds.length) await supabaseAdmin.from("vow_push_devices").delete().in("id", invalidIds);
-    return Response.json({ sent: results.filter((result) => result.ok).length, removed: invalidIds.length });
+    return Response.json({ sent: results.filter((result) => result.ok).length, failed: results.filter((result) => !result.ok).length, removed: invalidIds.length });
   } catch (error) { console.error("[VOW] Push send failed:", error); return Response.json({ error: "Push delivery failed" }, { status: 502 }); }
 });
