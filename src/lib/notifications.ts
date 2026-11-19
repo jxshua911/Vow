@@ -410,10 +410,13 @@ export async function clearCloudPushRegistration(): Promise<void> {
       if (error) throw error;
     }
   } catch (error) {
-    console.warn('[VOW] Push registration cleanup failed:', error);
+    console.error('[VOW] Push registration cleanup failed; keeping the local token so cleanup can be retried:', error);
+    throw error;
   }
 
-  try { await PushNotifications.unregister(); } catch { /* ignore */ }
+  try { await PushNotifications.unregister(); } catch (error) {
+    console.warn('[VOW] Device push unregistration could not be confirmed:', error);
+  }
   await clearStoredPushToken();
 }
 
