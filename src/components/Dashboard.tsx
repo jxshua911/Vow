@@ -19,11 +19,23 @@ function createAccountScopedDemoData(): { goals: Goal[]; sessions: Session[]; we
     date.setHours(hour, 0, 0, 0);
     return date.toISOString();
   };
+  // The demo must respect VOW's one-active-goal rule. It is one
+  // illustrative goal with a coherent project-building session history.
   const definitions = [
-    { id: 'demo-goal-fitness', title: 'Build consistent fitness', outcome: 'Complete 12 structured training sessions', completed: 5, total: 9 },
-    { id: 'demo-goal-arabic', title: 'Learn conversational Arabic', outcome: 'Hold a 10-minute everyday conversation', completed: 4, total: 9 },
-    { id: 'demo-goal-reading', title: 'Read more consistently', outcome: 'Finish 4 books and record key takeaways', completed: 5, total: 8 },
-    { id: 'demo-goal-project', title: 'Build a personal project', outcome: 'Ship a working project milestone', completed: 4, total: 8 },
+    {
+      id: 'demo-goal-project',
+      title: 'Build a personal project',
+      outcome: 'Ship a working first version that solves one clearly defined problem',
+      completed: 4,
+      total: 8,
+      completedTitles: [
+        'Choose one problem worth solving',
+        'Define the first-version scope',
+        'Map the core user journey',
+        'Create the project structure',
+      ],
+      upcomingTitle: 'Build the core user flow',
+    },
   ];
   const goals: Goal[] = definitions.map((item) => ({
     id: item.id,
@@ -54,7 +66,7 @@ function createAccountScopedDemoData(): { goals: Goal[]; sessions: Session[]; we
         goal_id: goal.id,
         milestone_id: null,
         user_id: 'demo-only',
-        title: ['Focused practice', 'Progress session', 'Weekly checkpoint'][index % 3],
+        title: goal.completedTitles[index] || 'Review project progress',
         day_of_week: null,
         scheduled_at: dateAt(-completedIndex - 1, 9),
         duration_minutes: 30,
@@ -96,7 +108,7 @@ function createAccountScopedDemoData(): { goals: Goal[]; sessions: Session[]; we
       goal_id: goal.id,
       milestone_id: null,
       user_id: 'demo-only',
-      title: ['Easy run and mobility', 'Everyday conversation practice', 'Read and reflect', 'Build the next feature'][index],
+      title: goal.upcomingTitle,
       day_of_week: null,
       scheduled_at: dateAt(index + 1, 9 + (index % 3)),
       duration_minutes: [35, 20, 25, 45][index],
@@ -111,13 +123,13 @@ function createAccountScopedDemoData(): { goals: Goal[]; sessions: Session[]; we
     });
   });
   const weekSessions: Session[] = [
-    ...[0, 1, 2].map((index) => ({
-      ...sessions[index],
+    ...sessions.filter((session) => session.status === 'completed').slice(0, 3).map((session, index) => ({
+      ...session,
       id: `demo-week-completed-${index}`,
       scheduled_at: dateAt(-Math.max(1, now.getDay() - index), 9),
     })),
-    ...[0, 1].map((index) => ({
-      ...sessions[sessions.length - 4 + index],
+    ...sessions.filter((session) => session.status === 'scheduled').slice(0, 2).map((session, index) => ({
+      ...session,
       id: `demo-week-upcoming-${index}`,
       scheduled_at: dateAt(index + 1, 9),
       status: 'scheduled' as const,
