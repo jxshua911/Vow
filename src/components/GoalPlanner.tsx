@@ -425,6 +425,7 @@ export function GoalPlanner({
   const [customDurationValue, setCustomDurationValue] = useState('');
   const [customDurationUnit, setCustomDurationUnit] = useState<DurationUnit>('months');
   const [showCustomDuration, setShowCustomDuration] = useState(false);
+  const [showDurationUnitMenu, setShowDurationUnitMenu] = useState(false);
   const [availableDays, setAvailableDays] = useState<string[]>([]);
   const [sessionTimes, setSessionTimes] = useState<Record<string, string>>({});
   const [sessionDates, setSessionDates] = useState<Record<string, string>>({});
@@ -512,15 +513,17 @@ export function GoalPlanner({
             setDurationMonths(savedDraft.durationMonths);
             if (!DURATION_OPTIONS.some((option) => option.months === savedDraft.durationMonths)) setShowCustomDuration(true);
           } else if (typeof savedDraft.durationWeeks === 'number') {
-            const matchingPreset = DURATION_OPTIONS.find((option) => option.months === monthsForLegacyWeeks(savedDraft.durationWeeks as number));
-            if (matchingPreset) setDurationMonths(matchingPreset.months);
-            else if (savedDraft.customDurationValue?.trim()) setShowCustomDuration(true);
+            // Preserve legacy week-based drafts exactly instead of approximating them as months.
+            setDurationMonths(null);
+            setCustomDurationValue(String(savedDraft.durationWeeks));
+            setCustomDurationUnit('weeks');
+            setShowCustomDuration(true);
           } else if (savedDraft.durationWeeks === null && typeof savedDraft.customDurationValue === 'string' && savedDraft.customDurationValue.trim()) {
             setDurationMonths(null);
             setShowCustomDuration(true);
           }
           if (typeof savedDraft.customDurationValue === 'string') setCustomDurationValue(savedDraft.customDurationValue);
-          if (savedDraft.customDurationUnit === 'months' || savedDraft.customDurationUnit === 'years') setCustomDurationUnit(savedDraft.customDurationUnit);
+          if (savedDraft.customDurationUnit === 'weeks' || savedDraft.customDurationUnit === 'months' || savedDraft.customDurationUnit === 'years') setCustomDurationUnit(savedDraft.customDurationUnit);
           if (Array.isArray(savedDraft.availableDays)) setAvailableDays(savedDraft.availableDays);
           if (savedDraft.sessionTimes) setSessionTimes(savedDraft.sessionTimes);
           if (savedDraft.sessionDates) setSessionDates(savedDraft.sessionDates);
@@ -1517,7 +1520,7 @@ export function GoalPlanner({
         <div className="border border-vow-border bg-vow-gray/10 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <label className="vow-label">How long are you committing?</label>
-            <span className="text-[10px] text-vow-muted">Months</span>
+            <span className="text-[10px] text-vow-muted">Set your own timeframe</span>
           </div>
           <div className="grid grid-cols-6 gap-1.5">
             {DURATION_OPTIONS.map(option => {
@@ -1527,11 +1530,45 @@ export function GoalPlanner({
             <button type="button" onClick={() => { setDurationMonths(null); setShowCustomDuration(true); }} aria-label="Custom duration" aria-expanded={showCustomDuration} className={"flex min-h-10 items-center justify-center rounded-md border px-1 py-2 text-sm font-semibold transition-colors " + (showCustomDuration ? "border-vow-ink bg-vow-ink text-vow-bg" : "border-vow-border text-vow-muted hover:text-vow-ink")}>+</button>
           </div>
           {showCustomDuration && <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-            <input type="number" min="1" max={customDurationUnit === "years" ? 1 : 12} value={customDurationValue} onChange={e => setCustomDurationValue(e.target.value)} placeholder="Amount" className="vow-input min-h-10 py-2 text-sm" aria-label="Custom duration amount" />
-            <select value={customDurationUnit === "years" ? "years" : "months"} onChange={e => setCustomDurationUnit(e.target.value as DurationUnit)} className="vow-input min-h-10 py-2 text-sm" aria-label="Custom duration unit">
-              <option value="months">Months</option>
-              <option value="years">Years</option>
-            </select>
+            <input
+              type="number"
+              min="1"
+              max={customDurationUnit === 'weeks' ? 52 : customDurationUnit === 'years' ? 1 : 12}
+              step="1"
+              value={customDurationValue}
+              onChange={e => setCustomDurationValue(e.target.value)}
+              placeholder="Amount"
+              className="vow-input min-h-10 py-2 text-sm"
+              aria-label="Custom duration amount"
+            />
+            <div className="relative">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={showDurationUnitMenu}
+                aria-label={`Duration unit: ${customDurationUnit}`}
+                onClick={() => setShowDurationUnitMenu(open => !open)}
+                onKeyDown={e => { if (e.key === 'Escape') setShowDurationUnitMenu(false); }}
+                className="vow-input min-h-10 min-w-[112px] py-2 px-3 text-sm flex items-center justify-between gap-3"
+              >
+                <span>{customDurationUnit.charAt(0).toUpperCase() + customDurationUnit.slice(1)}</span>
+                <span aria-hidden="true" className="text-vow-muted">⌄</span>
+              </button>
+              {showDurationUnitMenu && <div role="menu" aria-label="Duration unit" className="absolute right-0 top-full z-30 mt-1 min-w-full overflow-hidden rounded-md border border-vow-border bg-vow-bg shadow-lg">
+                {(['weeks', 'months', 'years'] as DurationUnit[]).map(unit => (
+                  <button
+                    key={unit}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={customDurationUnit === unit}
+                    onClick={() => { setCustomDurationUnit(unit); setShowDurationUnitMenu(false); }}
+                    className={`block w-full px-3 py-2.5 text-left text-sm transition-colors ${customDurationUnit === unit ? 'bg-vow-ink text-vow-bg' : 'text-vow-ink hover:bg-vow-surface'}`}
+                  >
+                    {unit.charAt(0).toUpperCase() + unit.slice(1)}
+                  </button>
+                ))}
+              </div>}
+            </div>
           </div>}
           <p className="mt-2 text-[11px] text-vow-muted">{selectedDurationWeeks ? "Selected · " + selectedDurationLabel : showCustomDuration ? "Enter a custom duration to continue." : "Choose a duration."}</p>
         </div>
