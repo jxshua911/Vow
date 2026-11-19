@@ -84,7 +84,8 @@ export function VowDatePicker({ value, onChange, label = 'Choose date', placehol
   });
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (selectedDate) setMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+    const currentValue = parseDateOnly(value);
+    if (currentValue) setMonth(new Date(currentValue.getFullYear(), currentValue.getMonth(), 1));
   }, [value]);
   useEffect(() => {
     if (!open) return;
