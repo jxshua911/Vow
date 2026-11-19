@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth';
 import type { Session, SessionAction } from '@/types/database';
 import { SessionExecution } from './SessionExecution';
 import { cancelReminder, notificationId, scheduleReminder } from '@/lib/notifications';
+import { VowDateTimePicker } from './VowControls';
 
 type PlannedActionSeed = {
   title: string;
@@ -424,7 +425,7 @@ export function SessionActions({ session: currentSession, readOnly = false }: Se
             <button type="button" className="text-xs underline underline-offset-2 text-vow-muted" onClick={() => beginEditAction(action)}>Edit details</button>
             <label className="text-xs underline underline-offset-2 text-vow-muted cursor-pointer">
               {action.scheduled_at ? 'Change step time' : 'Schedule this step'}
-              <input aria-label={`Schedule ${action.title}`} type="datetime-local" value={localDateTimeValue(action.scheduled_at)} onChange={(event) => void scheduleAction(action, event.target.value)} className="block mt-1 max-w-full border border-vow-border bg-transparent px-2 py-1 text-xs" />
+              <VowDateTimePicker value={localDateTimeValue(action.scheduled_at)} onChange={(value) => void scheduleAction(action, value)} label={`Schedule ${action.title}`} className="mt-2 max-w-xl" />
             </label>
             {action.scheduled_at && <button type="button" className="text-xs underline underline-offset-2 text-vow-muted" onClick={() => void scheduleAction(action, '')}>Use session time</button>}
           </div>}
