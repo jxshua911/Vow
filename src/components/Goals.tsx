@@ -251,7 +251,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     const { error } = await supabase.from('sessions').delete().eq('id', sess.id).eq('user_id', session.user.id);
     if (error) {
       console.error('[VOW] Could not delete session:', error);
-      alert('Could not delete this session. Please try again.');
+      await alert('Could not delete this session. Please try again.');
       return;
     }
     await cancelReminder(notificationId(sess.id));
@@ -261,14 +261,14 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
         await deleteSessionFromNativeCalendar(sess);
       } catch (calendarError) {
         console.error('[VOW] Session deleted but native calendar cleanup failed:', calendarError);
-        alert('The session was deleted from VOW, but its phone-calendar event could not be removed. Check calendar permission and remove the leftover event from your calendar.');
+        await alert('The session was deleted from VOW, but its phone-calendar event could not be removed. Check calendar permission and remove the leftover event from your calendar.');
       }
     }
     await load();
   }
   async function mergeSessions(source: Session, target: Session) {
     if (!session || source.id === target.id || source.goal_id !== target.goal_id || mergeBusy) return;
-    if (!confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will keep the chosen appointment time and add the durations together. This cannot be automatically undone.`)) return;
+    if (!await confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will keep the chosen appointment time and add the durations together. This cannot be automatically undone.`)) return;
     setMergeBusy(true);
     setActionError(null);
     let combinedScheduledAt = target.scheduled_at;
@@ -384,18 +384,18 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     if (!editingSession || !session) return;
     const nextDuration = Number(editDurationMinutes);
     if (!Number.isInteger(nextDuration) || nextDuration < 5 || nextDuration > 1440) {
-      alert('Choose a duration between 5 minutes and 24 hours.');
+      await alert('Choose a duration between 5 minutes and 24 hours.');
       return;
     }
     let nextIso: string | null = null;
     let nextDay: string | null = null;
     if (editTimingMode === 'timed') {
       const nextDate = new Date(editScheduledAt);
-      if (!Number.isFinite(nextDate.getTime())) { alert('Choose a valid date and time.'); return; }
+      if (!Number.isFinite(nextDate.getTime())) { await alert('Choose a valid date and time.'); return; }
       nextIso = nextDate.toISOString();
       nextDay = nextDate.toLocaleDateString('en-US', { weekday: 'long' });
     } else if (editTimingMode === 'flexible-day') {
-      if (!sessionDays.includes(editDayOfWeek)) { alert('Choose a weekday for this flexible session.'); return; }
+      if (!sessionDays.includes(editDayOfWeek)) { await alert('Choose a weekday for this flexible session.'); return; }
       nextDay = editDayOfWeek;
     }
     const previousDate = editingSession.scheduled_at;
@@ -412,7 +412,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     }).eq('id', editingSession.id).eq('user_id', session.user.id);
     if (error) {
       console.error('[VOW] Could not adjust session:', error);
-      alert('Could not save this schedule change. Please try again.');
+      await alert('Could not save this schedule change. Please try again.');
       return;
     }
     if (nextIso && editingSession.external_event_id && navigator.onLine) {
@@ -469,7 +469,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     onBack();
   }
   async function deleteGoal() {
-    if (!session || !confirm('Permanently delete this goal and all associated data? This cannot be undone.')) return;
+    if (!session || !await confirm('Permanently delete this goal and all associated data? This cannot be undone.')) return;
     setActionError(null);
     const { data: linkedSessions, error: sessionsError } = await supabase
       .from('sessions')
@@ -478,7 +478,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       .eq('user_id', session.user.id);
     if (sessionsError) {
       console.error('[VOW] Could not load sessions before goal deletion:', sessionsError);
-      alert('Could not safely prepare this goal for deletion. Please try again.');
+      await alert('Could not safely prepare this goal for deletion. Please try again.');
       return;
     }
 
@@ -516,7 +516,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     const { error } = await supabase.from('goals').delete().eq('id', goalId).eq('user_id', session.user.id);
     if (error) {
       console.error('[VOW] Failed to delete goal:', error);
-      alert('Could not delete goal. Please try again.');
+      await alert('Could not delete goal. Please try again.');
       return;
     }
 
