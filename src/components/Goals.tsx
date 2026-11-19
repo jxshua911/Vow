@@ -12,7 +12,8 @@ import { addSessionToNativeCalendar, deleteSessionFromNativeCalendar, replaceSes
 import { GoalResources } from './GoalResources';
 import { SessionActions } from './SessionActions';
 import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Clock, Calendar } from '@/lib/ui-icons';
-import { VowDateTimePicker, VowSelect, useVowDialog } from './VowControls';
+import { VowDateTimePicker, VowSelect } from './VowControls';
+import { useVowDialog } from './VowDialog';
 
 function getSessionVideoUrls(notes: string | null): string[] {
   return [...new Set((notes || '').split('\n').filter((line) => line.startsWith('Video: ')).flatMap((line) => {
