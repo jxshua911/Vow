@@ -49,7 +49,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     };
     window.addEventListener('vow:demo-mode-changed', handleDemoModeChange);
     return () => window.removeEventListener('vow:demo-mode-changed', handleDemoModeChange);
-  }, [session?.user.id, session?.user.email, demoModeEligible]);
+  }, [session, demoModeEligible]);
 
   useEffect(() => { setName(displayName); }, [displayName]);
 
