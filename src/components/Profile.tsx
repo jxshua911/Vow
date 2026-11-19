@@ -68,7 +68,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       console.warn('[VOW] Could not refresh notification permission state:', error);
       setNotificationsEnabled(preferences.enabled);
     }
-  }, []);
+  }, [session?.user.id]);
 
   useEffect(() => {
     void refreshNotificationState();
