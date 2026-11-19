@@ -196,9 +196,9 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       const { data, error } = await supabase.functions.invoke('vow-account-delete', { body: { confirm: true } });
       if (error) throw error;
       if (!data?.deleted) throw new Error(data?.error || 'Account deletion was not completed.');
-      await supabase.auth.signOut({ scope: 'local' });
-      void Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()])
-        .catch((cleanupError) => console.warn('[VOW] Post-deletion reminder cleanup failed:', cleanupError));
+      await Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()]);
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+      if (signOutError) throw signOutError;
     } catch (error) {
       console.error('[VOW] Account deletion failed:', error);
       setDeleteError(userFacingError(error, 'Could not complete account deletion. Please try again.'));
