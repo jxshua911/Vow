@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Goal } from '@/types/database';
 import { syncUserUpcomingSessionNotifications } from '@/lib/notifications';
-import { useVowDialog } from './VowControls';
+import { useVowDialog } from './VowDialog';
 
 export function GoalHistoryActions() {
   const { session } = useAuth();
