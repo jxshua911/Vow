@@ -271,7 +271,7 @@ function AppContent() {
       }
     })();
     return () => { cancelled = true; };
-  }, [session]);
+  }, [session, loading]);
 
   useEffect(() => {
     if (!session) return;
