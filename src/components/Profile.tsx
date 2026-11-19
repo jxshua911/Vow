@@ -7,6 +7,7 @@ import { useTheme } from '@/lib/theme';
 import { userFacingError } from '@/lib/userFacingError';
 import { getEntitlementSnapshot, type EntitlementSnapshot } from '@/lib/entitlements';
 import { PageHeader } from './AppShell';
+import { getDemoModeEnabled, isDemoModeEligible, setDemoModeEnabled } from '@/lib/demoMode';
 import {
   cancelAllVowNotifications,
   clearCloudPushRegistration,
@@ -25,7 +26,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState('');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => getNotificationPreferences().enabled);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => getNotificationPreferences(session?.user.id ?? null).enabled);
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const [notificationError, setNotificationError] = useState('');
   const [updatingNotifications, setUpdatingNotifications] = useState(false);
@@ -33,11 +34,27 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [signOutError, setSignOutError] = useState('');
+  const demoModeEligible = isDemoModeEligible(session?.user.email);
+  const [demoModeEnabled, setDemoModeEnabledState] = useState(false);
+
+  useEffect(() => {
+    if (!session || !demoModeEligible) {
+      setDemoModeEnabledState(false);
+      return;
+    }
+    setDemoModeEnabledState(getDemoModeEnabled(session.user.id));
+    const handleDemoModeChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string; enabled?: boolean }>).detail;
+      if (detail?.userId === session.user.id) setDemoModeEnabledState(Boolean(detail.enabled));
+    };
+    window.addEventListener('vow:demo-mode-changed', handleDemoModeChange);
+    return () => window.removeEventListener('vow:demo-mode-changed', handleDemoModeChange);
+  }, [session, demoModeEligible]);
 
   useEffect(() => { setName(displayName); }, [displayName]);
 
   const refreshNotificationState = useCallback(async () => {
-    const preferences = getNotificationPreferences();
+    const preferences = getNotificationPreferences(session?.user.id ?? null);
     if (!Capacitor.isNativePlatform()) {
       setNotificationsEnabled(preferences.enabled);
       return;
@@ -51,7 +68,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       console.warn('[VOW] Could not refresh notification permission state:', error);
       setNotificationsEnabled(preferences.enabled);
     }
-  }, []);
+  }, [session?.user.id]);
 
   useEffect(() => {
     void refreshNotificationState();
@@ -123,7 +140,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       }
       // Do not send users into Android's separate Alarms & reminders
       // settings page just to enable ordinary session notifications.
-      const preferences = await setNotificationPreferences({ enabled: true });
+      const preferences = await setNotificationPreferences({ enabled: true }, session?.user.id ?? null);
       setNotificationsEnabled(preferences.enabled && permission === 'granted');
       await refreshNotificationState();
       if (Capacitor.getPlatform() === 'android' && isRemotePushConfigured()) {
@@ -136,7 +153,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     } catch (error) {
       console.error('[VOW] Enabling session reminders failed:', error);
       void refreshNotificationState();
-      setNotificationError(getNotificationPreferences().enabled
+      setNotificationError(getNotificationPreferences(session?.user.id ?? null).enabled
         ? 'Notifications are enabled, but reminders could not be fully synced. Try again in a moment.'
         : 'Could not enable session reminders. Please try again.');
     } finally {
@@ -148,7 +165,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     setUpdatingNotifications(true);
     setNotificationError('');
     try {
-      const preferences = await setNotificationPreferences({ enabled: false });
+      const preferences = await setNotificationPreferences({ enabled: false }, session?.user.id ?? null);
       setNotificationsEnabled(preferences.enabled);
       await refreshNotificationState();
     } catch (error) {
@@ -162,10 +179,9 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   async function handleSignOut() {
     setSignOutError('');
     try {
+      await Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()]);
       const { error } = await supabase.auth.signOut({ scope: 'local' });
       if (error) throw error;
-      void Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()])
-        .catch((error) => console.warn('[VOW] Post-sign-out reminder cleanup failed:', error));
     } catch (error) {
       console.error('[VOW] Sign out failed:', error);
       setSignOutError('Could not sign out. Please try again.');
@@ -180,9 +196,9 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       const { data, error } = await supabase.functions.invoke('vow-account-delete', { body: { confirm: true } });
       if (error) throw error;
       if (!data?.deleted) throw new Error(data?.error || 'Account deletion was not completed.');
-      await supabase.auth.signOut({ scope: 'local' });
-      void Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()])
-        .catch((cleanupError) => console.warn('[VOW] Post-deletion reminder cleanup failed:', cleanupError));
+      await Promise.all([cancelAllVowNotifications(), clearCloudPushRegistration()]);
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+      if (signOutError) throw signOutError;
     } catch (error) {
       console.error('[VOW] Account deletion failed:', error);
       setDeleteError(userFacingError(error, 'Could not complete account deletion. Please try again.'));
@@ -222,7 +238,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
 
             <div className="py-5">
               <div className="flex items-center justify-between gap-4">
-                <div><p className="text-sm text-vow-ink">Enable notifications</p><p className="text-xs text-vow-muted mt-1">Session reminders</p></div>
+                <div><p className="text-sm text-vow-ink">Enable notifications</p><p className="text-xs text-vow-muted mt-1">Scheduled reminders for your commitments. VOW asks for device permission only after you switch this on.</p></div>
                 <button
                   type="button"
                   role="switch"
@@ -239,6 +255,31 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
               {updatingNotifications && <p className="text-xs text-vow-muted mt-2" role="status">Updating session reminders…</p>}
               {notificationError && <p className="text-xs text-vow-muted mt-2" role="alert">{notificationError}</p>}
             </div>
+
+            {demoModeEligible && session && <div className="py-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm text-vow-ink">Demo dashboard</p>
+                  <p className="text-xs text-vow-muted mt-1">Preview one illustrative goal with 1 of 3 planning actions used. Demo figures never change your real goals, usage or entitlements.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={demoModeEnabled}
+                  aria-label={demoModeEnabled ? 'Turn off demo dashboard' : 'Turn on demo dashboard'}
+                  onClick={() => {
+                    const next = !demoModeEnabled;
+                    setDemoModeEnabled(session.user.id, next);
+                    setDemoModeEnabledState(next);
+                  }}
+                  className="relative h-11 w-12 shrink-0 p-0"
+                >
+                  <span className={`absolute inset-x-0 top-1/2 h-7 -translate-y-1/2 rounded-full border border-vow-border transition-colors ${demoModeEnabled ? 'bg-vow-ink' : 'bg-vow-surface'}`} />
+                  <span className={`absolute left-1 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full shadow-sm transition-transform ${demoModeEnabled ? 'translate-x-5 bg-vow-bg' : 'translate-x-0 bg-vow-muted'}`} />
+                </button>
+              </div>
+              <p className="text-[11px] text-vow-muted mt-2">{demoModeEnabled ? 'Demo dashboard is on for this account on this device.' : 'Off — your real dashboard is shown.'}</p>
+            </div>}
           </div>
         </div>
 
@@ -265,7 +306,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
                 ? <button type="button" onClick={() => { setDeleteError(''); setConfirmDelete(true); }} className="text-sm text-vow-muted hover:text-vow-ink">Delete Account</button>
                 : <div>
                   <p className="text-sm text-vow-ink mb-1">Delete your account?</p>
-                  <p className="text-xs text-vow-muted mb-3">Your account will be marked for deletion. You can restore it by signing back in within 14 days; after that, deletion may become permanent.</p>
+                  <p className="text-xs text-vow-muted mb-3">Your account will be marked for deletion. You can sign back in within 14 days and explicitly choose Restore my account. After the grace period, deletion becomes permanent.</p>
                   {deleteError && <p className="text-xs text-vow-muted mb-3" role="alert">{deleteError}</p>}
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setConfirmDelete(false)} disabled={deleting} className="vow-btn-ghost">Keep account</button>

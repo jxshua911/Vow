@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-vow-account-purge-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
 };
@@ -63,61 +63,82 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
 
   try {
-    const authorization = req.headers.get("Authorization");
-    if (!authorization?.startsWith("Bearer ")) return json({ error: "Authentication required." }, 401);
+    const suppliedSecret = req.headers.get("x-vow-account-purge-secret") || "";
+    if (!suppliedSecret) return json({ error: "Not authorized." }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    if (!supabaseUrl || !serviceRoleKey) {
       console.error("Account purge: Supabase runtime configuration is missing.");
       return json({ error: "Account deletion is temporarily unavailable." }, 503);
     }
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authorization } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) return json({ error: "Not authenticated." }, 401);
-
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: settings, error: settingsError } = await admin
-      .from("user_settings")
-      .select("account_status,deletion_expires_at")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (settingsError) throw new Error("ACCOUNT_PURGE_STATE_LOOKUP_FAILED");
-    if (!settings) return json({ status: "already_purged" });
-    if (
-      settings.account_status !== "deleted" ||
-      !settings.deletion_expires_at ||
-      new Date(settings.deletion_expires_at).getTime() > Date.now()
-    ) {
-      return json({ error: "The account is not eligible for permanent deletion yet." }, 409);
-    }
+    const { data: authorized, error: authorizationError } = await admin.rpc("vow_validate_account_purge_cron_secret", {
+      p_secret: suppliedSecret,
+    });
+    if (authorizationError || authorized !== true) return json({ error: "Not authorized." }, 401);
 
-    const objectPaths = await listUserObjects(admin, user.id);
-    for (let offset = 0; offset < objectPaths.length; offset += PAGE_SIZE) {
-      const batch = objectPaths.slice(offset, offset + PAGE_SIZE);
-      const { error } = await admin.storage.from(BUCKET).remove(batch);
-      if (error) {
-        console.error("Account purge: private resource cleanup failed.");
-        return json({ error: "Account deletion is temporarily unavailable." }, 503);
+    const { data: expiredAccounts, error: expiredLookupError } = await admin
+      .from("user_settings")
+      .select("user_id,deletion_expires_at")
+      .eq("account_status", "deleted")
+      .not("deletion_expires_at", "is", null)
+      .lte("deletion_expires_at", new Date().toISOString())
+      .order("deletion_expires_at", { ascending: true })
+      .limit(50);
+    if (expiredLookupError) throw new Error("EXPIRED_ACCOUNT_LOOKUP_FAILED");
+
+    let purged = 0;
+    const failed: string[] = [];
+    for (const account of expiredAccounts || []) {
+      const userId = String(account.user_id || "");
+      if (!userId) continue;
+      try {
+        // Re-check eligibility immediately before destructive work. A restored
+        // account must never be deleted by a stale batch result.
+        const { data: current, error: currentError } = await admin
+          .from("user_settings")
+          .select("account_status,deletion_expires_at")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (currentError) throw new Error("ACCOUNT_STATE_RECHECK_FAILED");
+        if (!current || current.account_status !== "deleted" || !current.deletion_expires_at
+            || new Date(current.deletion_expires_at).getTime() > Date.now()) continue;
+
+        const objectPaths = await listUserObjects(admin, userId);
+        for (let offset = 0; offset < objectPaths.length; offset += PAGE_SIZE) {
+          const batch = objectPaths.slice(offset, offset + PAGE_SIZE);
+          const { error: storageError } = await admin.storage.from(BUCKET).remove(batch);
+          if (storageError) throw new Error("STORAGE_OBJECT_PURGE_FAILED");
+        }
+
+        // Remove user-linked moderation/IP records. Preserve only a minimal,
+        // unlinked payment audit record where accounting history is required.
+        const { error: moderationCleanupError } = await admin
+          .from("moderation_ip_bans")
+          .delete()
+          .eq("user_id", userId);
+        if (moderationCleanupError) throw new Error("MODERATION_DATA_PURGE_FAILED");
+
+        const { error: paymentAuditCleanupError } = await admin
+          .from("vow_payment_events")
+          .update({ user_id: null, metadata: {} })
+          .eq("user_id", userId);
+        if (paymentAuditCleanupError) throw new Error("PAYMENT_AUDIT_ANONYMIZATION_FAILED");
+
+        const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
+        if (deleteError) throw new Error("AUTH_USER_DELETE_FAILED");
+        purged += 1;
+      } catch (error) {
+        failed.push(userId);
+        console.error("[VOW] Permanent account purge failed:", error instanceof Error ? error.message : "UNKNOWN_ERROR");
       }
     }
 
-    const { data: purgeResult, error: purgeError } = await admin.rpc("vow_purge_expired_account", {
-      p_user_id: user.id,
-    });
-    if (purgeError || !["purged", "already_purged"].includes(String(purgeResult?.status))) {
-      console.error("Account purge: relational data cleanup failed.");
-      return json({ error: "Account deletion is temporarily unavailable." }, 503);
-    }
-
-    return json({ status: purgeResult.status });
+    return json({ processed: (expiredAccounts || []).length, purged, failed: failed.length });
   } catch (error) {
     console.error("Account purge failed:", error instanceof Error ? error.message : "UNKNOWN_ERROR");
     return json({ error: "Account deletion is temporarily unavailable." }, 503);

@@ -9,7 +9,16 @@ export type NotificationPermission = PermissionStatus['display'];
 export type NotificationPreferences = { enabled: boolean; sound: boolean; vibration: boolean };
 
 const CHANNEL_PREFIX = 'vow-reminders';
-const PREF_KEY = 'vow:notification-preferences';
+const PREF_KEY_PREFIX = 'vow:notification-preferences:';
+let activeNotificationUserId: string | null = null;
+
+export function setNotificationUser(userId: string | null): void {
+  activeNotificationUserId = userId;
+}
+
+function preferenceKey(userId: string | null): string {
+  return `${PREF_KEY_PREFIX}${userId || 'signed-out'}`;
+}
 const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: false, sound: true, vibration: true };
 const PUSH_TOKEN_KEY = 'vow:fcm-token';
 let pushListenersReady = false;
@@ -44,9 +53,9 @@ function isVowNotification(notification: { title: string; extra?: unknown }): bo
   return notification.title.startsWith('VOW ·');
 }
 
-export function getNotificationPreferences(): NotificationPreferences {
+export function getNotificationPreferences(userId: string | null = activeNotificationUserId): NotificationPreferences {
   try {
-    const stored = localStorage.getItem(PREF_KEY);
+    const stored = localStorage.getItem(preferenceKey(userId));
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<NotificationPreferences>;
       return {
@@ -61,19 +70,31 @@ export function getNotificationPreferences(): NotificationPreferences {
   return DEFAULT_PREFERENCES;
 }
 
-export async function setNotificationPreferences(preferences: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
-  const next = { ...getNotificationPreferences(), ...preferences };
-  try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+export async function setNotificationPreferences(preferences: Partial<NotificationPreferences>, userId: string | null = activeNotificationUserId): Promise<NotificationPreferences> {
+  const next = { ...getNotificationPreferences(userId), ...preferences };
 
-  if (!Capacitor.isNativePlatform()) return next;
-
-  if (!next.enabled) {
-    await cancelAllVowNotifications();
-    await clearCloudPushRegistration();
+  if (!Capacitor.isNativePlatform()) {
+    try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
     return next;
   }
 
+  if (!next.enabled) {
+    // Keep the setting visibly enabled if server-side token removal fails;
+    // otherwise a user could believe remote notifications were disabled.
+    await clearCloudPushRegistration();
+    await cancelAllVowNotifications();
+    try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
+    return next;
+  }
+
+  try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
+
   if (await getNotificationPermission() === 'granted') {
+    const token = await getStoredPushToken();
+    if (token && isRemotePushConfigured()) {
+      const { error } = await supabase.rpc('vow_touch_push_device', { p_token: token, p_build_tier: VOW_BUILD_TIER, p_channel_id: channelId(next) });
+      if (error) throw error;
+    }
     await syncCurrentUserUpcomingSessionNotifications();
   }
   return next;
@@ -145,9 +166,15 @@ export async function scheduleReminder(id: number, title: string, body: string, 
   // essential when a session is moved or its notification settings change.
   await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => undefined);
 
-  const exactAlarmGranted = Capacitor.getPlatform() === 'android'
-    ? (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'
-    : undefined;
+  let exactAlarmGranted: boolean | undefined;
+  if (Capacitor.getPlatform() === 'android') {
+    try {
+      exactAlarmGranted = (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted';
+    } catch (error) {
+      console.warn('[VOW] Exact-alarm state could not be checked; scheduling an inexact reminder:', error);
+      exactAlarmGranted = false;
+    }
+  }
 
   const result = await LocalNotifications.schedule({
     notifications: [{
@@ -345,6 +372,7 @@ async function registerCloudPushNotifications(): Promise<void> {
         const { error } = await supabase.rpc('vow_touch_push_device', {
           p_token: value,
           p_build_tier: VOW_BUILD_TIER,
+          p_channel_id: channelId(getNotificationPreferences()),
         });
         if (error) throw error;
         finishPushRegistration();
@@ -383,14 +411,19 @@ export async function clearCloudPushRegistration(): Promise<void> {
 
   const token = await getStoredPushToken();
   try {
-    if (token) {
-      await supabase.from('vow_push_devices').delete().eq('token', token);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (token && user) {
+      const { error } = await supabase.from('vow_push_devices').delete().eq('token', token).eq('user_id', user.id);
+      if (error) throw error;
     }
   } catch (error) {
-    console.warn('[VOW] Push registration cleanup failed:', error);
+    console.error('[VOW] Push registration cleanup failed; keeping the local token so cleanup can be retried:', error);
+    throw error;
   }
 
-  try { await PushNotifications.unregister(); } catch { /* ignore */ }
+  try { await PushNotifications.unregister(); } catch (error) {
+    console.warn('[VOW] Device push unregistration could not be confirmed:', error);
+  }
   await clearStoredPushToken();
 }
 

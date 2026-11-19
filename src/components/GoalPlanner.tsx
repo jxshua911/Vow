@@ -13,6 +13,7 @@ import { userFacingError } from '@/lib/userFacingError';
 import { analyseGoalForEvidence, recommendGoalIntegrations } from '@/lib/armadillo';
 import { openExternalLink } from '@/lib/externalLinks';
 import { TimeWheelPicker } from './TimeWheelPicker';
+import { VowDatePicker } from './VowControls';
 import { listNativeCalendarEvents, type NativeCalendarEvent } from '@/lib/nativeCalendar';
 import { answerForPlanning, CLARIFICATION_SKIP, rememberClarificationAnswers, removeQuestionsAnsweredByPlanner, reuseClarificationAnswers } from '@/lib/clarification';
 
@@ -29,6 +30,7 @@ type SavedPlannerDraft = {
   rawInput?: string;
   why?: string;
   durationWeeks?: number | null;
+  durationMonths?: number | null;
   customDurationValue?: string;
   customDurationUnit?: DurationUnit;
   availableDays?: string[];
@@ -112,21 +114,45 @@ const GOAL_PLACEHOLDERS = [
   'Save enough for a planned trip',
 ];
 const DURATION_OPTIONS = [
-  { weeks: 1, label: '1 week', detail: 'Quick start' },
-  { weeks: 2, label: '2 weeks', detail: 'Short sprint' },
-  { weeks: 4, label: '1 month', detail: 'Build momentum' },
-  { weeks: 8, label: '2 months', detail: 'Build consistency' },
-  { weeks: 12, label: '3 months', detail: 'Meaningful change' },
-  { weeks: 26, label: '6 months', detail: 'Long-term build' },
-  { weeks: 52, label: '1 year', detail: 'Full-year commitment' },
+  { months: 1, label: '1 month', value: '1' },
+  { months: 2, label: '2 months', value: '2' },
+  { months: 3, label: '3 months', value: '3' },
+  { months: 6, label: '6 months', value: '6' },
+  { months: 12, label: '12 months', value: '12' },
 ];
 
-type DurationUnit = 'days' | 'weeks' | 'months';
-function customDurationWeeks(value: string, unit: DurationUnit): number | null {
+type DurationUnit = 'days' | 'weeks' | 'months' | 'years';
+function addCalendarMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  const originalDay = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + months);
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(originalDay, lastDay));
+  return result;
+}
+function calendarDurationWeeks(start: Date, months: number): number {
+  const endExclusive = addCalendarMonths(start, months);
+  return Math.max(1, Math.min(52, Math.ceil((endExclusive.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000))));
+}
+function customDurationMonths(value: string, unit: DurationUnit): number | null {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0) return null;
-  const days = unit === 'days' ? amount : unit === 'weeks' ? amount * 7 : amount * 30;
-  return Math.max(1, Math.ceil(days / 7));
+  if (unit === 'months') return Math.round(amount);
+  if (unit === 'years') return Math.round(amount * 12);
+  return null;
+}
+function monthsForLegacyWeeks(weeks: number): number {
+  return Math.max(1, Math.min(12, Math.round((weeks * 7) / 30.4375)));
+}
+function customDurationWeeks(value: string, unit: DurationUnit, start = nextMonday()): number | null {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  if (unit === 'months' || unit === 'years') {
+    const months = customDurationMonths(value, unit);
+    return months ? calendarDurationWeeks(start, months) : null;
+  }
+  return Math.max(1, Math.ceil((unit === 'days' ? amount : amount * 7) / 7));
 }
 
 function currentLocalTime(): string {
@@ -148,13 +174,14 @@ function defaultDateForDay(day: string): string {
 function deadlineFor(start: Date, weeks: number) {
   return toDateString(addDays(start, weeks * 7 - 1));
 }
+function deadlineForDuration(start: Date, months: number | null, weeks: number): string {
+  return months && months > 0
+    ? toDateString(addDays(addCalendarMonths(start, months), -1))
+    : deadlineFor(start, weeks);
+}
 function milestoneDeadlineFor(start: Date, week: number, dayOfWeek?: string | null) {
   const dayIndex = dayOfWeek ? DAYS.indexOf(dayOfWeek) : -1;
   return toDateString(addDays(start, (Math.max(1, week) - 1) * 7 + (dayIndex >= 0 ? dayIndex : 6)));
-}
-function durationLabel(w: number) {
-  const option = DURATION_OPTIONS.find(x => x.weeks === w);
-  return option?.label || `${w} weeks`;
 }
 function canonicalDay(day: unknown): string | null {
   const value = String(day ?? '').trim().toLowerCase();
@@ -395,9 +422,11 @@ export function GoalPlanner({
   const draftStorageKey = 'vow-goal-planner-draft:' + userId + (resumeDraftId ? ':' + resumeDraftId : ':new');
   const legacyDraftStorageKey = 'vow-goal-planner-draft:' + userId;
   const [why, setWhy] = useState(initialWhy);
-  const [durationWeeks, setDurationWeeks] = useState<number | null>(null);
+  const [durationMonths, setDurationMonths] = useState<number | null>(null);
   const [customDurationValue, setCustomDurationValue] = useState('');
   const [customDurationUnit, setCustomDurationUnit] = useState<DurationUnit>('months');
+  const [showCustomDuration, setShowCustomDuration] = useState(false);
+  const [showDurationUnitMenu, setShowDurationUnitMenu] = useState(false);
   const [availableDays, setAvailableDays] = useState<string[]>([]);
   const [sessionTimes, setSessionTimes] = useState<Record<string, string>>({});
   const [sessionDates, setSessionDates] = useState<Record<string, string>>({});
@@ -434,8 +463,15 @@ export function GoalPlanner({
     return () => window.removeEventListener('vow:hardware-back', handleHardwareBack);
   }, [onCancel]);
 
-  const selectedDurationWeeks = durationWeeks ?? customDurationWeeks(customDurationValue, customDurationUnit);
-  const selectedDurationLabel = durationWeeks ? durationLabel(durationWeeks) : selectedDurationWeeks ? customDurationValue.trim() + ' ' + customDurationUnit : 'Choose a duration';
+  const selectedDurationMonths = durationMonths ?? customDurationMonths(customDurationValue, customDurationUnit);
+  const selectedDurationWeeks = durationMonths
+    ? calendarDurationWeeks(nextMonday(), durationMonths)
+    : customDurationWeeks(customDurationValue, customDurationUnit, nextMonday());
+  const selectedDurationLabel = durationMonths
+    ? `${durationMonths} months`
+    : selectedDurationWeeks
+      ? `${customDurationValue.trim()} ${Number(customDurationValue) === 1 ? customDurationUnit.slice(0, -1) : customDurationUnit}`
+      : 'Choose a duration';
   const missingSessionTimes = availableDays.filter((day) => modeForDay(day) === 'timed' && !sessionTimes[day]);
   useEffect(() => {
     let cancelled = false;
@@ -474,10 +510,21 @@ export function GoalPlanner({
         if (savedDraft && savedMatchesRequestedDraft && !initialGoal && !initialWhy) {
           if (typeof savedDraft.rawInput === 'string') setRawInput(savedDraft.rawInput);
           if (typeof savedDraft.why === 'string') setWhy(savedDraft.why);
-          if (typeof savedDraft.durationWeeks === 'number') setDurationWeeks(savedDraft.durationWeeks);
-          else if (savedDraft.durationWeeks === null && typeof savedDraft.customDurationValue === 'string' && savedDraft.customDurationValue.trim()) setDurationWeeks(null);
+          if (typeof savedDraft.durationMonths === 'number') {
+            setDurationMonths(savedDraft.durationMonths);
+            if (!DURATION_OPTIONS.some((option) => option.months === savedDraft.durationMonths)) setShowCustomDuration(true);
+          } else if (typeof savedDraft.durationWeeks === 'number') {
+            // Preserve legacy week-based drafts exactly instead of approximating them as months.
+            setDurationMonths(null);
+            setCustomDurationValue(String(savedDraft.durationWeeks));
+            setCustomDurationUnit('weeks');
+            setShowCustomDuration(true);
+          } else if (savedDraft.durationWeeks === null && typeof savedDraft.customDurationValue === 'string' && savedDraft.customDurationValue.trim()) {
+            setDurationMonths(null);
+            setShowCustomDuration(true);
+          }
           if (typeof savedDraft.customDurationValue === 'string') setCustomDurationValue(savedDraft.customDurationValue);
-          if (savedDraft.customDurationUnit) setCustomDurationUnit(savedDraft.customDurationUnit);
+          if (savedDraft.customDurationUnit === 'weeks' || savedDraft.customDurationUnit === 'months' || savedDraft.customDurationUnit === 'years') setCustomDurationUnit(savedDraft.customDurationUnit);
           if (Array.isArray(savedDraft.availableDays)) setAvailableDays(savedDraft.availableDays);
           if (savedDraft.sessionTimes) setSessionTimes(savedDraft.sessionTimes);
           if (savedDraft.sessionDates) setSessionDates(savedDraft.sessionDates);
@@ -509,8 +556,13 @@ export function GoalPlanner({
           if (!savedMatchesRequestedDraft) {
             setRawInput(String(goal.title || goal.outcome || ''));
             setWhy(String(goal.why_it_matters || ''));
+            const monthMatch = /^(\d+)m$/i.exec(String(goal.duration || ''));
             const durationMatch = /^(\d+)w$/i.exec(String(goal.duration || ''));
-            if (durationMatch) setDurationWeeks(Math.max(1, Math.min(52, Number(durationMatch[1]))));
+            if (monthMatch) {
+              const restoredMonths = Math.max(1, Math.min(12, Number(monthMatch[1])));
+              setDurationMonths(restoredMonths);
+              if (!DURATION_OPTIONS.some((option) => option.months === restoredMonths)) setShowCustomDuration(true);
+            } else if (durationMatch) setDurationMonths(monthsForLegacyWeeks(Number(durationMatch[1])));
             setAvailableDays([]);
             setSessionTimes({});
             setClarification(null);
@@ -529,7 +581,12 @@ export function GoalPlanner({
             const restoredPlan = storedPlan as Plan;
             setPlan(restoredPlan);
             if (Number.isFinite(Number(restoredPlan.duration_weeks)) && Number(restoredPlan.duration_weeks) > 0) {
-              setDurationWeeks(Math.max(1, Math.min(52, Number(restoredPlan.duration_weeks))));
+              const storedMonths = Number((restoredPlan as Plan & { duration_months?: number }).duration_months);
+              const restoredMonths = Number.isFinite(storedMonths) && storedMonths > 0
+                ? Math.max(1, Math.min(12, storedMonths))
+                : monthsForLegacyWeeks(Number(restoredPlan.duration_weeks));
+              setDurationMonths(restoredMonths);
+              if (!DURATION_OPTIONS.some((option) => option.months === restoredMonths)) setShowCustomDuration(true);
             }
             const restoredDays = Array.isArray(restoredPlan.available_days) && restoredPlan.available_days.length
               ? restoredPlan.available_days.filter((day): day is string => DAYS.includes(day))
@@ -586,7 +643,8 @@ export function GoalPlanner({
       window.localStorage.setItem(activeDraftStorageKey, JSON.stringify({
         rawInput,
         why,
-        durationWeeks,
+        durationMonths: selectedDurationMonths,
+        durationWeeks: selectedDurationWeeks,
         customDurationValue,
         customDurationUnit,
         availableDays,
@@ -610,7 +668,8 @@ export function GoalPlanner({
     activeDraftStorageKey,
     rawInput,
     why,
-    durationWeeks,
+    durationMonths,
+    selectedDurationWeeks,
     customDurationValue,
     customDurationUnit,
     availableDays,
@@ -663,8 +722,8 @@ export function GoalPlanner({
         outcome: rawInput.trim(),
         why_it_matters: why.trim() || null,
         start_date: toDateString(start),
-        deadline: deadlineFor(start, selectedDurationWeeks || 1),
-        duration: `${selectedDurationWeeks || 1}w`,
+        deadline: deadlineForDuration(start, selectedDurationMonths, selectedDurationWeeks || 1),
+        duration: selectedDurationMonths ? `${selectedDurationMonths}m` : `${selectedDurationWeeks || 1}w`,
         status: 'draft',
         weekly_commitment_target: availableDays.length,
         plan_json: { category: goalDomain.category, goal_type: goalDomain.goal_type },
@@ -734,8 +793,8 @@ export function GoalPlanner({
       setError('Please keep your context under 5,000 characters.');
       return;
     }
-    if (selectedDurationWeeks < 1 || selectedDurationWeeks > 52) {
-      setError('Please choose a duration between 1 and 52 weeks.');
+    if (selectedDurationWeeks < 1 || selectedDurationWeeks > 52 || (selectedDurationMonths !== null && selectedDurationMonths > 12)) {
+      setError('Please choose a duration of up to 12 calendar months.');
       return;
     }
     if (availableDays.length < 1 || availableDays.length > 7 || missingSessionTimes.length > 0) {
@@ -834,8 +893,8 @@ export function GoalPlanner({
         setError('Please keep your context under 5,000 characters.');
         return;
       }
-      if (selectedDurationWeeks < 1 || selectedDurationWeeks > 52) {
-        setError('Please choose a duration between 1 and 52 weeks.');
+      if (selectedDurationWeeks < 1 || selectedDurationWeeks > 52 || (selectedDurationMonths !== null && selectedDurationMonths > 12)) {
+        setError('Please choose a duration of up to 12 calendar months.');
         return;
       }
       if (availableDays.length < 1 || availableDays.length > 7 || missingSessionTimes.length > 0) {
@@ -885,7 +944,7 @@ export function GoalPlanner({
             why_it_matters: why.trim() || null,
             domain,
             start_date: toDateString(start),
-            deadline: deadlineFor(start, selectedDurationWeeks),
+            deadline: deadlineForDuration(start, selectedDurationMonths, selectedDurationWeeks),
             duration_weeks: selectedDurationWeeks,
             weekly_commitment_target: availableDays.length,
             plan_generated_at: null,
@@ -893,7 +952,7 @@ export function GoalPlanner({
             schedule_mode: scheduleMode,
             available_days: availableDays,
           },
-          message: `Create a personalised ${domain.goal_type} plan for ${rawInput.trim()}. Goal duration: ${selectedDurationWeeks} weeks. Available days and scheduling modes: ${availableDays.map((day) => `${day}: ${modeForDay(day)}${modeForDay(day) === 'timed' ? ` on ${sessionDates[day] || defaultDateForDay(day)} at ${sessionTimes[day] || 'a time the user must choose'}` : ''}`).join('; ')}. Use the supplied answers and references. For timed days, use the specified date and time; flexible days keep the weekday but no time; unscheduled days have no weekday or timestamp. Return complete JSON matching the required schema, with concrete, distinct, domain-specific sessions, actionable steps, measurable finish criteria, safe progression, and no invented research or URLs.`,
+          message: `Create a personalised ${domain.goal_type} plan for ${rawInput.trim()}. Goal duration: ${selectedDurationMonths ? `${selectedDurationMonths} calendar months` : `${selectedDurationWeeks} weeks`} (planning horizon: ${selectedDurationWeeks} weeks). Keep every session and milestone within the supplied deadline. Available days and scheduling modes: ${availableDays.map((day) => `${day}: ${modeForDay(day)}${modeForDay(day) === 'timed' ? ` on ${sessionDates[day] || defaultDateForDay(day)} at ${sessionTimes[day] || 'a time the user must choose'}` : ''}`).join('; ')}. Use the supplied answers and references. For timed days, use the specified date and time; flexible days keep the weekday but no time; unscheduled days have no weekday or timestamp. Return complete JSON matching the required schema, with concrete, distinct, domain-specific sessions, actionable steps, measurable finish criteria, safe progression, and no invented research or URLs.`,
           answers: clarification.questions.map((question, index) => ({ question, answer: clean[index] || '' })),
           available_days: availableDays,
           schedule_times_enabled: scheduleTimesEnabled,
@@ -949,6 +1008,7 @@ export function GoalPlanner({
 
       const start = nextMonday();
 
+      const goalDeadline = deadlineForDuration(start, selectedDurationMonths, selectedDurationWeeks || 1);
       function buildDate(week: number, day: string, preferredTime: string): Date {
         const w = Math.max(1, Math.min(selectedDurationWeeks || 1, week));
         const dayIndex = Math.max(0, DAYS.indexOf(day));
@@ -962,14 +1022,22 @@ export function GoalPlanner({
         return date;
       }
 
-      const filteredItems = plan.schedule.filter(x => availableDays.includes(x.day));
+      const filteredItems = plan.schedule.filter((item) => {
+        if (!availableDays.includes(item.day)) return false;
+        const dayIndex = Math.max(0, DAYS.indexOf(item.day));
+        const baseDate = sessionDates[item.day]
+          ? new Date(`${sessionDates[item.day]}T00:00:00`)
+          : addDays(start, dayIndex);
+        const plannedDate = addDays(baseDate, (Math.max(1, Math.min(selectedDurationWeeks || 1, item.week)) - 1) * 7);
+        return Number.isFinite(plannedDate.getTime()) && toDateString(plannedDate) <= goalDeadline;
+      });
       if (!filteredItems.length)
         throw new Error('The generated schedule does not match your selected days. Please rebuild the plan.');
 
       // Only inspect the device calendar when the user has already opted into
       // calendar sync; do not trigger a surprise permission prompt during planning.
       if (!ignoreCalendarConflicts && filteredItems.some((item) => modeForDay(item.day) === 'timed') && Capacitor.isNativePlatform() && localStorage.getItem('vow:native-calendar-sync') === 'true') {
-        const rangeEnd = addDays(start, (selectedDurationWeeks || 1) * 7);
+        const rangeEnd = addDays(new Date(`${goalDeadline}T00:00:00`), 1);
         let events: NativeCalendarEvent[];
         try {
           events = await listNativeCalendarEvents(start, rangeEnd);
@@ -1009,11 +1077,14 @@ export function GoalPlanner({
         description: m.description || `Make measurable progress toward “${rawInput.trim()}” during week ${m.week}.`,
         week: Math.max(1, Math.min(selectedDurationWeeks || 1, Number(m.week) || 1)),
         sort_order: i,
-        deadline: milestoneDeadlineFor(
-          start,
-          Math.min(selectedDurationWeeks || 1, Math.max(1, m.week)),
-          m.day_of_week,
-        ),
+        deadline: (() => {
+          const milestoneDate = milestoneDeadlineFor(
+            start,
+            Math.min(selectedDurationWeeks || 1, Math.max(1, m.week)),
+            m.day_of_week,
+          );
+          return milestoneDate > goalDeadline ? goalDeadline : milestoneDate;
+        })(),
         status: i === 0 ? 'in_progress' : 'pending',
       }));
 
@@ -1081,8 +1152,10 @@ export function GoalPlanner({
       const lockedPlan = {
         ...plan,
         goal_title: rawInput.trim(),
-        horizon: `${selectedDurationWeeks || 1} weeks`,
-        deadline: deadlineFor(start, selectedDurationWeeks || 1),
+        horizon: selectedDurationMonths ? `${selectedDurationMonths} calendar months` : `${selectedDurationWeeks || 1} weeks`,
+        duration_months: selectedDurationMonths,
+        planning_horizon_weeks: selectedDurationWeeks || 1,
+        deadline: goalDeadline,
         steps: compatibilitySteps,
       };
 
@@ -1093,8 +1166,8 @@ export function GoalPlanner({
           outcome: plan.outcome || rawInput.trim(),
           why_it_matters: why.trim() || null,
           start_date: toDateString(start),
-          deadline: deadlineFor(start, selectedDurationWeeks || 1),
-          duration: `${selectedDurationWeeks || 1}w`,
+          deadline: goalDeadline,
+          duration: selectedDurationMonths ? `${selectedDurationMonths}m` : `${selectedDurationWeeks || 1}w`,
           status: 'active',
           weekly_commitment_target: availableDays.length,
           plan_json: lockedPlan,
@@ -1445,24 +1518,60 @@ export function GoalPlanner({
           />
         </div>
 
-        <div className="bg-vow-gray/10 border border-vow-border p-4">
-          <label className="vow-label block mb-3">How long are you committing?</label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {DURATION_OPTIONS.map(option => (
-              <button key={option.weeks} type="button" onClick={() => setDurationWeeks(option.weeks)} className={`text-left border px-3 py-3 transition-colors ${durationWeeks === option.weeks ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>
-                <span className="block text-sm font-medium">{option.label}</span>
-                <span className="block text-[10px] mt-1 text-vow-muted">{option.detail}</span>
-              </button>
-            ))}
-            <button type="button" onClick={() => setDurationWeeks(null)} className={`text-left border px-3 py-3 transition-colors ${durationWeeks === null ? 'border-vow-ink bg-vow-ink text-vow-bg' : 'border-vow-border text-vow-muted hover:text-vow-ink'}`}>
-              <span className="block text-sm font-medium">Custom</span><span className="block text-[10px] mt-1 text-vow-muted">Any duration</span>
-            </button>
+        <div className="border border-vow-border bg-vow-gray/10 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <label className="vow-label">How long are you committing?</label>
+            <span className="text-[10px] text-vow-muted">Set your own timeframe</span>
           </div>
-          {durationWeeks === null && <div className="grid grid-cols-[1fr_auto] gap-2 mt-3">
-            <input type="number" min="1" max="3650" value={customDurationValue} onChange={e => setCustomDurationValue(e.target.value)} placeholder="e.g. 4" className="vow-input" aria-label="Custom duration amount" />
-            <select value={customDurationUnit} onChange={e => setCustomDurationUnit(e.target.value as DurationUnit)} className="vow-input" aria-label="Custom duration unit"><option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option></select>
+          <div className="grid grid-cols-6 gap-1.5">
+            {DURATION_OPTIONS.map(option => {
+              const selected = durationMonths === option.months;
+              return <button key={option.months} type="button" onClick={() => { setDurationMonths(option.months); setCustomDurationValue(''); setShowCustomDuration(false); }} aria-label={option.label} aria-pressed={selected} className={"flex min-h-10 items-center justify-center rounded-md border px-1 py-2 text-xs font-semibold transition-colors " + (selected ? "border-vow-ink bg-vow-ink text-vow-bg" : "border-vow-border text-vow-muted hover:text-vow-ink")}>{option.value}</button>;
+            })}
+            <button type="button" onClick={() => { setDurationMonths(null); setShowCustomDuration(true); }} aria-label="Custom duration" aria-expanded={showCustomDuration} className={"flex min-h-10 items-center justify-center rounded-md border px-1 py-2 text-sm font-semibold transition-colors " + (showCustomDuration ? "border-vow-ink bg-vow-ink text-vow-bg" : "border-vow-border text-vow-muted hover:text-vow-ink")}>+</button>
+          </div>
+          {showCustomDuration && <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+            <input
+              type="number"
+              min="1"
+              max={customDurationUnit === 'weeks' ? 52 : customDurationUnit === 'years' ? 1 : 12}
+              step="1"
+              value={customDurationValue}
+              onChange={e => setCustomDurationValue(e.target.value)}
+              placeholder="Amount"
+              className="vow-input min-h-10 py-2 text-sm"
+              aria-label="Custom duration amount"
+            />
+            <div className="relative">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={showDurationUnitMenu}
+                aria-label={`Duration unit: ${customDurationUnit}`}
+                onClick={() => setShowDurationUnitMenu(open => !open)}
+                onKeyDown={e => { if (e.key === 'Escape') setShowDurationUnitMenu(false); }}
+                className="vow-input min-h-10 min-w-[112px] py-2 px-3 text-sm flex items-center justify-between gap-3"
+              >
+                <span>{customDurationUnit.charAt(0).toUpperCase() + customDurationUnit.slice(1)}</span>
+                <span aria-hidden="true" className="text-vow-muted">⌄</span>
+              </button>
+              {showDurationUnitMenu && <div role="menu" aria-label="Duration unit" className="absolute right-0 top-full z-30 mt-1 min-w-full overflow-hidden rounded-md border border-vow-border bg-vow-bg shadow-lg">
+                {(['weeks', 'months', 'years'] as DurationUnit[]).map(unit => (
+                  <button
+                    key={unit}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={customDurationUnit === unit}
+                    onClick={() => { setCustomDurationUnit(unit); setShowDurationUnitMenu(false); }}
+                    className={`block w-full px-3 py-2.5 text-left text-sm transition-colors ${customDurationUnit === unit ? 'bg-vow-ink text-vow-bg' : 'text-vow-ink hover:bg-vow-surface'}`}
+                  >
+                    {unit.charAt(0).toUpperCase() + unit.slice(1)}
+                  </button>
+                ))}
+              </div>}
+            </div>
           </div>}
-          <p className="text-xs text-vow-muted mt-3">{selectedDurationWeeks ? `Selected: ${selectedDurationLabel} · VOW plans in ${selectedDurationWeeks} week${selectedDurationWeeks === 1 ? '' : 's'}.` : 'Choose a duration before continuing.'}</p>
+          <p className="mt-2 text-[11px] text-vow-muted">{selectedDurationWeeks ? "Selected · " + selectedDurationLabel : showCustomDuration ? "Enter a custom duration to continue." : "Choose a duration."}</p>
         </div>
 
         <div className="border border-vow-border bg-vow-gray/10 p-3 sm:p-4">
@@ -1537,7 +1646,7 @@ export function GoalPlanner({
                     ))}
                   </div>
                   {dayMode === 'timed' && <div className="grid grid-cols-2 gap-2">
-                    <label className="block min-w-0 text-[11px] text-vow-muted">Date<input type="date" value={sessionDates[day] || defaultDateForDay(day)} onChange={event => setSessionDates(current => ({ ...current, [day]: event.target.value }))} className="mt-1 block w-full min-w-0 border border-vow-border bg-vow-bg px-2 py-2 text-xs text-vow-ink" /></label>
+                    <label className="block min-w-0 text-[11px] text-vow-muted">Date<VowDatePicker value={sessionDates[day] || defaultDateForDay(day)} onChange={value => setSessionDates(current => ({ ...current, [day]: value }))} label={day + " session date"} placeholder="Choose date" className="mt-1" /></label>
                     <div className="min-w-0"><p className="mb-1 text-[11px] text-vow-muted">Time</p><TimeWheelPicker value={selectedTime} onChange={value => setSessionTimes(current => ({ ...current, [day]: value }))} label={day + ' session time'} /></div>
                   </div>}
                   {dayMode === 'flexible-day' && <p className="text-[11px] text-vow-muted">Sessions stay on {day}, without a fixed clock time.</p>}
@@ -1563,7 +1672,7 @@ export function GoalPlanner({
           </button>
           <button
             onClick={askQuestions}
-            disabled={!rawInput.trim() || planning || availableDays.length === 0 || !selectedDurationWeeks || missingSessionTimes.length > 0}
+            disabled={!rawInput.trim() || planning || availableDays.length === 0 || !selectedDurationWeeks || (selectedDurationMonths !== null && selectedDurationMonths > 12) || missingSessionTimes.length > 0}
             className="vow-btn-primary flex-1"
           >
             {planning ? 'VOW is preparing questions…' : missingSessionTimes.length > 0 ? `Choose time for ${missingSessionTimes.length} day${missingSessionTimes.length === 1 ? '' : 's'}` : !selectedDurationWeeks ? 'Choose a duration' : 'Continue'}
