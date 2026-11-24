@@ -47,7 +47,9 @@ Deno.serve(async (req) => {
       .eq("user_id", payload.user_id)
       .maybeSingle();
     if (settingsError) throw new Error("Unable to verify account notification status");
-    if (!settings || settings.account_status === "deleted") {
+    const criticalCategory = ["account", "security", "subscription"].includes(category);
+    if (!settings || settings.account_status === "purging"
+      || (settings.account_status === "deleted" && !criticalCategory)) {
       return Response.json({ sent: 0, failed: 0, removed: 0, skipped: "account_inactive" });
     }
 
