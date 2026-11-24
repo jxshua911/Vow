@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
           title: item.title,
           body: item.body,
           category: item.category,
+          queue_id: item.id,
           data: item.data || {},
         }),
       });
@@ -70,7 +71,7 @@ Deno.serve(async (req) => {
         skipped += 1;
         continue;
       }
-      if (response.ok && Number(result.sent) > 0) {
+      if (response.ok && Number(result.sent) > 0 && Number(result.failed) === 0) {
         await admin.from("vow_notification_queue")
           .update({ status: "sent", delivered_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
           .eq("id", item.id);
@@ -84,6 +85,8 @@ Deno.serve(async (req) => {
         skipped += 1;
         continue;
       }
+      // Partial success is retried. The sender's per-device ledger skips devices
+      // already delivered, preventing duplicate pushes on the next queue attempt.
       const message = response.ok ? "FCM_DELIVERY_FAILED" : "PUSH_ENDPOINT_" + response.status;
       if (item.attempts < 5) {
         await admin.from("vow_notification_queue")
