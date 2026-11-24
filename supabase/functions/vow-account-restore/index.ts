@@ -34,6 +34,20 @@ const cors = {
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: cors });
 
+async function sendAccountPush(userId:string,title:string,body:string,data:Record<string,string>={}){
+  const secret=Deno.env.get("VOW_PUSH_INTERNAL_SECRET")||"";
+  const baseUrl=Deno.env.get("SUPABASE_URL")||"";
+  if(!secret||!baseUrl)return;
+  try{
+    const response=await fetch(baseUrl+"/functions/v1/vow-send-push",{
+      method:"POST",headers:{"Content-Type":"application/json","x-vow-push-secret":secret},
+      body:JSON.stringify({user_id:userId,title,body,category:"account",data}),
+    });
+    if(!response.ok)console.warn("[VOW] Account restoration push was not delivered:",response.status);
+  }catch{console.warn("[VOW] Account restoration push could not be sent.");}
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
@@ -128,6 +142,8 @@ Deno.serve(async (req) => {
       if (restoreError) return json({ error: "ACCOUNT_RESTORATION_FAILED" }, 503);
       return json({ status: String(restored?.status || "expired") });
     }
+
+    await sendAccountPush(user.id,"Your VOW account has been restored","Your account is active again. Your saved goals and progress are ready.",{event:"account_restored"});
 
     return json({
       status: restored.status,
