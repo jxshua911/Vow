@@ -142,9 +142,19 @@ function customDurationMonths(value: string, unit: DurationUnit): number | null 
   if (unit === 'years') return Math.round(amount * 12);
   return null;
 }
-function monthsForLegacyWeeks(weeks: number): number {
-  return Math.max(1, Math.min(12, Math.round((weeks * 7) / 30.4375)));
+function durationToken(value: string, unit: DurationUnit): string | null {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount <= 0) return null;
+  return `${amount}${unit === 'weeks' ? 'w' : unit === 'months' ? 'm' : unit === 'years' ? 'y' : 'd'}`;
 }
+function parseDurationToken(value: unknown): { amount: number; unit: 'weeks' | 'months' | 'years' } | null {
+  const match = /^(\d+)(w|m|y)$/i.exec(String(value ?? '').trim());
+  if (!match) return null;
+  const amount = Number(match[1]);
+  if (!Number.isSafeInteger(amount) || amount <= 0) return null;
+  return { amount, unit: match[2].toLowerCase() === 'w' ? 'weeks' : match[2].toLowerCase() === 'y' ? 'years' : 'months' };
+}
+
 function customDurationWeeks(value: string, unit: DurationUnit, start = nextMonday()): number | null {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -464,6 +474,10 @@ export function GoalPlanner({
   }, [onCancel]);
 
   const selectedDurationMonths = durationMonths ?? customDurationMonths(customDurationValue, customDurationUnit);
+  const selectedDurationToken = durationToken(
+    durationMonths !== null ? String(durationMonths) : customDurationValue,
+    durationMonths !== null ? 'months' : customDurationUnit
+  );
   const selectedDurationWeeks = durationMonths
     ? calendarDurationWeeks(nextMonday(), durationMonths)
     : customDurationWeeks(customDurationValue, customDurationUnit, nextMonday());
@@ -556,13 +570,23 @@ export function GoalPlanner({
           if (!savedMatchesRequestedDraft) {
             setRawInput(String(goal.title || goal.outcome || ''));
             setWhy(String(goal.why_it_matters || ''));
-            const monthMatch = /^(\d+)m$/i.exec(String(goal.duration || ''));
-            const durationMatch = /^(\d+)w$/i.exec(String(goal.duration || ''));
-            if (monthMatch) {
-              const restoredMonths = Math.max(1, Math.min(12, Number(monthMatch[1])));
-              setDurationMonths(restoredMonths);
-              if (!DURATION_OPTIONS.some((option) => option.months === restoredMonths)) setShowCustomDuration(true);
-            } else if (durationMatch) setDurationMonths(monthsForLegacyWeeks(Number(durationMatch[1])));
+            const storedDuration = parseDurationToken(goal.duration);
+            if (storedDuration?.unit === 'weeks') {
+              setDurationMonths(null);
+              setCustomDurationValue(String(storedDuration.amount));
+              setCustomDurationUnit('weeks');
+              setShowCustomDuration(true);
+            } else if (storedDuration?.unit === 'years') {
+              setDurationMonths(null);
+              setCustomDurationValue(String(storedDuration.amount));
+              setCustomDurationUnit('years');
+              setShowCustomDuration(true);
+            } else if (storedDuration?.unit === 'months') {
+              setDurationMonths(storedDuration.amount);
+              setCustomDurationValue('');
+              setCustomDurationUnit('months');
+              if (!DURATION_OPTIONS.some((option) => option.months === storedDuration.amount)) setShowCustomDuration(true);
+            }
             setAvailableDays([]);
             setSessionTimes({});
             setClarification(null);
@@ -580,15 +604,23 @@ export function GoalPlanner({
           if (storedPlan && Array.isArray(storedPlan.schedule) && Array.isArray(storedPlan.milestones)) {
             const restoredPlan = storedPlan as Plan;
             setPlan(restoredPlan);
-            if (Number.isFinite(Number(restoredPlan.duration_weeks)) && Number(restoredPlan.duration_weeks) > 0) {
-              const storedMonths = Number((restoredPlan as Plan & { duration_months?: number }).duration_months);
-              const restoredMonths = Number.isFinite(storedMonths) && storedMonths > 0
-                ? Math.max(1, Math.min(12, storedMonths))
-                : monthsForLegacyWeeks(Number(restoredPlan.duration_weeks));
-              setDurationMonths(restoredMonths);
-              if (!DURATION_OPTIONS.some((option) => option.months === restoredMonths)) setShowCustomDuration(true);
+            if (!parseDurationToken(goal.duration) && Number.isFinite(Number(restoredPlan.duration_weeks)) && Number(restoredPlan.duration_weeks) > 0) {
+              const storedUnit = (restoredPlan as Plan & { duration_unit?: string }).duration_unit;
+              const storedValue = Number((restoredPlan as Plan & { duration_value?: number }).duration_value);
+              if ((storedUnit === 'weeks' || storedUnit === 'months' || storedUnit === 'years') && Number.isSafeInteger(storedValue) && storedValue > 0) {
+                setDurationMonths(storedUnit === 'months' ? storedValue : null);
+                setCustomDurationValue(String(storedValue));
+                setCustomDurationUnit(storedUnit);
+                setShowCustomDuration(true);
+              } else {
+                // Older plans without a canonical duration keep their exact week horizon.
+                setDurationMonths(null);
+                setCustomDurationValue(String(Math.max(1, Math.ceil(Number(restoredPlan.duration_weeks)))));
+                setCustomDurationUnit('weeks');
+                setShowCustomDuration(true);
+              }
             }
-            const restoredDays = Array.isArray(restoredPlan.available_days) && restoredPlan.available_days.length
+                        const restoredDays = Array.isArray(restoredPlan.available_days) && restoredPlan.available_days.length
               ? restoredPlan.available_days.filter((day): day is string => DAYS.includes(day))
               : [...new Set(restoredPlan.schedule.map((item) => item.day).filter((day): day is string => DAYS.includes(day)))];
             if (restoredDays.length) setAvailableDays(restoredDays);
@@ -723,7 +755,7 @@ export function GoalPlanner({
         why_it_matters: why.trim() || null,
         start_date: toDateString(start),
         deadline: deadlineForDuration(start, selectedDurationMonths, selectedDurationWeeks || 1),
-        duration: selectedDurationMonths ? `${selectedDurationMonths}m` : `${selectedDurationWeeks || 1}w`,
+        duration: selectedDurationToken || `${selectedDurationWeeks || 1}w`,
         status: 'draft',
         weekly_commitment_target: availableDays.length,
         plan_json: { category: goalDomain.category, goal_type: goalDomain.goal_type },
@@ -828,6 +860,8 @@ export function GoalPlanner({
             outcome: rawInput.trim(),
             why_it_matters: why.trim() || null,
             duration_weeks: selectedDurationWeeks,
+            duration_unit: durationMonths !== null ? 'months' : customDurationUnit,
+            duration_value: durationMonths !== null ? durationMonths : Number(customDurationValue),
             weekly_commitment_target: availableDays.length,
             domain: goalAnalysis,
             schedule_times_enabled: scheduleTimesEnabled,
@@ -1154,6 +1188,8 @@ export function GoalPlanner({
         goal_title: rawInput.trim(),
         horizon: selectedDurationMonths ? `${selectedDurationMonths} calendar months` : `${selectedDurationWeeks || 1} weeks`,
         duration_months: selectedDurationMonths,
+        duration_unit: durationMonths !== null ? 'months' : customDurationUnit,
+        duration_value: durationMonths !== null ? durationMonths : Number(customDurationValue),
         planning_horizon_weeks: selectedDurationWeeks || 1,
         deadline: goalDeadline,
         steps: compatibilitySteps,
@@ -1167,7 +1203,7 @@ export function GoalPlanner({
           why_it_matters: why.trim() || null,
           start_date: toDateString(start),
           deadline: goalDeadline,
-          duration: selectedDurationMonths ? `${selectedDurationMonths}m` : `${selectedDurationWeeks || 1}w`,
+          duration: selectedDurationToken || `${selectedDurationWeeks || 1}w`,
           status: 'active',
           weekly_commitment_target: availableDays.length,
           plan_json: lockedPlan,
