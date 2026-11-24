@@ -203,6 +203,21 @@ Deno.serve(async (req) => {
       }
     }
 
+    const storeRegionCode = typeof purchase.regionCode === "string" && /^[A-Z]{2}$/.test(purchase.regionCode.toUpperCase())
+      ? purchase.regionCode.toUpperCase()
+      : null;
+    let marketTier: string | null = null;
+    if (storeRegionCode) {
+      const { data: market, error: marketError } = await serviceClient
+        .from("vow_google_play_market_catalog")
+        .select("market_tier")
+        .eq("country_code", storeRegionCode)
+        .eq("is_enabled", true)
+        .maybeSingle();
+      if (marketError) throw new Error("GOOGLE_PLAY_MARKET_LOOKUP_FAILED");
+      marketTier = market?.market_tier ?? null;
+    }
+
     const { error: recordError } = await serviceClient.rpc("vow_set_subscription_record", {
       p_user_id: user.id,
       p_provider: "google_play",
@@ -217,6 +232,15 @@ Deno.serve(async (req) => {
     });
 
     if (recordError) throw new Error("SUBSCRIPTION_RECORD_FAILED");
+
+    if (storeRegionCode) {
+      const { error: marketAssignmentError } = await serviceClient
+        .from("vow_subscription_records")
+        .update({ store_region_code: storeRegionCode, market_tier: marketTier })
+        .eq("provider", "google_play")
+        .eq("provider_purchase_id", purchaseToken);
+      if (marketAssignmentError) throw new Error("GOOGLE_PLAY_MARKET_ASSIGNMENT_FAILED");
+    }
 
     // Google recommends server-side acknowledgement after verification.
     if (active && purchase.acknowledgementState === "ACKNOWLEDGEMENT_STATE_PENDING") {
@@ -271,6 +295,8 @@ Deno.serve(async (req) => {
       status,
       currentPeriodEnd: lineItem.expiryTime ?? null,
       restored: Boolean(existing),
+      regionCode: storeRegionCode,
+      marketTier,
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : "GOOGLE_PLAY_VERIFICATION_FAILED";
