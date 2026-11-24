@@ -127,6 +127,12 @@ SECURITY DEFINER
 SET search_path = ''
 AS $function$
 BEGIN
+  UPDATE public.vow_notification_queue
+     SET status = 'cancelled', updated_at = now()
+   WHERE user_id = NEW.user_id
+     AND category = 'session'
+     AND status IN ('scheduled','processing');
+
   IF NOT NEW.enabled THEN
     UPDATE public.vow_notification_queue
        SET status = 'cancelled', updated_at = now()
@@ -136,11 +142,6 @@ BEGIN
   END IF;
 
   IF NOT NEW.sessions_enabled THEN
-    UPDATE public.vow_notification_queue
-       SET status = 'cancelled', updated_at = now()
-     WHERE user_id = NEW.user_id
-       AND category = 'session'
-       AND status IN ('scheduled','processing');
     RETURN NEW;
   END IF;
 
@@ -162,6 +163,15 @@ BEGIN
   WHERE s.user_id = NEW.user_id
     AND s.status = 'scheduled'
     AND s.scheduled_at > now()
+    AND NOT (
+      NEW.quiet_start IS NOT NULL AND NEW.quiet_end IS NOT NULL
+      AND CASE WHEN NEW.quiet_start < NEW.quiet_end
+        THEN (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time >= NEW.quiet_start
+          AND (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time < NEW.quiet_end
+        ELSE (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time >= NEW.quiet_start
+          OR (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time < NEW.quiet_end
+      END
+    )
   ON CONFLICT (dedupe_key) DO UPDATE
     SET scheduled_at = EXCLUDED.scheduled_at,
         title = EXCLUDED.title,
@@ -180,7 +190,7 @@ $function$;
 
 DROP TRIGGER IF EXISTS vow_sync_user_session_notifications ON public.reminder_preferences;
 CREATE TRIGGER vow_sync_user_session_notifications
-AFTER INSERT OR UPDATE OF enabled, sessions_enabled
+AFTER INSERT OR UPDATE OF enabled, sessions_enabled, timezone, quiet_start, quiet_end
 ON public.reminder_preferences
 FOR EACH ROW
 EXECUTE FUNCTION public.vow_sync_user_session_notifications();
