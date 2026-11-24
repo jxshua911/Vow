@@ -15,6 +15,7 @@ import {
   requestNotificationPermission,
   getNotificationPermission,
   getNotificationPreferences,
+  loadRemoteNotificationPreferences,
   setupCloudPushNotifications,
   setNotificationPreferences,
 } from '@/lib/notifications';
@@ -26,6 +27,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState('');
+  const [notificationPreferences, setNotificationPreferencesState] = useState(() => getNotificationPreferences(session?.user.id ?? null));
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => getNotificationPreferences(session?.user.id ?? null).enabled);
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const [notificationError, setNotificationError] = useState('');
@@ -54,7 +56,15 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
   useEffect(() => { setName(displayName); }, [displayName]);
 
   const refreshNotificationState = useCallback(async () => {
-    const preferences = getNotificationPreferences(session?.user.id ?? null);
+    let preferences = getNotificationPreferences(session?.user.id ?? null);
+    if (session?.user.id) {
+      try {
+        preferences = await loadRemoteNotificationPreferences(session.user.id);
+      } catch (error) {
+        console.warn('[VOW] Remote notification preferences could not be loaded:', error);
+      }
+    }
+    setNotificationPreferencesState(preferences);
     if (!Capacitor.isNativePlatform()) {
       setNotificationsEnabled(preferences.enabled);
       return;
@@ -141,6 +151,7 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
       // Do not send users into Android's separate Alarms & reminders
       // settings page just to enable ordinary session notifications.
       const preferences = await setNotificationPreferences({ enabled: true }, session?.user.id ?? null);
+      setNotificationPreferencesState(preferences);
       setNotificationsEnabled(preferences.enabled && permission === 'granted');
       await refreshNotificationState();
       if (Capacitor.getPlatform() === 'android' && isRemotePushConfigured()) {
@@ -161,11 +172,27 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
     }
   }
 
+  async function handleToggleNotificationCategory(category: 'sessions' | 'weeklyReviews' | 'deadlines' | 'streaks', enabled: boolean) {
+    setUpdatingNotifications(true);
+    setNotificationError('');
+    try {
+      const preferences = await setNotificationPreferences({ [category]: enabled }, session?.user.id ?? null);
+      setNotificationPreferencesState(preferences);
+      await refreshNotificationState();
+    } catch (error) {
+      console.error('[VOW] Notification category preference could not be saved:', error);
+      setNotificationError('Could not update reminder settings. Please try again.');
+    } finally {
+      setUpdatingNotifications(false);
+    }
+  }
+
   async function handleDisableNotifications() {
     setUpdatingNotifications(true);
     setNotificationError('');
     try {
       const preferences = await setNotificationPreferences({ enabled: false }, session?.user.id ?? null);
+      setNotificationPreferencesState(preferences);
       setNotificationsEnabled(preferences.enabled);
       await refreshNotificationState();
     } catch (error) {
@@ -252,8 +279,26 @@ export function ProfilePage({ onLegal }: { onLegal?: () => void }) {
                   <span className={`absolute left-1 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-5 bg-vow-bg' : 'translate-x-0 bg-vow-muted'}`} />
                 </button>
               </div>
-              {updatingNotifications && <p className="text-xs text-vow-muted mt-2" role="status">Updating session reminders…</p>}
+              {updatingNotifications && <p className="text-xs text-vow-muted mt-2" role="status">Updating notification settings…</p>}
               {notificationError && <p className="text-xs text-vow-muted mt-2" role="alert">{notificationError}</p>}
+              <div className="mt-4 border-t border-vow-border pt-4 space-y-3">
+                <p className="text-xs font-medium text-vow-ink">Routine reminders</p>
+                {([
+                  ['sessions', 'Sessions', 'Reminders before scheduled sessions and actions.'],
+                  ['weeklyReviews', 'Weekly reviews', 'A prompt to review your progress each week.'],
+                  ['deadlines', 'Goal deadlines', 'A reminder before an upcoming goal deadline.'],
+                  ['streaks', 'Progress and streaks', 'A gentle prompt when your weekly momentum drops.'],
+                ] as const).map(([key, label, description]) => (
+                  <div key={key} className="flex items-center justify-between gap-4">
+                    <div className="min-w-0"><p className="text-sm text-vow-ink">{label}</p><p className="text-xs text-vow-muted mt-1">{description}</p></div>
+                    <button type="button" role="switch" aria-checked={notificationPreferences[key]} aria-label={`${notificationPreferences[key] ? 'Disable' : 'Enable'} ${label.toLowerCase()} reminders`} disabled={updatingNotifications} onClick={() => void handleToggleNotificationCategory(key, !notificationPreferences[key])} className="relative h-11 w-12 shrink-0 p-0 disabled:opacity-50">
+                      <span className={`absolute inset-x-0 top-1/2 h-7 -translate-y-1/2 rounded-full border border-vow-border transition-colors ${notificationPreferences[key] ? 'bg-vow-ink' : 'bg-vow-surface'}`} />
+                      <span className={`absolute left-1 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full shadow-sm transition-transform ${notificationPreferences[key] ? 'translate-x-5 bg-vow-bg' : 'translate-x-0 bg-vow-muted'}`} />
+                    </button>
+                  </div>
+                ))}
+                <p className="text-[11px] text-vow-muted">Important account, security and subscription notices remain enabled so you do not miss essential information.</p>
+              </div>
             </div>
 
             {demoModeEligible && session && <div className="py-5">
