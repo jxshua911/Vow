@@ -81,6 +81,9 @@ type PlanReference = {
   resource_type: 'youtube' | 'instagram' | 'image' | 'video' | 'link';
 };
 type Plan = {
+  duration_months?: number | null;
+  duration_unit?: DurationUnit;
+  duration_value?: number;
   category: GoalCategory;
   goal_type: string;
   outcome: string;
@@ -592,8 +595,8 @@ export function GoalPlanner({
             const restoredPlan = storedPlan as Plan;
             setPlan(restoredPlan);
             if (!parseDurationToken(goal.duration) && Number.isFinite(Number(restoredPlan.duration_weeks)) && Number(restoredPlan.duration_weeks) > 0) {
-              const storedUnit = (restoredPlan as Plan & { duration_unit?: string }).duration_unit;
-              const storedValue = Number((restoredPlan as Plan & { duration_value?: number }).duration_value);
+              const storedUnit = restoredPlan.duration_unit;
+              const storedValue = Number(restoredPlan.duration_value);
               if ((storedUnit === 'weeks' || storedUnit === 'months' || storedUnit === 'years') && Number.isSafeInteger(storedValue) && storedValue > 0) {
                 setDurationMonths(storedUnit === 'months' ? storedValue : null);
                 setCustomDurationValue(String(storedValue));
