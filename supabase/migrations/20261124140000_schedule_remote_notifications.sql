@@ -102,6 +102,63 @@ ON public.sessions
 FOR EACH ROW
 EXECUTE FUNCTION public.vow_sync_session_notification();
 
+CREATE OR REPLACE FUNCTION public.vow_sync_user_session_notifications()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+BEGIN
+  IF NOT NEW.enabled OR NOT NEW.sessions_enabled THEN
+    UPDATE public.vow_notification_queue
+       SET status = 'cancelled', updated_at = now()
+     WHERE user_id = NEW.user_id
+       AND category = 'session'
+       AND status IN ('scheduled','processing');
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO public.vow_notification_queue (
+    user_id, category, dedupe_key, scheduled_at, title, body, data, status, attempts, updated_at
+  )
+  SELECT
+    s.user_id,
+    'session',
+    'session:' || s.id::text,
+    GREATEST(s.scheduled_at - interval '15 minutes', now()),
+    'Your VOW session is coming up',
+    s.title,
+    jsonb_build_object('sessionId', s.id::text, 'goalId', s.goal_id::text),
+    'scheduled',
+    0,
+    now()
+  FROM public.sessions s
+  WHERE s.user_id = NEW.user_id
+    AND s.status = 'scheduled'
+    AND s.scheduled_at > now()
+  ON CONFLICT (dedupe_key) DO UPDATE
+    SET scheduled_at = EXCLUDED.scheduled_at,
+        title = EXCLUDED.title,
+        body = EXCLUDED.body,
+        data = EXCLUDED.data,
+        status = 'scheduled',
+        attempts = 0,
+        last_error = NULL,
+        delivered_at = NULL,
+        updated_at = now()
+  WHERE public.vow_notification_queue.status IN ('cancelled','skipped','failed');
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS vow_sync_user_session_notifications ON public.reminder_preferences;
+CREATE TRIGGER vow_sync_user_session_notifications
+AFTER INSERT OR UPDATE OF enabled, sessions_enabled
+ON public.reminder_preferences
+FOR EACH ROW
+EXECUTE FUNCTION public.vow_sync_user_session_notifications();
+
 CREATE OR REPLACE FUNCTION public.vow_enqueue_periodic_notifications()
 RETURNS integer
 LANGUAGE plpgsql
