@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { addDays, toDateString } from '@/lib/dates';
+import { durationToken, parseDurationToken, type DurationUnit } from '@/lib/goalDuration';
 import { syncUpcomingSessionNotifications } from '@/lib/notifications';
 import { consumeEntitlement, FREE_PLANNING_ACTION_LIMIT, getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementResult } from '@/lib/entitlements';
 import { UpgradePrompt } from './UpgradePrompt';
@@ -121,7 +122,6 @@ const DURATION_OPTIONS = [
   { months: 12, label: '12 months', value: '12' },
 ];
 
-type DurationUnit = 'days' | 'weeks' | 'months' | 'years';
 function addCalendarMonths(date: Date, months: number): Date {
   const result = new Date(date);
   const originalDay = result.getDate();
@@ -142,19 +142,6 @@ function customDurationMonths(value: string, unit: DurationUnit): number | null 
   if (unit === 'years') return Math.round(amount * 12);
   return null;
 }
-function durationToken(value: string, unit: DurationUnit): string | null {
-  const amount = Number(value);
-  if (!Number.isSafeInteger(amount) || amount <= 0) return null;
-  return `${amount}${unit === 'weeks' ? 'w' : unit === 'months' ? 'm' : unit === 'years' ? 'y' : 'd'}`;
-}
-function parseDurationToken(value: unknown): { amount: number; unit: 'weeks' | 'months' | 'years' } | null {
-  const match = /^(\d+)(w|m|y)$/i.exec(String(value ?? '').trim());
-  if (!match) return null;
-  const amount = Number(match[1]);
-  if (!Number.isSafeInteger(amount) || amount <= 0) return null;
-  return { amount, unit: match[2].toLowerCase() === 'w' ? 'weeks' : match[2].toLowerCase() === 'y' ? 'years' : 'months' };
-}
-
 function customDurationWeeks(value: string, unit: DurationUnit, start = nextMonday()): number | null {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -620,7 +607,7 @@ export function GoalPlanner({
                 setShowCustomDuration(true);
               }
             }
-                        const restoredDays = Array.isArray(restoredPlan.available_days) && restoredPlan.available_days.length
+            const restoredDays = Array.isArray(restoredPlan.available_days) && restoredPlan.available_days.length
               ? restoredPlan.available_days.filter((day): day is string => DAYS.includes(day))
               : [...new Set(restoredPlan.schedule.map((item) => item.day).filter((day): day is string => DAYS.includes(day)))];
             if (restoredDays.length) setAvailableDays(restoredDays);

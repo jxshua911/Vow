@@ -144,46 +144,6 @@ Deno.serve(async (req) => {
         if (!current || current.account_status !== "deleted" || !current.deletion_expires_at
             || new Date(current.deletion_expires_at).getTime() > Date.now()) continue;
 
-        // External billing cancellation and OAuth revocation are deferred until
-        // the 14-day restoration window has expired. A restored account keeps its
-        // existing provider subscription and connected services.
-        const {data:billing}=await admin.from("vow_user_entitlements").select("provider,stripe_subscription_id,status").eq("user_id",userId).maybeSingle();
-        if(billing?.provider==="stripe"&&billing.stripe_subscription_id&&["active","grace"].includes(billing.status)){const stripeSecret=Deno.env.get("STRIPE_SECRET_KEY")||"";if(!stripeSecret)throw new Error("STRIPE_CANCELLATION_NOT_CONFIGURED");await cancelStripe(billing.stripe_subscription_id,stripeSecret);}
-        if(billing?.provider==="google_play"&&["active","grace"].includes(billing.status)){
-        const {data:playSubscription,error:playSubscriptionError}=await admin.from("vow_subscription_records")
-        .select("provider_purchase_id,current_period_end,auto_renewing")
-        .eq("user_id",userId)
-        .eq("provider","google_play")
-        .in("status",["active","grace"])
-        .order("current_period_end",{ascending:false})
-        .limit(1)
-        .maybeSingle();
-        if(playSubscriptionError)throw new Error("GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED");
-        if(playSubscription?.auto_renewing!==false){
-        const purchaseToken=String(playSubscription?.provider_purchase_id||"").trim();
-        if(!purchaseToken)throw new Error("GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED");
-        const serviceAccountJson=Deno.env.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")||"";
-        const packageName=Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME")||"com.vow.app";
-        if(!serviceAccountJson)throw new Error("GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED");
-        try {
-          const account = JSON.parse(serviceAccountJson) as GoogleServiceAccount;
-          await cancelGooglePlaySubscription(purchaseToken, packageName, account);
-        } catch {
-          throw new Error("GOOGLE_PLAY_SUBSCRIPTION_CANCELLATION_FAILED");
-        }
-        }
-        }
-        
-        const [{data:google},{data:strava}] = await Promise.all([
-          admin.from("google_calendar_connections").select("access_token,refresh_token").eq("user_id",userId).maybeSingle(),
-          admin.from("strava_connections").select("access_token,refresh_token").eq("user_id",userId).maybeSingle(),
-        ]);
-        await Promise.all([
-          google?.refresh_token ? revokeGoogle(google.refresh_token) : Promise.resolve(),
-          google?.access_token ? revokeGoogle(google.access_token) : Promise.resolve(),
-          strava?.access_token ? revokeStrava(strava.access_token) : Promise.resolve(),
-        ]);
-
         const objectPaths = await listUserObjects(admin, userId);
         for (let offset = 0; offset < objectPaths.length; offset += PAGE_SIZE) {
           const batch = objectPaths.slice(offset, offset + PAGE_SIZE);
@@ -204,6 +164,57 @@ Deno.serve(async (req) => {
           .update({ user_id: null, metadata: {} })
           .eq("user_id", userId);
         if (paymentAuditCleanupError) throw new Error("PAYMENT_AUDIT_ANONYMIZATION_FAILED");
+
+        // External billing cancellation and OAuth revocation happen only after
+        // the 14-day restoration window has expired and data cleanup has succeeded.
+        const { data: billing, error: billingLookupError } = await admin
+          .from("vow_user_entitlements")
+          .select("provider,stripe_subscription_id,status")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (billingLookupError) throw new Error("BILLING_LOOKUP_FAILED");
+
+        if (billing?.provider === "stripe" && billing.stripe_subscription_id && ["active", "grace"].includes(billing.status)) {
+          const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") || "";
+          if (!stripeSecret) throw new Error("STRIPE_CANCELLATION_NOT_CONFIGURED");
+          await cancelStripe(billing.stripe_subscription_id, stripeSecret);
+        }
+
+        if (billing?.provider === "google_play" && ["active", "grace"].includes(billing.status)) {
+          const { data: playSubscription, error: playSubscriptionError } = await admin
+            .from("vow_subscription_records")
+            .select("provider_purchase_id,current_period_end,auto_renewing")
+            .eq("user_id", userId)
+            .eq("provider", "google_play")
+            .in("status", ["active", "grace"])
+            .order("current_period_end", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (playSubscriptionError) throw new Error("GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED");
+          if (playSubscription?.auto_renewing !== false) {
+            const purchaseToken = String(playSubscription?.provider_purchase_id || "").trim();
+            if (!purchaseToken) throw new Error("GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED");
+            const serviceAccountJson = Deno.env.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON") || "";
+            const packageName = Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME") || "com.vow.app";
+            if (!serviceAccountJson) throw new Error("GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED");
+            try {
+              const account = JSON.parse(serviceAccountJson) as GoogleServiceAccount;
+              await cancelGooglePlaySubscription(purchaseToken, packageName, account);
+            } catch {
+              throw new Error("GOOGLE_PLAY_SUBSCRIPTION_CANCELLATION_FAILED");
+            }
+          }
+        }
+
+        const [{ data: google }, { data: strava }] = await Promise.all([
+          admin.from("google_calendar_connections").select("access_token,refresh_token").eq("user_id", userId).maybeSingle(),
+          admin.from("strava_connections").select("access_token,refresh_token").eq("user_id", userId).maybeSingle(),
+        ]);
+        await Promise.all([
+          google?.refresh_token ? revokeGoogle(google.refresh_token) : Promise.resolve(),
+          google?.access_token ? revokeGoogle(google.access_token) : Promise.resolve(),
+          strava?.access_token ? revokeStrava(strava.access_token) : Promise.resolve(),
+        ]);
 
         const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
         if (deleteError) throw new Error("AUTH_USER_DELETE_FAILED");
