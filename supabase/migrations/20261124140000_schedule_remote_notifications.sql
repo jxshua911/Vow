@@ -32,6 +32,55 @@ ALTER TABLE public.vow_notification_queue ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.vow_notification_queue FROM PUBLIC, anon, authenticated;
 GRANT ALL ON TABLE public.vow_notification_queue TO service_role;
 
+CREATE OR REPLACE FUNCTION public.vow_next_allowed_notification_time(
+  p_candidate timestamptz,
+  p_timezone text,
+  p_quiet_start time,
+  p_quiet_end time
+)
+RETURNS timestamptz
+LANGUAGE plpgsql
+STABLE
+SET search_path = ''
+AS $function$
+DECLARE
+  tz text := COALESCE(NULLIF(p_timezone, ''), 'UTC');
+  local_candidate timestamp;
+  local_date date;
+  local_time time;
+  allowed_local timestamp;
+BEGIN
+  IF p_candidate IS NULL THEN RETURN NULL; END IF;
+  IF p_quiet_start IS NULL OR p_quiet_end IS NULL OR p_quiet_start = p_quiet_end THEN
+    RETURN p_candidate;
+  END IF;
+
+  local_candidate := p_candidate AT TIME ZONE tz;
+  local_date := local_candidate::date;
+  local_time := local_candidate::time;
+
+  IF p_quiet_start < p_quiet_end THEN
+    IF local_time >= p_quiet_start AND local_time < p_quiet_end THEN
+      allowed_local := local_date + p_quiet_end;
+      RETURN allowed_local AT TIME ZONE tz;
+    END IF;
+  ELSE
+    IF local_time >= p_quiet_start THEN
+      allowed_local := (local_date + 1) + p_quiet_end;
+      RETURN allowed_local AT TIME ZONE tz;
+    ELSIF local_time < p_quiet_end THEN
+      allowed_local := local_date + p_quiet_end;
+      RETURN allowed_local AT TIME ZONE tz;
+    END IF;
+  END IF;
+
+  RETURN p_candidate;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.vow_next_allowed_notification_time(timestamptz,text,time,time) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.vow_next_allowed_notification_time(timestamptz,text,time,time) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.vow_sync_session_notification()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -44,7 +93,6 @@ DECLARE
   quiet_start_time time;
   quiet_end_time time;
   fire_at timestamptz;
-  local_fire_time time;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     UPDATE public.vow_notification_queue
@@ -83,15 +131,9 @@ BEGIN
   END IF;
 
   fire_at := GREATEST(NEW.scheduled_at - interval '15 minutes', now());
-  local_fire_time := fire_at AT TIME ZONE reminder_timezone;
-  IF quiet_start_time IS NOT NULL AND quiet_end_time IS NOT NULL AND
-     CASE WHEN quiet_start_time = quiet_end_time THEN false
-       WHEN quiet_start_time < quiet_end_time
-       THEN local_fire_time >= quiet_start_time AND local_fire_time < quiet_end_time
-       ELSE local_fire_time >= quiet_start_time OR local_fire_time < quiet_end_time
-     END THEN
-    RETURN NEW;
-  END IF;
+  fire_at := public.vow_next_allowed_notification_time(fire_at, reminder_timezone, quiet_start_time, quiet_end_time);
+  -- Do not send a late reminder after the session itself has begun.
+  IF fire_at >= NEW.scheduled_at THEN RETURN NEW; END IF;
 
   INSERT INTO public.vow_notification_queue (
     user_id, category, dedupe_key, scheduled_at, title, body, data, status, attempts, updated_at
@@ -168,7 +210,10 @@ BEGIN
     s.user_id,
     'session',
     'session:' || s.id::text,
-    GREATEST(s.scheduled_at - interval '15 minutes', now()),
+    public.vow_next_allowed_notification_time(
+      GREATEST(s.scheduled_at - interval '15 minutes', now()),
+      COALESCE(NULLIF(NEW.timezone, ''), 'UTC'), NEW.quiet_start, NEW.quiet_end
+    ),
     'Your VOW session is coming up',
     s.title,
     jsonb_build_object('sessionId', s.id::text, 'goalId', s.goal_id::text),
@@ -179,16 +224,10 @@ BEGIN
   WHERE s.user_id = NEW.user_id
     AND s.status = 'scheduled'
     AND s.scheduled_at > now()
-    AND NOT (
-      NEW.quiet_start IS NOT NULL AND NEW.quiet_end IS NOT NULL
-      AND CASE WHEN NEW.quiet_start = NEW.quiet_end THEN false
-        WHEN NEW.quiet_start < NEW.quiet_end
-        THEN (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time >= NEW.quiet_start
-          AND (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time < NEW.quiet_end
-        ELSE (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time >= NEW.quiet_start
-          OR (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time < NEW.quiet_end
-      END
-    )
+    AND public.vow_next_allowed_notification_time(
+      GREATEST(s.scheduled_at - interval '15 minutes', now()),
+      COALESCE(NULLIF(NEW.timezone, ''), 'UTC'), NEW.quiet_start, NEW.quiet_end
+    ) < s.scheduled_at
   ON CONFLICT (dedupe_key) DO UPDATE
     SET scheduled_at = EXCLUDED.scheduled_at,
         title = EXCLUDED.title,
@@ -238,19 +277,14 @@ BEGIN
     INSERT INTO public.vow_notification_queue (user_id, category, dedupe_key, scheduled_at, title, body, data)
     SELECT user_id, 'weekly_review',
       'weekly-review:' || user_id::text || ':' || date_trunc('week', local_now)::date::text,
-      now(), 'Your weekly review is ready',
+      public.vow_next_allowed_notification_time(now(), tz, quiet_start, quiet_end), 'Your weekly review is ready',
       'Take a moment to review your progress and set your next commitments.',
       '{}'::jsonb
     FROM due
     WHERE extract(dow FROM local_now) = 0
       AND local_now::time >= time '18:00'
       AND local_now::time < time '18:05'
-      AND NOT (quiet_start IS NOT NULL AND quiet_end IS NOT NULL AND
-        CASE WHEN quiet_start = quiet_end THEN false
-          WHEN quiet_start < quiet_end
-          THEN local_now::time >= quiet_start AND local_now::time < quiet_end
-          ELSE local_now::time >= quiet_start OR local_now::time < quiet_end
-        END)
+
     ON CONFLICT (dedupe_key) DO NOTHING
     RETURNING 1
   ) SELECT count(*) INTO affected FROM inserted;
@@ -272,18 +306,13 @@ BEGIN
     INSERT INTO public.vow_notification_queue (user_id, category, dedupe_key, scheduled_at, title, body, data)
     SELECT g.user_id, 'deadline',
       'deadline:' || g.id::text || ':' || g.deadline::text,
-      now(), 'A goal deadline is approaching',
+      public.vow_next_allowed_notification_time(now(), d.tz, d.quiet_start, d.quiet_end), 'A goal deadline is approaching',
       'Your goal "' || left(g.title, 100) || '" is due tomorrow.',
       jsonb_build_object('goalId', g.id::text)
     FROM due d
     JOIN public.goals g ON g.user_id = d.user_id
     WHERE d.local_time >= time '09:00' AND d.local_time < time '09:05'
-      AND NOT (d.quiet_start IS NOT NULL AND d.quiet_end IS NOT NULL AND
-        CASE WHEN d.quiet_start = d.quiet_end THEN false
-          WHEN d.quiet_start < d.quiet_end
-          THEN d.local_time >= d.quiet_start AND d.local_time < d.quiet_end
-          ELSE d.local_time >= d.quiet_start OR d.local_time < d.quiet_end
-        END)
+
       AND g.status IN ('active','locked')
       AND g.deadline = d.local_date + 1
     ON CONFLICT (dedupe_key) DO NOTHING
@@ -307,24 +336,19 @@ BEGIN
             AND COALESCE(s.completed_at, s.updated_at) >= now() - interval '7 days'
        )
   ), due AS (
-    SELECT user_id, now() AT TIME ZONE tz AS local_now FROM eligible
+    SELECT user_id, tz, quiet_start, quiet_end, now() AT TIME ZONE tz AS local_now FROM eligible
   ), inserted AS (
     INSERT INTO public.vow_notification_queue (user_id, category, dedupe_key, scheduled_at, title, body, data)
     SELECT user_id, 'streak',
       'streak:' || user_id::text || ':' || date_trunc('week', local_now)::date::text,
-      now(), 'Keep your momentum alive',
+      public.vow_next_allowed_notification_time(now(), tz, quiet_start, quiet_end), 'Keep your momentum alive',
       'You have not logged a completed session this week. Choose one small next step.',
       '{}'::jsonb
     FROM due
     WHERE extract(dow FROM local_now) = 1
       AND local_now::time >= time '19:00'
       AND local_now::time < time '19:05'
-      AND NOT (quiet_start IS NOT NULL AND quiet_end IS NOT NULL AND
-        CASE WHEN quiet_start = quiet_end THEN false
-          WHEN quiet_start < quiet_end
-          THEN local_now::time >= quiet_start AND local_now::time < quiet_end
-          ELSE local_now::time >= quiet_start OR local_now::time < quiet_end
-        END)
+
     ON CONFLICT (dedupe_key) DO NOTHING
     RETURNING 1
   ) SELECT count(*) INTO affected FROM inserted;
