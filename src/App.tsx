@@ -398,12 +398,16 @@ function AppContent() {
     setAccountDeletionPending(false);
     setDeletionExpiresAt(null);
     accountStateReady.current = true;
-    if (data?.resubscribe_required === true) {
+    if (data?.resubscribe_required === true || data?.billing_status_unverified === true) {
       const endDate = data.current_period_end ? new Date(data.current_period_end).toLocaleDateString() : null;
       setAccountRestoreNotice(
-        'Your Google Play Premium access remains available'
-        + (endDate ? ` until ${endDate}` : ' for the remainder of your paid period')
-        + ', but the subscription will not renew. To continue Premium after that, resubscribe to VOW in Google Play under Payments & subscriptions.'
+        data?.billing_status_unverified === true
+          ? 'We could not verify your Google Play renewal status. Your existing paid access may remain available'
+            + (endDate ? ` until ${endDate}` : ' for the remainder of your paid period')
+            + '. Check Google Play under Payments & subscriptions. If auto-renew is off, resubscribe to VOW there.'
+          : 'Your Google Play Premium access remains available'
+            + (endDate ? ` until ${endDate}` : ' for the remainder of your paid period')
+            + ', but the subscription will not renew. To continue Premium after that, resubscribe to VOW in Google Play under Payments & subscriptions.'
       );
     }
   }
