@@ -46,10 +46,19 @@ DECLARE
   fire_at timestamptz;
   local_fire_time time;
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    UPDATE public.vow_notification_queue
+       SET status = 'cancelled', updated_at = now()
+     WHERE dedupe_key = 'session:' || OLD.id::text
+       AND status IN ('scheduled','processing');
+    RETURN OLD;
+  END IF;
+
   IF TG_OP = 'UPDATE' AND (
     OLD.status IS DISTINCT FROM NEW.status
     OR OLD.scheduled_at IS DISTINCT FROM NEW.scheduled_at
     OR OLD.title IS DISTINCT FROM NEW.title
+    OR OLD.goal_id IS DISTINCT FROM NEW.goal_id
   ) THEN
     UPDATE public.vow_notification_queue
        SET status = 'cancelled', updated_at = now()
@@ -115,8 +124,14 @@ $function$;
 
 DROP TRIGGER IF EXISTS vow_sync_session_notification ON public.sessions;
 CREATE TRIGGER vow_sync_session_notification
-AFTER INSERT OR UPDATE OF status, scheduled_at, title
+AFTER INSERT OR UPDATE OF status, scheduled_at, title, goal_id
 ON public.sessions
+FOR EACH ROW
+EXECUTE FUNCTION public.vow_sync_session_notification();
+
+DROP TRIGGER IF EXISTS vow_cancel_deleted_session_notification ON public.sessions;
+CREATE TRIGGER vow_cancel_deleted_session_notification
+AFTER DELETE ON public.sessions
 FOR EACH ROW
 EXECUTE FUNCTION public.vow_sync_session_notification();
 
