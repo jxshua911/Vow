@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
     const { data: expiredAccounts, error: expiredLookupError } = await admin
       .from("user_settings")
       .select("user_id,deletion_expires_at")
-      .eq("account_status", "deleted")
+      .in("account_status", ["deleted", "purging"])
       .not("deletion_expires_at", "is", null)
       .lte("deletion_expires_at", new Date().toISOString())
       .order("deletion_expires_at", { ascending: true })
@@ -141,8 +141,17 @@ Deno.serve(async (req) => {
           .eq("user_id", userId)
           .maybeSingle();
         if (currentError) throw new Error("ACCOUNT_STATE_RECHECK_FAILED");
-        if (!current || current.account_status !== "deleted" || !current.deletion_expires_at
+        if (!current || !["deleted", "purging"].includes(String(current.account_status)) || !current.deletion_expires_at
             || new Date(current.deletion_expires_at).getTime() > Date.now()) continue;
+
+        // Lock the account row and atomically claim permanent deletion. If a
+        // restore won the race, this returns false; if purge won, restore is
+        // blocked until the purge completes. Stale claims are retried later.
+        const { data: purgeClaimed, error: purgeClaimError } = await admin.rpc("vow_claim_expired_account_purge", {
+          p_user_id: userId,
+        });
+        if (purgeClaimError) throw new Error("ACCOUNT_PURGE_CLAIM_FAILED");
+        if (purgeClaimed !== true) continue;
 
         const objectPaths = await listUserObjects(admin, userId);
         for (let offset = 0; offset < objectPaths.length; offset += PAGE_SIZE) {
