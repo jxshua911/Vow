@@ -376,7 +376,10 @@ async function syncCurrentUserUpcomingSessionNotifications(): Promise<void> {
 export async function syncUserUpcomingSessionNotifications(userId: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
-  const preferences = getNotificationPreferences();
+  // Server preferences are authoritative. Load them before syncing so an
+  // early app-start sync cannot overwrite a user's saved category choices
+  // with local defaults from a fresh install.
+  const preferences = await loadRemoteNotificationPreferences(userId);
   await persistRemoteReminderPreference(preferences, userId);
   if (!preferences.enabled) {
     await cancelAllVowNotifications();
