@@ -54,7 +54,7 @@ async function stopRenewalForAccount(admin:ReturnType<typeof createClient<any>>,
   if(billing.provider==="google_play"){
     const {data:subscription,error:subscriptionError}=await admin.from("vow_subscription_records")
       .select("provider_purchase_id,auto_renewing").eq("user_id",userId).eq("provider","google_play")
-      .in("status",["active","grace"]).order("current_period_end",{ascending:false}).limit(1).maybeSingle();
+      .in("status",["active","grace","cancelled"]).order("current_period_end",{ascending:false}).limit(1).maybeSingle();
     if(subscriptionError)throw new Error("GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED");
     if(subscription?.auto_renewing===false)return;
     const purchaseToken=String(subscription?.provider_purchase_id||"").trim();
