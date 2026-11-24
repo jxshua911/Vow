@@ -5,6 +5,19 @@ const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"au
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:CORS});
 function adminClient(){return createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"",{auth:{persistSession:false,autoRefreshToken:false}});}
 function authClient(req:Request){return createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_ANON_KEY")||Deno.env.get("SUPABASE_PUBLISHABLE_KEY")||"",{global:{headers:{Authorization:req.headers.get("Authorization")||""}}});}
+async function sendAccountPush(userId:string,title:string,body:string,data:Record<string,string>={}){
+  const secret=Deno.env.get("VOW_PUSH_INTERNAL_SECRET")||"";
+  const baseUrl=Deno.env.get("SUPABASE_URL")||"";
+  if(!secret||!baseUrl)return;
+  try{
+    const response=await fetch(baseUrl+"/functions/v1/vow-send-push",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-vow-push-secret":secret},
+      body:JSON.stringify({user_id:userId,title,body,category:"account",data}),
+    });
+    if(!response.ok)console.warn("[VOW] Account event push was not delivered:",response.status);
+  }catch{console.warn("[VOW] Account event push could not be sent.");}
+}
 type GoogleServiceAccount={client_email:string;private_key:string;token_uri?:string};
 async function googleAccessToken(account:GoogleServiceAccount){
   const now=Math.floor(Date.now()/1000);
@@ -123,6 +136,7 @@ Deno.serve(async(req)=>{
     return json({error:"SUBSCRIPTION_CANCELLATION_FAILED",message:"Account deletion was not completed because subscription renewal could not be safely stopped. Please try again or contact support."},503);
   }
 
+  await sendAccountPush(user.id,"Account deletion scheduled","Your VOW account is scheduled for deletion. You can restore it during the 14-day recovery window.",{event:"deletion_scheduled",restoreUntil:deletionExpiresAt});
   const {error:pushDeviceCleanupError}=await admin.from("vow_push_devices").delete().eq("user_id",user.id);
   if(pushDeviceCleanupError)console.warn("[VOW] Account is pending deletion but push-device cleanup needs retry.");
   await admin.from("reminder_preferences").update({enabled:false,updated_at:new Date().toISOString()}).eq("user_id",user.id);
