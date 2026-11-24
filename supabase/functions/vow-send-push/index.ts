@@ -142,17 +142,6 @@ Deno.serve(async (req) => {
       }
       return { id: device.id, ok: false, remove: permanentTokenFailure, skipped: false };
     }));
-      const response = await fetch("https://fcm.googleapis.com/v1/projects/" + serviceAccount.project_id + "/messages:send", {
-        method: "POST", headers: { authorization: "Bearer " + accessToken, "content-type": "application/json" },
-        body: JSON.stringify({ message: { token: device.token, notification: { title: payload.title, body: payload.body }, data: { ...(payload.data ?? {}), category }, android: { priority: "HIGH", notification: { channel_id: device.channel_id || "vow-reminders-sound-vibrate-v1", icon: "ic_vow_monochrome" } } } }),
-      });
-      if (response.ok) return { id: device.id, ok: true, remove: false };
-      const failure = await response.json().catch(() => null);
-      const details = Array.isArray(failure?.error?.details) ? failure.error.details : [];
-      const permanentTokenFailure = details.some((item: { errorCode?: string }) => item?.errorCode === "UNREGISTERED");
-      console.warn("[VOW] FCM delivery failed for a registered device:", response.status, failure?.error?.status || "UNKNOWN");
-      return { id: device.id, ok: false, remove: permanentTokenFailure };
-    }));
     const invalidIds = results.filter((result) => result.remove).map((result) => result.id);
     if (invalidIds.length) await supabaseAdmin.from("vow_push_devices").delete().in("id", invalidIds);
     return Response.json({ sent: results.filter((result) => result.ok).length, failed: results.filter((result) => !result.ok).length, removed: invalidIds.length, already_delivered: results.filter((result) => result.skipped).length });
