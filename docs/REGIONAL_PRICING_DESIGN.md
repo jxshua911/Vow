@@ -1,13 +1,13 @@
 # VOW regional pricing and market eligibility
 
-**Status:** proposal for owner approval; not implemented or active in production.  
+**Status:** Google Play implementation in progress; Play Console price configuration and billing verification remain outstanding.  
 **Decision recorded:** Entry $2.99, Accessible $4.99, Moderate $5.99, Standard $6.99 per month (USD-equivalent).
 
 ## 1. Pricing objective
 
 VOW should price according to local purchasing power and the value of the product, while remaining commercially sustainable. A single USD price converted mechanically into local currency is not regional purchasing-power pricing.
 
-Keep four global tiers. Do not create a bespoke price for every country at launch. Use a country-to-tier catalogue, then configure local currency price points in each billing provider.
+Keep four global tiers. Do not create a bespoke price for every country at launch. Use one Google Play subscription product and monthly base plan, with country-specific local prices configured in Google Play Console. Google Play is the only billing provider in the current launch scope. Stripe and Apple billing are deferred.
 
 ## 2. Competitor benchmark (publicly visible prices, checked 24 November 2026)
 
@@ -109,59 +109,47 @@ Separate four concepts that must never be conflated:
 
 The client may request a country for display or relocation review, but it must never authoritatively choose the tier, price ID, currency, entitlement or billing country.
 
-### Google Play
+### Google Play — current launch provider
 
-Use Google Play's verified buyer country and the product's country-specific subscription base-plan price. Verify the purchase token server-side with the Google Play Developer API and persist the returned region code alongside the subscription record. Do not use device locale, SIM country, app language or an editable VOW country field.
+Use one monthly subscription product/base plan. Google Play controls the actual local-currency charge based on the buyer's Play country and the country-specific price configured for that base plan. Configure only the approved launch markets initially; do not automatically enable future countries until reviewed.
 
-Google Play lets developers set country/region availability and local base-plan prices; the buyer's Play country determines which base plans are available:
-- https://support.google.com/googleplay/android-developer/answer/140504
-- https://support.google.com/googleplay/android-developer/answer/6334373
-- https://developers.google.com/android-publisher/api-ref/rest/v3/monetization.subscriptions
+The app must display the product's localized `priceString` returned by Google Play Billing. Never hardcode a USD price as the final customer price or derive a price from device locale, SIM, IP address or a user-editable country selector.
 
-### Stripe / web checkout
+After server-side purchase-token verification through `purchases.subscriptionsv2.get`, persist Google's `regionCode` (ISO alpha-2 billing country at the time the subscription was granted) and map it through the server-owned `vow_google_play_market_catalog`. This is an audit/analytics classification; Google Play remains authoritative for the amount actually charged.
 
-Use explicit server-configured Stripe Price IDs (or an approved server-side market-price table) for each enabled country/tier and billing period. Require billing-address collection and validate the billing country against the payment-method issuing country or other trusted payment evidence before retaining a discounted assignment. A mismatch must receive the Standard tier or manual review; do not grant an ongoing discounted renewal based only on a typed address.
+Primary Google documentation:
+- Subscription purchase verification and `regionCode`: https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.subscriptionsv2
+- Configure country/region availability and prices for subscriptions: https://support.google.com/googleplay/android-developer/answer/1169947
+- Play Billing lifecycle and server-side verification: https://developer.android.com/google/play/billing/lifecycle/subscriptions
 
-IP geolocation is a risk signal only. Do not rely on VPN-sensitive IP, browser locale, timezone, SIM or user-selected region as proof. Enforce the final assignment in the signed webhook path before granting/renewing Premium. Preserve existing subscribers' prices and apply approved relocation changes only at renewal.
-
-Stripe Adaptive Pricing is useful for local-currency presentment and conversion, but it is not the same as purchasing-power pricing: it converts a configured price and can add a currency-conversion fee. VOW needs explicit market price differences for the four tiers.
-- https://support.stripe.com/questions/adaptive-pricing
-- https://stripe.com/resources/more/geographic-pricing-in-practice
-
-### Apple (future iOS)
-
-App Store Connect supports per-storefront auto-renewable subscription prices, many price points per currency, comparable prices across 175 storefronts, and preservation of existing subscriber prices. Use the store's verified transaction/storefront information; do not recreate the store's country decision in the client.
-- https://developer.apple.com/help/app-store-connect/manage-subscriptions/manage-pricing-for-auto-renewable-subscriptions/
-- https://developer.apple.com/documentation/appstoreconnectapi/configuring-subscription-prices-across-territories
+**Deferred:** Stripe web checkout and Apple App Store billing are not part of this launch scope. Existing legacy provider records are not deleted by this change.
 
 ## 6. Anti-arbitrage and subscriber fairness
 
 - Never trust a client-supplied country, tier, price, currency or provider price ID.
-- Google Play: use verified Play country/region from purchase verification.
-- Stripe: require billing address and check it against card/payment country; use IP only as a risk signal.
-- Country/card mismatch: Standard tier or manual review; do not silently grant a lower recurring price.
-- Genuine relocation: review evidence, then apply the new market at the next renewal.
-- Grandfather current subscribers; no silent price increases.
-- Record every market assignment and change.
-- Rate-limit repeated relocation requests and flag conflicting evidence.
+- Google Play: use only the verified `regionCode` from the server-side subscription purchase resource. Do not trust device locale, SIM, IP or an editable in-app country.
+- Google Play determines the billing country and applies the country-specific base-plan price configured in Play Console; VOW records the verified country and its approved tier for audit/analytics.
+- Genuine relocation is handled through Google Play's own country/account eligibility rules, not by allowing a user to switch a VOW tier manually.
+- Grandfather existing subscribers; do not silently change a current subscription's price.
+- Record the verified country and tier on every purchase verification and subscription lifecycle update.
 - Recheck local tax, consumer law, refunds, cancellation disclosures and payment-provider availability before opening each market.
 
 ## 7. Implementation status in VOW (verified 24 November 2026)
 
 - Regional tier proposal and anti-arbitrage design: documented only.
-- Stripe checkout: currently uses one server-configured `STRIPE_PRICE_ID_MONTHLY`; no country/tier selection.
-- Stripe checkout currently forces monthly billing and ignores a client-provided billing interval.
-- No server-owned country/tier assignment or market audit tables are implemented.
-- No regional Stripe Price IDs or country assignments are configured.
-- Google Play country-specific prices must be configured in Play Console; verify that the live purchase-verification path persists and enforces `regionCode` before relying on it.
-- Stripe account merchant/legal/tax readiness must be confirmed before production activation.
+- A server-owned Google Play market catalogue maps 49 proposed launch markets to the approved tier ladder.
+- The remediation branch adds `store_region_code` and `market_tier` to verified Google Play subscription records.
+- The remediation branch reads Google's verified `regionCode` in both purchase verification and RTDN lifecycle processing, then records the country/tier against the subscription.
+- The Android upgrade screen uses Google Play's localized product price and no longer offers Stripe checkout.
+- Production migrations and Edge Functions are not deployed. Play Console country availability and exact local-currency prices are not configured or verified yet.
+- Billing activation, purchase sandbox testing, and Play Console merchant/tax readiness remain the final manual gates.
 
 ## 8. Release gates
 
 Do not activate regional pricing until:
 1. The owner approves the country matrix and exact local-currency prices.
-2. Stripe merchant charges/payouts and legal/tax setup are ready.
-3. The server-owned market catalogue, assignment and audit trail exist.
-4. Google Play purchase verification and Stripe webhook enforcement are tested.
-5. VPN, locale, billing/card mismatch, relocation, renewal and grandfathering tests pass.
-6. Storefront prices and tax-inclusive/exclusive presentation are checked in real sandbox/test purchases.
+2. Configure the approved 49 countries and exact local-currency prices for the Google Play monthly base plan in Play Console.
+3. Confirm Play Console merchant/payment profile and tax readiness.
+4. Deploy the reconciled market-catalogue migration and Google Play verification/RTDN functions.
+5. Verify that purchase-token verification and RTDN persist Google's regionCode and mapped tier.
+6. Test purchase, restore, renewal, cancellation, country changes and grandfathered subscriptions with Google Play license testers.
