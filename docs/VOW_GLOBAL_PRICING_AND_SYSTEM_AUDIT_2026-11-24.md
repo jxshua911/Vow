@@ -31,9 +31,11 @@ Benchmarked Todoist, TickTick, Notion, Structured, Habitify, Sunsama and Motion 
 - `vow-create-checkout` uses a single `STRIPE_PRICE_ID_MONTHLY` environment variable.
 - Checkout is monthly-only and explicitly ignores client-supplied billing interval.
 - No server-owned market catalogue, user-market assignment or market audit trail exists.
+- Live `vow_subscription_records` and `vow_user_entitlements` have no market/country/tier columns.
+- Neither the live nor remediation-branch Google Play verification code currently captures or persists the verified purchase `regionCode`.
+- The Stripe webhook in the remediation branch does not yet validate billing country or card issuing country.
 - No regional Stripe Price IDs or country-tier assignments are configured.
-- The existing design document previously used outdated proposed prices; it is being replaced with the owner-approved ladder and a preliminary 37-country Europe matrix.
-- Google Play's verified purchase country needs to be confirmed in the live verification path before it can drive a market assignment.
+- The pricing design now records the owner-approved ladder and a preliminary 37-country Europe matrix.
 
 **Status:** research and design underway; implementation not started; not live.
 
@@ -48,7 +50,8 @@ Benchmarked Todoist, TickTick, Notion, Structured, Habitify, Sunsama and Motion 
 - The deployed `vow-dispatch-notifications` Edge Function does not exist.
 - Deployed `vow-send-push` is version 8. Its live code does not enforce account status or per-category reminder flags.
 - The remediation branch has a newer sender with account-status and category checks, plus a dispatcher and migration-backed queue, but these are not deployed.
-- The Profile UI currently exposes only one global “Enable notifications” switch; per-category controls are not exposed.
+- The production app currently exposes only one global “Enable notifications” switch. I have now added four category controls (sessions, weekly reviews, deadlines and streaks) to the remediation branch and wired them to the migration's server-side preference fields; this code is awaiting CI verification.
+- The live Vault contains only the existing account-purge cron secret; the notification-dispatch secret has not been created because its migration is not applied.
 - The live database migration history ends at `20261119054150`; the three 24 November remediation migrations are not applied.
 - No end-to-end FCM delivery or Samsung S24 Ultra notification test has been completed.
 
