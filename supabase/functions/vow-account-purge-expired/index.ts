@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
             .select("provider_purchase_id,current_period_end,auto_renewing")
             .eq("user_id", userId)
             .eq("provider", "google_play")
-            .in("status", ["active", "grace"])
+            .in("status", ["active", "grace", "cancelled"])
             .order("current_period_end", { ascending: false })
             .limit(1)
             .maybeSingle();
