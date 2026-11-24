@@ -183,7 +183,7 @@ function clarificationFallback(goal: string, category: string, selectedDays: str
     ],
   };
 }
-type CooldownKind = "clarify" | "plan" | "chat" | "review";
+type CooldownKind = "clarify" | "plan" | "review";
 
 async function cooldown(uid: string, k: CooldownKind) {
   try {
@@ -1258,7 +1258,10 @@ Deno.serve(async (req) => {
     if (requestedMode !== "goal-clarify" && requestedMode !== "goal-plan")
       return json({ error: "Unsupported AI mode. VOW only accepts goal clarification and plan generation requests." }, 400);
     mode = requestedMode;
-    const kind = mode === "goal-plan" ? "plan" : "clarify";
+    const kind =
+      mode === "goal-plan"
+        ? "plan"
+        : "clarify";
     const g = p?.goal || {};
     const domain = g?.domain && typeof g.domain === "object" ? g.domain : {};
     const { data: userSettings } = await client(req)
@@ -1303,8 +1306,8 @@ Deno.serve(async (req) => {
         429,
         { "Retry-After": String(wait) }
       );
-    // Goal planning is the only user-facing AI generation path. The retired
-    // standalone chat surface cannot consume tokens or entitlement reservations.
+    // The standalone chat feature has been retired. Only plan generation can
+    // consume a planning entitlement; clarification is a bounded discovery step.
     const feature = mode === "goal-clarify" ? null : "planning_action";
     let entitlement: Record<string, unknown> = {
       allowed: true,
@@ -1426,8 +1429,115 @@ Deno.serve(async (req) => {
     }
 
     if (mode === "goal-clarify") {
-      return json({ error: "Unsupported AI mode." }, 400);
-  } catch (e) {
+      let r: any;
+      let usedFallback = false;
+      try {
+        r = await ai(req,
+          [
+            {
+              role: "system",
+              content: `You are VOW's specialist goal-discovery researcher. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Use the supplied VOW knowledge base, domain profile, previous goals, recent journal context, and research results as your first planning reference. Use previous goals and journal entries only to personalise the plan when they are relevant to the current goal. Return ONLY JSON: {questions:[string,string,string],recommended_duration_weeks:number,rationale:string,category:string,goal_type:string,classification_confidence:number}. Copy category and goal_type from the supplied domain profile when it is sufficiently specific; otherwise classify the goal accurately and use one supported category. Ask high-value questions that resolve the most important missing inputs for this exact domain. For savings or purchase goals involving a named product, vehicle, property, course, or other specific target, use supplied research to identify the item and public price evidence first; never ask the user to define a measurable success metric or supply facts available online. Ask only for personal variables that materially affect the plan, such as location/currency, current savings, and a realistic contribution amount. Use the supplied research results to resolve named entities and ambiguous terms before asking questions. If research does not resolve an ambiguity that materially changes the plan, ask one concise, specific clarification instead of generic questions. Never ask generic questions when domain-specific ones are possible. Do not ask for information already supplied. If the user says they do not know, ask a smaller decision question that helps them choose; do not proceed as if the missing information does not matter. Domain profile: ${JSON.stringify(domain)}`,
+            },
+            { role: "user", content: JSON.stringify({ message, ...context }) },
+          ],
+          "clarify",
+          researchRequired
+        );
+      } catch (e) {
+        console.warn("clarify AI error", e);
+        const errorCode = e instanceof Error ? e.message : String(e);
+        const providerFailure = /^(GROQ_API_KEY_MISSING|MISTRAL_API_KEY_MISSING|QWEN_API_KEY_MISSING|NOVA_API_KEY_MISSING|GROQ_429|MISTRAL_429|QWEN_429|NOVA_429|GROQ_PROVIDER_ERROR_\d+|MISTRAL_PROVIDER_ERROR_\d+|QWEN_PROVIDER_ERROR_\d+|NOVA_PROVIDER_ERROR_\d+|GROQ_EMPTY_RESPONSE|MISTRAL_EMPTY_RESPONSE|QWEN_EMPTY_RESPONSE|NOVA_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED|AI_USAGE_CHECK_FAILED)$/.test(errorCode) ||
+          /^(GROQ_API_KEY_MISSING|GROQ_429|GROQ_PROVIDER_ERROR_\d+|GROQ_EMPTY_RESPONSE|OPENAI_API_KEY_MISSING|OPENAI_PROVIDER_ERROR_\d+|OPENAI_EMPTY_RESPONSE|INVALID_AI_JSON|AI_RESEARCH_NOT_PERFORMED|AI_USAGE_CHECK_FAILED)$/.test(errorCode) ||
+          (e instanceof TypeError && /fetch|network|timeout/i.test(errorCode)) ||
+          (e instanceof Error && e.name === "AbortError");
+        if (!providerFailure) throw e;
+        const goalLabel = str(g?.outcome || g?.title, 180) || "this goal";
+        r = {
+          ...clarificationFallback(goalLabel, str(fallbackCategory, 80), ds, Boolean(str(g?.deadline, 30))),
+          recommended_duration_weeks: w,
+          rationale: "A few details will help VOW shape a practical plan around your goal and schedule.",
+          category: fallbackCategory || "Personal Development",
+          goal_type: str(domain?.goal_type, 80) || "Personal goal",
+          classification_confidence: Number(domain?.confidence) || 0.6,
+        };
+        usedFallback = true;
+      }
+      let questions = arr(r?.questions, 3).slice(0, 3);
+      if (questions.length < 2) {
+        questions = clarificationFallback(
+          str(g?.outcome || g?.title, 180) || "this goal",
+          str(fallbackCategory, 80),
+          ds,
+          Boolean(str(g?.deadline, 30)),
+        ).questions;
+        r = {
+          ...r,
+          recommended_duration_weeks: w,
+          rationale: "A few details will help VOW shape a practical plan around your goal and schedule.",
+          category: fallbackCategory || "Personal Development",
+          goal_type: str(domain?.goal_type, 80) || "Personal goal",
+          classification_confidence: Number(domain?.confidence) || 0.6,
+        };
+        usedFallback = true;
+      }
+      r.questions = questions;
+      r.category = str(r.category, 80) || str(fallbackCategory, 80) || "Personal Development";
+      r.goal_type = str(r.goal_type, 80) || str(domain?.goal_type, 80) || "Personal goal";
+      const classificationConfidence = Number(r.classification_confidence);
+      const domainConfidence = Number(domain?.confidence);
+      r.classification_confidence = Number.isFinite(classificationConfidence)
+        ? Math.max(0, Math.min(1, classificationConfidence))
+        : Number.isFinite(domainConfidence)
+        ? Math.max(0, Math.min(1, domainConfidence))
+        : 0.7;
+      r.recommended_duration_weeks = Math.min(
+        52,
+        Math.max(1, Number(r.recommended_duration_weeks) || w)
+      );
+      r.rationale = str(r.rationale, 500);
+      if (usedFallback && entitlementReservationId) {
+        await releasePlanningEntitlement(req, entitlementReservationId);
+        entitlementReservationId = null;
+      }
+      await record(req, "goal-clarify", "success", Date.now() - startedAt);
+      if (entitlementReservationId) {
+        await finalizePlanningEntitlement(req, entitlementReservationId);
+        entitlementFinalized = true;
+      }
+      return json({ structured: r, text: JSON.stringify(r) });
+    }
+    if (mode === "goal-plan") {
+      const planMessages = [
+            {
+              role: "system",
+              content: `You are VOW's expert planning and research engine. Use the supplied research results and cite their URLs in references when relevant. Treat catalogue page counts as edition-dependent estimates. If a public lookup is unavailable, proceed with a transparent assumption rather than pretending research happened. Never make the user supply facts that can reasonably be looked up, and never block a plan because the user cannot know a precise measurement in advance. For unknown personal baselines, choose a safe, adjustable starting estimate or include a short baseline-measuring activity in the first session. Respond in the user's selected language (language code: ${preferredLanguage}) unless the user explicitly asks for another language. Preserve structured JSON keys in English. Build the best practical plan for the exact goal. The VOW knowledge base, domain profile, previous goals, and recent journal context are core references: use relevant entries to ground methodology, actions, metrics and cautions before using web research. Use real-time web search and visit authoritative sources when current or specialist information can improve the plan. Use the supplied research results when available. If a specialist term remains ambiguous after lookup, avoid unsupported claims and build a cautious plan around the user's stated meaning or ask one concise clarification only when the ambiguity materially changes the plan. Prefer primary sources, respected institutions and recognised expert frameworks; synthesise research rather than dumping links. Only return clarification_needed:true when a genuinely essential personal choice or safety constraint makes planning inappropriate without an answer. Do not ask for searchable public facts, product/book specifications, nutrition labels, exact future performance, or measurements the user cannot reasonably know. Use assumptions and mark them clearly in assumptions[]. Use previous goals and recent journal entries as personal context when relevant, but never expose unrelated private details or assume that past goals must continue. Never fill missing personal context with boilerplate. Verify resource URLs with web_search: when suitable, include one direct, genuinely relevant YouTube video and one authoritative website for this exact goal and level. Do not invent titles or URLs; omit an unavailable resource rather than fabricate it. The app may add clearly labelled YouTube searches and app suggestions separately. Clock times are optional: when goal.schedule_times_enabled is false, preferred_time must be null and no time of day may be invented. Research named products, vehicles, careers, qualifications, locations, events, and other specific entities instead of treating them as generic goals. For savings or purchase goals, identify the exact target item, research credible current price evidence where available, cite sources, calculate a transparent target and adjustable savings scenarios, and ask only about personal inputs such as currency, current savings, and feasible contribution. If prices vary or live evidence is unavailable, say so and show a labelled estimate rather than pretending to know an exact price. Duration (${w} weeks) and available days (${ds.join(
+                ", "
+              )}) are HARD constraints. Follow-up answers are HARD personal context. Domain profile: ${JSON.stringify(domain)}. Return ONLY JSON with outcome, success_metric, baseline, assumptions, milestones (2-8 objects with title,description,week), weekly_session_templates (one object per week, each containing week and sessions; sessions must contain one concrete, distinct session for each selected day with day,task,purpose,target_metric,duration_minutes,preferred_time,actions (for every week, 3-6 meaningful objects with type,title,instructions,substeps (2-5 ordered concrete strings), and optional children for nested domain-specific groups/actions; type must be category for a grouping with children, exercise for an individual physical exercise, task for other executable work, or rest for an explicit break; every rest action must include duration_seconds as a positive integer and a clear title, and may omit instructions/substeps; children use the same recursive structure to a maximum depth of 5; use sets,reps,rest_seconds only when relevant and duration_minutes only when useful; include measurable completion criteria in instructions or target_metric; later weeks must remain equally executable, not become vague outlines)), session_templates (fallback template per selected day with day,task,purpose,target_metric,duration_minutes,preferred_time,actions), weekly_focus (exactly one string per week), progression, checkpoints (3-8), risks (3-8), fallback_rules (2-6), summary, references (0-4 objects with url,title,resource_type). Make the plan genuinely domain-specific. Do not invent specialist claims when the knowledge/research does not support them.
+
+CORE EXECUTION-STRUCTURE RULE: Do NOT use one generic action recipe for every goal. First infer the actual work system implied by the goal, then build each session around that system. A session is an executable work block, not a motivational theme. Its task/title must tell the user what they are doing today; its purpose explains why it matters; its actions and ordered substeps describe exactly what to do; its target_metric defines observable completion. Use meaningful domain-native groupings (for example, concepts and question types for study, project phases and deliverables for product work, muscle groups for training, recipe stages for cooking, transactions and savings calculations for finance, techniques and finished artefacts for creative practice). Do not force irrelevant labels such as muscle groups, sets/reps, or study questions into unrelated domains.
+
+CATEGORY-SPECIFIC EXECUTION BLUEPRINTS — choose the matching blueprint from the actual goal, not merely a broad category label, and adapt it to the user's level, constraints, answers, research and desired outcome:
+• FITNESS / SPORT / PHYSICAL SKILLS: organise by relevant muscle group, skill, training quality, or sport phase. Name each exercise/drill; provide sets × reps, rounds, distance, pace, duration or intensity as appropriate; rest/recovery; technique cues; equipment; warm-up/cool-down where relevant; and an observable finish condition. Place rest where it belongs. Progress volume, difficulty and skill over weeks responsibly.
+• EDUCATION / EXAMS / LEARNING / LANGUAGES: organise by exact concept, topic, skill or exam objective. Include a short explanation or resource, worked examples where useful, a specified number/type/difficulty of independent questions, active recall or spaced review, and an answer-checking/error-correction step. Define measurable evidence such as questions attempted and accuracy, concepts explained from memory, vocabulary recalled, or a marked practice section. Increase difficulty and revisit weaknesses over time; do not say only “study/revise chapter”.
+• SOFTWARE / PRODUCT / CAREER / BUSINESS / PROJECTS: organise by research, decisions, design, implementation, validation, launch or other phases that fit the real goal. Each action must name a concrete artefact, feature, test, customer interaction or decision; include exact steps, tools or acceptance criteria when known, a deliverable, and how to verify it. For outreach, specify target count and a useful message/output; for interviews, define the questions and synthesis; for coding, identify the component/behaviour and tests rather than “work on the app”. Sequence dependencies and distinguish research, building, testing and shipping.
+• MONEY / SAVING / PURCHASE GOALS: organise by the real target and timeline. Include the budget or calculation to perform, inputs to gather, spending categories or income/savings actions, target contribution, progress check and obstacle response. Research the actual item/price when possible and cite evidence; distinguish verified price from estimate. Use the user's currency and clearly state assumptions. Never imply financial outcomes are guaranteed.
+• CREATIVE WORK / ART / WRITING / MUSIC / CRAFTS: organise by technique, draft/section, practice drill, iteration, critique and finished output as relevant. Specify the exact passage, object, exercise, duration or number of iterations; criteria for quality; feedback/revision; and a tangible artefact or performance evidence. Avoid vague “be creative” tasks.
+• MINDFULNESS / HABITS / PERSONAL DEVELOPMENT: specify the cue/context, precise behaviour, duration/frequency when useful, environment setup, tracking method and reflection/recovery plan. Define what doing the habit means and how it will be recorded. Do not turn reflection into endless journalling without a question or outcome.
+• RELATIONSHIPS / COMMUNICATION / SOCIAL GOALS: define the appropriate interaction or practice, preparation, respectful communication behaviour, listening/response skill and reflection. Use observable actions within the user's control; do not prescribe manipulating, pressuring or controlling another person or treat their response as guaranteed.
+• HEALTH / WELLBEING: give evidence-informed, level-appropriate, measurable actions and monitoring; acknowledge when professional guidance is needed and do not diagnose. Avoid unsafe prescriptions.
+• HOME / ORGANISATION / LIFE ADMIN / TRAVEL: organise by area, task, booking, document, route or dependency. List concrete preparation and execution steps, required materials/documents, realistic time estimates and a verifiable done state.
+• GENERAL / MIXED / UNCERTAIN GOALS: infer the most useful execution model from the actual outcome and research. If genuinely ambiguous in a way that materially changes the plan, ask one targeted question; otherwise state a reasonable assumption and proceed. For compound goals, combine only the relevant blueprints instead of flattening everything into generic tasks.
+
+ACTION DETAIL RULES: In weeks 1–4, the 3–6 action objects must represent the meaningful work units for THAT session, not interchangeable filler. Populate the existing fields according to the domain: title is a clear action name; instructions explain how to execute it; sets/reps are only for countable repetitions; duration_minutes is for timed work; rest_seconds is only when relevant; substeps are 2–5 ordered, specific steps with inputs, counts, constraints or technique cues and a clear finish condition. For non-fitness tasks, do not fake sets/reps or rest. If a category needs a grouping, express it clearly in the session task and action titles so related actions remain visibly grouped; keep each action specific enough to execute independently. Use a measurable target_metric for the session as a whole. Do not invent exact values when evidence is unavailable: label assumptions and make them adjustable.
+
+Each week's sessions must advance that week's focus rather than repeating the same task. Across the schedule, include the relevant preparation, execution, checking/feedback and progression steps. For skill-based physical activities, specify named drills and sub-steps, sets and repetitions or rounds, rest periods where appropriate, technique cues, and a clear finish condition. For beginner martial arts, progress from stance, balance, footwork and basic techniques to controlled combinations; prioritise qualified instructor feedback and supervised practice, never prescribe unsupervised sparring or guarantee formal belt readiness by a deadline. For cooking goals, specify actual recipe actions such as preparing ingredients, boiling and timing pasta, simmering sauce, tasting, or plating instead of vague cooking tasks. Every week must meaningfully progress toward the outcome.`,
+            },
+            { role: "user", content: JSON.stringify({ message, ...context }) },
+          ];
+      let b: any;
+      try {
+        b = await ai(req, planMessages, "plan", researchRequired);
+      } catch (e) {
         console.warn("plan AI failed", e);
         throw e;
       }
