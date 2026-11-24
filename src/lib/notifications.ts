@@ -70,6 +70,18 @@ export function getNotificationPreferences(userId: string | null = activeNotific
   return DEFAULT_PREFERENCES;
 }
 
+async function persistRemoteReminderPreference(enabled: boolean, userId: string | null): Promise<void> {
+  if (!userId) return;
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const { error } = await supabase.from('reminder_preferences').upsert({
+    user_id: userId,
+    enabled,
+    timezone,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+  if (error) throw error;
+}
+
 export async function setNotificationPreferences(preferences: Partial<NotificationPreferences>, userId: string | null = activeNotificationUserId): Promise<NotificationPreferences> {
   const next = { ...getNotificationPreferences(userId), ...preferences };
 
@@ -79,24 +91,28 @@ export async function setNotificationPreferences(preferences: Partial<Notificati
   }
 
   if (!next.enabled) {
-    // Keep the setting visibly enabled if server-side token removal fails;
-    // otherwise a user could believe remote notifications were disabled.
+    // Turn off server delivery first. Even if device-token cleanup later fails,
+    // the server will no longer send routine reminders to this account.
+    await persistRemoteReminderPreference(false, userId);
+    try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
     await clearCloudPushRegistration();
     await cancelAllVowNotifications();
-    try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
     return next;
   }
 
+  if (await getNotificationPermission() !== 'granted') {
+    return { ...next, enabled: false };
+  }
+
+  await persistRemoteReminderPreference(true, userId);
   try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
 
-  if (await getNotificationPermission() === 'granted') {
-    const token = await getStoredPushToken();
-    if (token && isRemotePushConfigured()) {
-      const { error } = await supabase.rpc('vow_touch_push_device', { p_token: token, p_build_tier: VOW_BUILD_TIER, p_channel_id: channelId(next) });
-      if (error) throw error;
-    }
-    await syncCurrentUserUpcomingSessionNotifications();
+  const token = await getStoredPushToken();
+  if (token && isRemotePushConfigured()) {
+    const { error } = await supabase.rpc('vow_touch_push_device', { p_token: token, p_build_tier: VOW_BUILD_TIER, p_channel_id: channelId(next) });
+    if (error) throw error;
   }
+  await syncCurrentUserUpcomingSessionNotifications();
   return next;
 }
 
