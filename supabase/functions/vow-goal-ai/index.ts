@@ -1455,8 +1455,10 @@ Deno.serve(async (req) => {
     // Avoid a separate model call solely to classify the goal. The client
     // already supplies deterministic domain evidence; unknown goals use a
     // neutral fallback and the planning request handles the actual plan.
-    if (!domain?.category || domain.category === "Unknown" || domain.category === "General") {
-      domain.category = "Personal Development";
+    let fallbackCategory = str(domain?.category, 80);
+    if (!fallbackCategory || fallbackCategory === "Unknown" || fallbackCategory === "General") {
+      fallbackCategory = "Personal Development";
+      domain.category = fallbackCategory;
       domain.confidence = Math.max(Number(domain.confidence) || 0, 0.5);
     }
 
