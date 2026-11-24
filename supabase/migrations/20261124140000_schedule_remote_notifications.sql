@@ -109,7 +109,15 @@ SECURITY DEFINER
 SET search_path = ''
 AS $function$
 BEGIN
-  IF NOT NEW.enabled OR NOT NEW.sessions_enabled THEN
+  IF NOT NEW.enabled THEN
+    UPDATE public.vow_notification_queue
+       SET status = 'cancelled', updated_at = now()
+     WHERE user_id = NEW.user_id
+       AND status IN ('scheduled','processing');
+    RETURN NEW;
+  END IF;
+
+  IF NOT NEW.sessions_enabled THEN
     UPDATE public.vow_notification_queue
        SET status = 'cancelled', updated_at = now()
      WHERE user_id = NEW.user_id
