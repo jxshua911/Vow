@@ -179,7 +179,7 @@ DECLARE
 BEGIN
   -- Weekly review: Sunday at 18:00 in the user's own timezone.
   WITH eligible AS (
-    SELECT rp.user_id, COALESCE(NULLIF(us.timezone, ''), 'UTC') AS tz
+    SELECT rp.user_id, COALESCE(NULLIF(rp.timezone, ''), NULLIF(us.timezone, ''), 'UTC') AS tz, rp.quiet_start, rp.quiet_end
       FROM public.reminder_preferences rp
       JOIN public.user_settings us ON us.user_id = rp.user_id
      WHERE rp.enabled = true
@@ -187,7 +187,7 @@ BEGIN
        AND us.account_status = 'active'
        AND EXISTS (SELECT 1 FROM public.goals g WHERE g.user_id = rp.user_id AND g.status IN ('active','locked'))
   ), due AS (
-    SELECT user_id, tz, now() AT TIME ZONE tz AS local_now
+    SELECT user_id, tz, quiet_start, quiet_end, now() AT TIME ZONE tz AS local_now
       FROM eligible
   ), inserted AS (
     INSERT INTO public.vow_notification_queue (user_id, category, dedupe_key, scheduled_at, title, body, data)
@@ -200,6 +200,11 @@ BEGIN
     WHERE extract(dow FROM local_now) = 0
       AND local_now::time >= time '18:00'
       AND local_now::time < time '18:05'
+      AND NOT (quiet_start IS NOT NULL AND quiet_end IS NOT NULL AND
+        CASE WHEN quiet_start < quiet_end
+          THEN local_now::time >= quiet_start AND local_now::time < quiet_end
+          ELSE local_now::time >= quiet_start OR local_now::time < quiet_end
+        END)
     ON CONFLICT (dedupe_key) DO NOTHING
     RETURNING 1
   ) SELECT count(*) INTO affected FROM inserted;
@@ -207,14 +212,14 @@ BEGIN
 
   -- Goal deadlines: one reminder at 09:00 local time on the day before.
   WITH eligible AS (
-    SELECT rp.user_id, COALESCE(NULLIF(us.timezone, ''), 'UTC') AS tz
+    SELECT rp.user_id, COALESCE(NULLIF(rp.timezone, ''), NULLIF(us.timezone, ''), 'UTC') AS tz, rp.quiet_start, rp.quiet_end
       FROM public.reminder_preferences rp
       JOIN public.user_settings us ON us.user_id = rp.user_id
      WHERE rp.enabled = true
        AND rp.deadlines_enabled = true
        AND us.account_status = 'active'
   ), due AS (
-    SELECT user_id, tz, (now() AT TIME ZONE tz)::date AS local_date,
+    SELECT user_id, tz, quiet_start, quiet_end, (now() AT TIME ZONE tz)::date AS local_date,
            (now() AT TIME ZONE tz)::time AS local_time
       FROM eligible
   ), inserted AS (
@@ -227,6 +232,11 @@ BEGIN
     FROM due d
     JOIN public.goals g ON g.user_id = d.user_id
     WHERE d.local_time >= time '09:00' AND d.local_time < time '09:05'
+      AND NOT (d.quiet_start IS NOT NULL AND d.quiet_end IS NOT NULL AND
+        CASE WHEN d.quiet_start < d.quiet_end
+          THEN d.local_time >= d.quiet_start AND d.local_time < d.quiet_end
+          ELSE d.local_time >= d.quiet_start OR d.local_time < d.quiet_end
+        END)
       AND g.status IN ('active','locked')
       AND g.deadline = d.local_date + 1
     ON CONFLICT (dedupe_key) DO NOTHING
@@ -236,7 +246,7 @@ BEGIN
 
   -- Streak/progress nudge: Monday at 19:00 local, at most once per user/week.
   WITH eligible AS (
-    SELECT rp.user_id, COALESCE(NULLIF(us.timezone, ''), 'UTC') AS tz
+    SELECT rp.user_id, COALESCE(NULLIF(rp.timezone, ''), NULLIF(us.timezone, ''), 'UTC') AS tz, rp.quiet_start, rp.quiet_end
       FROM public.reminder_preferences rp
       JOIN public.user_settings us ON us.user_id = rp.user_id
      WHERE rp.enabled = true
@@ -262,6 +272,11 @@ BEGIN
     WHERE extract(dow FROM local_now) = 1
       AND local_now::time >= time '19:00'
       AND local_now::time < time '19:05'
+      AND NOT (quiet_start IS NOT NULL AND quiet_end IS NOT NULL AND
+        CASE WHEN quiet_start < quiet_end
+          THEN local_now::time >= quiet_start AND local_now::time < quiet_end
+          ELSE local_now::time >= quiet_start OR local_now::time < quiet_end
+        END)
     ON CONFLICT (dedupe_key) DO NOTHING
     RETURNING 1
   ) SELECT count(*) INTO affected FROM inserted;
