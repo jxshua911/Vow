@@ -60,15 +60,11 @@ Deno.serve(async (req) => {
         .eq("user_id", payload.user_id)
         .maybeSingle();
       if (preferencesError) throw new Error("Unable to verify notification preferences");
-      const preferenceColumn: Record<string, string> = {
-        session: "sessions_enabled",
-        weekly_review: "weekly_reviews_enabled",
-        deadline: "deadlines_enabled",
-        streak: "streaks_enabled",
-      };
-      const categoryEnabled = preferences && preferenceColumn[category]
-        ? preferences[preferenceColumn[category]] === true
-        : true;
+      let categoryEnabled = true;
+      if (category === "session") categoryEnabled = preferences?.sessions_enabled === true;
+      else if (category === "weekly_review") categoryEnabled = preferences?.weekly_reviews_enabled === true;
+      else if (category === "deadline") categoryEnabled = preferences?.deadlines_enabled === true;
+      else if (category === "streak") categoryEnabled = preferences?.streaks_enabled === true;
       if (preferences?.enabled !== true || !categoryEnabled) {
         return Response.json({ sent: 0, failed: 0, removed: 0, skipped: "notifications_disabled" });
       }
