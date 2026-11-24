@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       stripeResumed = true;
     } else if (settings?.account_status === "deleted" && entitlement?.provider === "google_play") {
       const { data: subscription, error: subscriptionError } = await admin.from("vow_subscription_records")
-        .select("auto_renewing,current_period_end,status").eq("user_id", user.id).eq("provider", "google_play")
+        .select("auto_renewing,current_period_end,status,provider_purchase_id").eq("user_id", user.id).eq("provider", "google_play")
         .order("current_period_end", { ascending: false }).limit(1).maybeSingle();
       if (subscriptionError) return json({ error: "GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED" }, 503);
       currentPeriodEnd = subscription?.current_period_end || null;
