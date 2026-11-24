@@ -176,3 +176,40 @@ The Samsung Galaxy S24 Ultra regression suite remains outstanding. Test login, g
 - Remaining: verify provider secrets/quotas, inspect real usage after telemetry is live, and test clarify/plan/repair flows against each configured provider.
 
 Important: 9/10 means implementation completeness on the remediation branch, not production deployment or release readiness. Migration reconciliation and end-to-end QA remain separate gates.
+
+
+## 24 November 2026 — fresh verification and final non-billing gates
+
+### Latest branch verification
+- The remediation PR head at the latest successful full run was `64090addddd7deea5b8159a7386edcbcfcf14840`.
+- Capacitor Mobile CI passed Edge Function typecheck, unit tests, ESLint, TypeScript typecheck and production web build: [run 45424184933](https://github.com/jxshua911/Vow/actions/runs/45424184933).
+- Android debug APK build and upload passed: [run 45424184955](https://github.com/jxshua911/Vow/actions/runs/45424184955). Artifact SHA-256: `099b62889f32d7cceac352bf12552f778f53164e5e3a3a6fe8dcdcd8ac560e62`.
+- A subsequent code review found that the new `purging` account state was not yet rejected by the restrictive `vow_account_is_active()` guard. The race-safety migration now replaces that function so only active accounts pass the guard. This follow-up is commit `0501a4d51af229be8eabd892079789eb9bef4d94`.
+- On that follow-up commit, TypeScript typecheck, lint, unit tests and production build passed. Android APK build was still running at the time of this update: [run 45429055107](https://github.com/jxshua911/Vow/actions/runs/45429055107).
+- The successful APK is a build artifact only. It has not been installed or exercised on the Samsung Galaxy S24 Ultra.
+
+### Fresh production-state check
+- Supabase project status is `ACTIVE_HEALTHY`.
+- Production migration history still ends at `20261119054150`; the `capacitor-mobile` development branch still reports `MIGRATIONS_FAILED`.
+- The deployed function inventory does not include `vow-dispatch-notifications` or `vow-account-restore`. Deployed `vow-send-push` is version 8 and `vow-goal-ai` is version 180; the remediation versions remain branch-only.
+- No new migration or Edge Function has been deployed, and no production customer data has been modified.
+
+### Security-advisor review
+- The 12 RLS-enabled/no-policy findings inspected include private/server-owned tables. For the seven public-schema tables checked, neither `anon` nor `authenticated` has direct SELECT privileges; `service_role` does. This is intentional isolation, not a reason to add permissive policies.
+- The six authenticated `SECURITY DEFINER` functions flagged by the advisor were inspected. Their ACLs deny `anon` execution and grant the intended authenticated RPC access; each uses `auth.uid()` or trusted app metadata for its user-specific operation. Keep them under review rather than blindly revoking required RPC access.
+- Leaked-password protection remains disabled and should be enabled after reviewing the Auth rollout.
+- `pg_net` and `http` are installed in `public`; do not move extensions without checking dependent functions and cron jobs.
+- The performance advisor reports 62 unused-index notices. These are informational; do not bulk-drop indexes before observing real workload.
+
+### Release gates — billing intentionally isolated
+The goal is to clear every non-billing gate before the public test rollout:
+1. Recover/reconcile the missing production migration and get the Supabase development branch healthy without destructive reset.
+2. Validate the complete migration sequence on a clean development database, including account lifecycle, notifications, market catalogue and AI token telemetry.
+3. Deploy the non-billing Edge Functions to the development environment only after the schema is validated; verify provider secrets, FCM credentials, Vault and cron configuration.
+4. Run end-to-end tests for goal creation/planning, weeks/months/years, sessions, weekly reviews, dashboard counts, calendar sync, account deletion/restoration/purge, support and notification preferences.
+5. Install the latest APK on the S24 Ultra and test fresh install, upgrade, sign-in, foreground/background/force-closed notifications, timezone/quiet hours, offline/reconnect and crash recovery.
+6. Resolve every reproducible P0/P1 defect and record the test evidence. Only then call non-billing systems release-ready.
+7. Keep Google Play Console country availability, local price points, merchant/tax readiness and license-tester purchase/restore/renewal/cancellation as the separate billing workstream.
+
+### Pilot-readiness principle
+Do not recruit testers into a broken build. Once the non-billing gates pass, start a small, controlled closed test with a known build number, a short task-based test script, a single feedback channel and a clear bug-report template. Public content and waitlist acquisition can proceed in parallel, but tester access should be granted only to the validated build.
