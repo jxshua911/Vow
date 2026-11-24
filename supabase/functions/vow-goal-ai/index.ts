@@ -809,6 +809,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
   const usageRecorder = async (provider: string, model: string, usage: any) => {
     const tokenValue = (...values: unknown[]) => {
       for (const value of values) {
+        if (value === null || value === undefined || value === "") continue;
         const parsed = Number(value);
         if (Number.isFinite(parsed) && parsed >= 0) return Math.trunc(parsed);
       }
