@@ -185,6 +185,21 @@ Deno.serve(async (req) => {
     if (recordLookupError) throw new Error("PURCHASE_LINK_LOOKUP_FAILED");
     if (!record?.user_id) throw new Error("PURCHASE_NOT_LINKED");
 
+    const storeRegionCode = typeof purchase.regionCode === "string" && /^[A-Z]{2}$/.test(purchase.regionCode.toUpperCase())
+      ? purchase.regionCode.toUpperCase()
+      : null;
+    let marketTier: string | null = null;
+    if (storeRegionCode) {
+      const { data: market, error: marketError } = await serviceClient
+        .from("vow_google_play_market_catalog")
+        .select("market_tier")
+        .eq("country_code", storeRegionCode)
+        .eq("is_enabled", true)
+        .maybeSingle();
+      if (marketError) throw new Error("GOOGLE_PLAY_MARKET_LOOKUP_FAILED");
+      marketTier = market?.market_tier ?? null;
+    }
+
     const { error: writeError } = await serviceClient.rpc("vow_set_subscription_record", {
       p_user_id: record.user_id,
       p_provider: "google_play",
@@ -198,6 +213,15 @@ Deno.serve(async (req) => {
       p_auto_renewing: lineItem.autoRenewingPlan?.autoRenewEnabled ?? null,
     });
     if (writeError) throw new Error("SUBSCRIPTION_STATE_WRITE_FAILED");
+
+    if (storeRegionCode) {
+      const { error: marketAssignmentError } = await serviceClient
+        .from("vow_subscription_records")
+        .update({ store_region_code: storeRegionCode, market_tier: marketTier })
+        .eq("provider", "google_play")
+        .eq("provider_purchase_id", purchaseToken);
+      if (marketAssignmentError) throw new Error("GOOGLE_PLAY_MARKET_ASSIGNMENT_FAILED");
+    }
 
     const previousStatus = String(record.status || "");
     if (status === "cancelled" && previousStatus !== "cancelled") {
