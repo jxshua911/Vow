@@ -56,11 +56,20 @@ Deno.serve(async (req) => {
     if (!["account", "security", "subscription"].includes(category)) {
       const { data: preferences, error: preferencesError } = await supabaseAdmin
         .from("reminder_preferences")
-        .select("enabled")
+        .select("enabled,sessions_enabled,weekly_reviews_enabled,deadlines_enabled,streaks_enabled")
         .eq("user_id", payload.user_id)
         .maybeSingle();
       if (preferencesError) throw new Error("Unable to verify notification preferences");
-      if (preferences?.enabled !== true) {
+      const preferenceColumn: Record<string, string> = {
+        session: "sessions_enabled",
+        weekly_review: "weekly_reviews_enabled",
+        deadline: "deadlines_enabled",
+        streak: "streaks_enabled",
+      };
+      const categoryEnabled = preferences && preferenceColumn[category]
+        ? preferences[preferenceColumn[category]] === true
+        : true;
+      if (preferences?.enabled !== true || !categoryEnabled) {
         return Response.json({ sent: 0, failed: 0, removed: 0, skipped: "notifications_disabled" });
       }
     }
