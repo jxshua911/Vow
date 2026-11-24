@@ -109,7 +109,7 @@ The branch adds canonical week/month/year duration tokens and tests legacy week 
 
 ## 6. Build and QA
 
-PR #18 is open and draft, based on `capacitor-mobile`. Its latest audited head is `a0c60b0`. On commit `1d54e9160fa4ea190679700e876697b47a8e70de`, the completed Capacitor Mobile CI run passed Edge Function typecheck, unit tests, ESLint, TypeScript typecheck and production build. The separate Android debug APK build is still in progress. No APK has been installed or tested on a physical device.
+PR #18 is open and draft, based on `capacitor-mobile`. Current PR head: `32664a9b99f94f4da9d4091f30837161634af621`. On that head, Capacitor Mobile CI passed Edge Function typecheck, unit tests, ESLint, TypeScript typecheck and production build (runs [45423875921](https://github.com/jxshua911/Vow/actions/runs/45423875921) and [45423860638](https://github.com/jxshua911/Vow/actions/runs/45423860638)). The separate Android debug APK build is still in progress in [CI run 45423875878](https://github.com/jxshua911/Vow/actions/runs/45423875878). No APK has been installed or tested on a physical device.
 
 The Samsung Galaxy S24 Ultra regression suite remains outstanding. Test login, goal creation and duration changes, session scheduling, local and remote notifications, calendar permissions/sync, account deletion/restoration, Premium, offline/reconnect and crash recovery.
 
