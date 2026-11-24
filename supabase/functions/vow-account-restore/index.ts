@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
 
     let stripeResumed = false;
     let resubscribeRequired = false;
+    let billingStatusUnverified = false;
     let currentPeriodEnd: string | null = null;
 
     if (settings?.account_status === "deleted" && entitlement?.provider === "stripe"
@@ -99,11 +100,14 @@ Deno.serve(async (req) => {
         const endpoint = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/"
           + encodeURIComponent(packageName) + "/purchases/subscriptionsv2/tokens/" + encodeURIComponent(purchaseToken);
         const googleResponse = await fetch(endpoint, { headers: { Authorization: `Bearer ${accessToken}` } });
-        if (!googleResponse.ok) return json({ error: "GOOGLE_PLAY_SUBSCRIPTION_CHECK_FAILED" }, 503);
-        const purchase = await googleResponse.json();
-        const lineItem = Array.isArray(purchase.lineItems) ? purchase.lineItems[0] : null;
-        autoRenewing = lineItem?.autoRenewingPlan?.autoRenewEnabled ?? autoRenewing;
-        currentPeriodEnd = lineItem?.expiryTime || currentPeriodEnd;
+        if (!googleResponse.ok) {
+          billingStatusUnverified = true;
+        } else {
+          const purchase = await googleResponse.json();
+          const lineItem = Array.isArray(purchase.lineItems) ? purchase.lineItems[0] : null;
+          autoRenewing = lineItem?.autoRenewingPlan?.autoRenewEnabled ?? autoRenewing;
+          currentPeriodEnd = lineItem?.expiryTime || currentPeriodEnd;
+        }
       }
       resubscribeRequired = autoRenewing === false
         && Boolean(currentPeriodEnd && new Date(currentPeriodEnd).getTime() > Date.now());
@@ -129,6 +133,7 @@ Deno.serve(async (req) => {
       status: restored.status,
       provider: entitlement?.provider || null,
       resubscribe_required: resubscribeRequired,
+      billing_status_unverified: billingStatusUnverified,
       current_period_end: currentPeriodEnd,
     });
   } catch (error) {
