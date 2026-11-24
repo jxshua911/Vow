@@ -160,8 +160,10 @@ Deno.serve(async (req) => {
 
     const expiry = lineItem.expiryTime ? new Date(lineItem.expiryTime) : null;
     const active = activeStates.has(state) && (!expiry || expiry.getTime() > Date.now());
+    const cancelledPaid = state === "SUBSCRIPTION_STATE_CANCELED" && Boolean(expiry && expiry.getTime() > Date.now());
     const status = active
       ? (state === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD" ? "grace" : "active")
+      : cancelledPaid ? "cancelled"
       : pendingStates.has(state) ? "pending" : "expired";
 
     const serviceClient = createClient(
@@ -264,7 +266,7 @@ Deno.serve(async (req) => {
 
     return json(200, {
       ok: true,
-      plan: active ? "premium" : "free",
+      plan: active || cancelledPaid ? "premium" : "free",
       status,
       currentPeriodEnd: lineItem.expiryTime ?? null,
       restored: Boolean(existing),
