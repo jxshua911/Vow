@@ -50,7 +50,7 @@ Benchmarked Todoist, TickTick, Notion, Structured, Habitify, Sunsama and Motion 
 - The deployed `vow-dispatch-notifications` Edge Function does not exist.
 - Deployed `vow-send-push` is version 8. Its live code does not enforce account status or per-category reminder flags.
 - The remediation branch has a newer sender with account-status and category checks, plus a dispatcher and migration-backed queue, but these are not deployed.
-- The production app currently exposes only one global “Enable notifications” switch. I have now added four category controls (sessions, weekly reviews, deadlines and streaks) to the remediation branch and wired them to the migration's server-side preference fields; this code is awaiting CI verification.
+- The production app currently exposes only one global “Enable notifications” switch. I have now added four category controls (sessions, weekly reviews, deadlines and streaks) to the remediation branch and wired them to the migration's server-side preference fields; this code passed the completed Capacitor Mobile CI run on commit `1d54e9160fa4ea190679700e876697b47a8e70de` (Edge Function typecheck, unit tests, ESLint, TypeScript typecheck and production build). The separate Android debug APK build is still in progress.
 - The live Vault contains only the existing account-purge cron secret; the notification-dispatch secret has not been created because its migration is not applied.
 - The live database migration history ends at `20261119054150`; the three 24 November remediation migrations are not applied.
 - No end-to-end FCM delivery or Samsung S24 Ultra notification test has been completed.
@@ -109,7 +109,7 @@ The branch adds canonical week/month/year duration tokens and tests legacy week 
 
 ## 6. Build and QA
 
-PR #18 is open and draft, based on `capacitor-mobile`. Its latest audited head is `a0c60b0`. The PR record reports that unit tests, ESLint, TypeScript typecheck, production build, Edge Function typecheck and Android debug APK build passed on that commit. The APK was not installed or tested on a physical device.
+PR #18 is open and draft, based on `capacitor-mobile`. Its latest audited head is `a0c60b0`. On commit `1d54e9160fa4ea190679700e876697b47a8e70de`, the completed Capacitor Mobile CI run passed Edge Function typecheck, unit tests, ESLint, TypeScript typecheck and production build. The separate Android debug APK build is still in progress. No APK has been installed or tested on a physical device.
 
 The Samsung Galaxy S24 Ultra regression suite remains outstanding. Test login, goal creation and duration changes, session scheduling, local and remote notifications, calendar permissions/sync, account deletion/restoration, Premium, offline/reconnect and crash recovery.
 
