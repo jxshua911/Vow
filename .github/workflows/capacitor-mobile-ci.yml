@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - capacitor-mobile
+      - vow/remediation-nov-2026
   pull_request:
     branches:
       - capacitor-mobile
