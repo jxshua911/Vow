@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
 
     const { data: existing } = await serviceClient
       .from("vow_subscription_records")
-      .select("id, user_id, status")
+      .select("id, user_id, status, current_period_end")
       .eq("provider", "google_play")
       .eq("provider_purchase_id", purchaseToken)
       .maybeSingle();
@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
     const purchaseDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(purchaseToken));
     const purchaseEventId = `gplay_${Array.from(new Uint8Array(purchaseDigest)).map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     const premiumEmailEventKey = `premium-email:google_play:${purchaseEventId}`;
-    const wasPremiumActive = existing?.status === "active" || existing?.status === "grace";
+    const wasPremiumActive = existing?.status === "active" || existing?.status === "grace"\n      || (existing?.status === "cancelled" && Boolean(existing.current_period_end && new Date(existing.current_period_end).getTime() > Date.now()));
     if (active && !wasPremiumActive) {
       const { error: emailEventInsertError } = await serviceClient.from("vow_payment_events").insert({
         user_id: user.id,
