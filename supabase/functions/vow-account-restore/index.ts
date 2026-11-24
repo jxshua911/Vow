@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
       .select("account_status,deletion_expires_at").eq("user_id", user.id).maybeSingle();
     if (settingsError) return json({ error: "ACCOUNT_STATE_LOOKUP_FAILED" }, 503);
 
+    if (settings?.account_status === "purging") return json({ status: "purging" }, 200);
     if (settings?.account_status === "deleted") {
       const expiresAt = settings.deletion_expires_at ? new Date(settings.deletion_expires_at).getTime() : 0;
       if (!expiresAt || expiresAt <= Date.now()) return json({ status: "expired" }, 200);
