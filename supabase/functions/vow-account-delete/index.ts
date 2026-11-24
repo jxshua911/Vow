@@ -79,6 +79,7 @@ Deno.serve(async(req)=>{
   const {data:existingSettings,error:settingsReadError}=await admin.from("user_settings")
     .select("user_id,account_status,deleted_at,deletion_expires_at").eq("user_id",user.id).maybeSingle();
   if(settingsReadError)return json({error:"ACCOUNT_STATE_READ_FAILED"},500);
+  if(existingSettings?.account_status==="purging")return json({error:"ACCOUNT_PURGE_ALREADY_STARTED"},409);
   const priorDeletedAt=Date.parse(String(existingSettings?.deleted_at||""));
   const priorDeletionExpiresAt=Date.parse(String(existingSettings?.deletion_expires_at||""));
   const existingDeletionIsValid=existingSettings?.account_status==="deleted"
