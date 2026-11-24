@@ -12,7 +12,7 @@ const premiumBenefits = [
   'Unlimited active goals',
   'Unlimited planning actions',
   'Unlimited adaptive plan rebuilding',
-  'Deeper AI coaching and planning',
+  'More detailed, goal-specific AI plans',
   'Goal-specific planning methodology',
   'Advanced weekly review insights',
   'Full plan history',
