@@ -116,9 +116,11 @@ Deno.serve(async (req) => {
           throw new Error("SUBSCRIPTION_PRICE_METADATA_MISSING");
         }
 
-        const stripeStatus = event.type === "customer.subscription.deleted"
-          ? "cancelled"
-          : String(object?.status ?? "");
+        const stripeStatus = String(object?.status ?? "");
+        const currentPeriodEndSeconds = Number(object?.current_period_end || 0);
+        const endedAtSeconds = Number(object?.ended_at || 0);
+        const endedAtPaidPeriodEnd = currentPeriodEndSeconds > 0
+          && endedAtSeconds >= currentPeriodEndSeconds;
         const status = stripeStatus === "active" || stripeStatus === "trialing"
           ? "active"
           : stripeStatus === "past_due"
@@ -127,7 +129,9 @@ Deno.serve(async (req) => {
               ? "paused"
               : stripeStatus === "incomplete"
                 ? "pending"
-                : "expired";
+                : event.type === "customer.subscription.deleted" && endedAtPaidPeriodEnd
+                  ? "cancelled"
+                  : "expired";
 
         const { data: previousSubscription, error: previousSubscriptionError } = await db
           .from("vow_subscription_records")
@@ -191,7 +195,7 @@ Deno.serve(async (req) => {
             ? new Date(Number(object.current_period_end) * 1000).toLocaleDateString("en-US")
             : "the end of your paid period";
           await sendSubscriptionPush(userId, String(event.id), "Premium renewal stopped", `Your Premium subscription will not renew. Access remains active until ${endDate}.`);
-        } else if (status === "cancelled" && previousSubscription?.status !== "cancelled") {
+        } else if (status === "expired" && event.type === "customer.subscription.deleted" && previousSubscription?.status !== "expired") {
           await sendSubscriptionPush(userId, String(event.id), "VOW Premium has ended", "Your Premium subscription has ended. You can resubscribe at any time.");
         }
       }
