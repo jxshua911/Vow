@@ -170,4 +170,31 @@ GRANT EXECUTE ON FUNCTION public.vow_restore_account() TO authenticated;
 REVOKE ALL ON FUNCTION public.vow_restore_or_purge_account() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.vow_restore_or_purge_account() TO authenticated, service_role;
 
+
+-- A purge claim moves an account from deleted to purging. The restrictive
+-- account guard must reject both states, otherwise an existing JWT can still
+-- access user-scoped rows while the purge worker is deleting them.
+CREATE OR REPLACE FUNCTION public.vow_account_is_active()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+      FROM auth.users u
+     WHERE u.id = auth.uid()
+       AND NOT EXISTS (
+         SELECT 1
+           FROM public.user_settings s
+          WHERE s.user_id = u.id
+            AND s.account_status <> 'active'
+       )
+  );
+$function$;
+
+REVOKE ALL ON FUNCTION public.vow_account_is_active() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.vow_account_is_active() TO authenticated;
+
 COMMIT;
