@@ -1,0 +1,96 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Content-Type": "application/json",
+};
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: cors });
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
+  const authorization = req.headers.get("Authorization") || "";
+  if (!authorization.startsWith("Bearer ")) return json({ error: "AUTH_REQUIRED" }, 401);
+
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    if (!anonKey || !serviceKey) return json({ error: "SERVER_CONFIGURATION_ERROR" }, 503);
+
+    const userClient = createClient(url, anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    if (authError || !user) return json({ error: "AUTH_REQUIRED" }, 401);
+
+    const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: settings, error: settingsError } = await admin.from("user_settings")
+      .select("account_status,deletion_expires_at").eq("user_id", user.id).maybeSingle();
+    if (settingsError) return json({ error: "ACCOUNT_STATE_LOOKUP_FAILED" }, 503);
+
+    if (settings?.account_status === "deleted") {
+      const expiresAt = settings.deletion_expires_at ? new Date(settings.deletion_expires_at).getTime() : 0;
+      if (!expiresAt || expiresAt <= Date.now()) return json({ status: "expired" }, 200);
+    }
+
+    const { data: entitlement, error: entitlementError } = await admin.from("vow_user_entitlements")
+      .select("provider,stripe_subscription_id,status").eq("user_id", user.id).maybeSingle();
+    if (entitlementError) return json({ error: "BILLING_LOOKUP_FAILED" }, 503);
+
+    let stripeResumed = false;
+    let resubscribeRequired = false;
+    let currentPeriodEnd: string | null = null;
+
+    if (settings?.account_status === "deleted" && entitlement?.provider === "stripe"
+      && entitlement.stripe_subscription_id && ["active", "grace"].includes(String(entitlement.status))) {
+      const secret = Deno.env.get("STRIPE_SECRET_KEY") || "";
+      if (!secret) return json({ error: "STRIPE_RESTORATION_NOT_CONFIGURED" }, 503);
+      const response = await fetch("https://api.stripe.com/v1/subscriptions/" + encodeURIComponent(entitlement.stripe_subscription_id), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ cancel_at_period_end: "false" }),
+      });
+      if (!response.ok) return json({ error: "STRIPE_RESTORATION_FAILED" }, 503);
+      stripeResumed = true;
+    } else if (settings?.account_status === "deleted" && entitlement?.provider === "google_play") {
+      const { data: subscription, error: subscriptionError } = await admin.from("vow_subscription_records")
+        .select("auto_renewing,current_period_end,status").eq("user_id", user.id).eq("provider", "google_play")
+        .order("current_period_end", { ascending: false }).limit(1).maybeSingle();
+      if (subscriptionError) return json({ error: "GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED" }, 503);
+      currentPeriodEnd = subscription?.current_period_end || null;
+      resubscribeRequired = subscription?.auto_renewing === false
+        && Boolean(currentPeriodEnd && new Date(currentPeriodEnd).getTime() > Date.now());
+    }
+
+    const { data: restored, error: restoreError } = await userClient.rpc("vow_restore_account");
+    if (restoreError || !["restored", "active"].includes(String(restored?.status))) {
+      if (stripeResumed && entitlement?.stripe_subscription_id) {
+        const secret = Deno.env.get("STRIPE_SECRET_KEY") || "";
+        if (secret) {
+          await fetch("https://api.stripe.com/v1/subscriptions/" + encodeURIComponent(entitlement.stripe_subscription_id), {
+            method: "POST",
+            headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ cancel_at_period_end: "true" }),
+          }).catch(() => undefined);
+        }
+      }
+      if (restoreError) return json({ error: "ACCOUNT_RESTORATION_FAILED" }, 503);
+      return json({ status: String(restored?.status || "expired") });
+    }
+
+    return json({
+      status: restored.status,
+      provider: entitlement?.provider || null,
+      resubscribe_required: resubscribeRequired,
+      current_period_end: currentPeriodEnd,
+    });
+  } catch (error) {
+    console.error("[VOW] Account restoration failed:", error instanceof Error ? error.message : "UNKNOWN_ERROR");
+    return json({ error: "ACCOUNT_RESTORATION_FAILED" }, 503);
+  }
+});
