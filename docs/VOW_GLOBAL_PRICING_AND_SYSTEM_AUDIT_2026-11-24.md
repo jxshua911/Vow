@@ -60,6 +60,7 @@ Benchmarked Todoist, TickTick, Notion, Structured, Habitify, Sunsama and Motion 
 - Session and periodic notification generation currently drops a reminder when its fire time falls inside quiet hours. It does not defer the reminder to the next allowed time. Decide whether the intended policy is “skip” or “reschedule”; if reschedule, implement and test it.
 - Per-category preference columns are created by the un-applied migration, but the app settings UI does not yet let users control them.
 - Account/security/subscription messages are intentionally treated as critical by the branch sender and bypass routine reminder preferences. Keep these separate from optional routine reminders and explain this in settings.
+- The dispatcher currently marks a queue item as sent when at least one device succeeds, even if another registered device fails. A robust multi-device retry needs per-device delivery state; simply retrying the whole notification would duplicate it on devices that already received it.
 - The dispatcher cron, Vault secret, sender internal secret and Firebase credentials must be verified in a development environment before production deployment.
 
 **Status:** local reminders exist; remote queue/scheduler implementation is branch-only; remote delivery is not release-ready.
