@@ -145,7 +145,7 @@ The Samsung Galaxy S24 Ultra regression suite remains outstanding. Test login, g
 - Added a Google Play market catalogue migration for 49 proposed markets and added server-side subscription fields for verified store region and mapped tier.
 - Purchase verification and RTDN now read Google's verified `regionCode`, map it through the catalogue, and persist the country/tier on the subscription record. This is not deployed to production until migration drift is resolved.
 - Google Play remains the source of truth for the local amount charged. The app displays the localized product price returned by Google Play; exact country prices and availability still need Play Console configuration.
-- The standalone `GoalAI` component was not imported by any active screen. It has been removed, and the `vow-goal-ai` endpoint no longer accepts the standalone chat mode.
+- The standalone `GoalAI` component was active on the goal-detail screen. I removed its import and UI section from Goals, deleted the component, and disabled the backend chat mode so the separate assistant can no longer consume planning tokens.
 - Removed an extra AI model call that was used only to classify a goal when the client supplied an unknown category. The planner now uses supplied deterministic domain evidence or a neutral fallback, then spends its model call on clarification or actual plan generation.
 - The two-step goal flow remains intentional: clarification questions (when needed) followed by the actual plan. It is not a second free-form AI chat.
 - Mistral remains the default primary provider, followed by configured provider fallbacks. Added a private per-provider usage ledger and RPC for provider, model, request kind and prompt/completion/total token counts. This migration must be deployed before telemetry appears in production. The separate chat route and unused chat component have been removed, and an extra classification-only model call has been eliminated.
@@ -169,7 +169,7 @@ The Samsung Galaxy S24 Ultra regression suite remains outstanding. Test login, g
 - Remaining: configure country availability and exact local prices in Play Console, complete merchant/tax setup and test purchases/restores with license testers.
 
 ### AI — cost and reliability remediation
-- Removed the unused standalone GoalAI component and disabled the backend chat mode.
+- Removed the active standalone GoalAI assistant from the goal-detail screen, deleted its component, and disabled the backend chat mode.
 - Removed the extra classification-only model call; the goal planner uses supplied domain evidence or a deterministic fallback.
 - Mistral remains primary with configured fallbacks; plan quality validation and one bounded repair remain.
 - Added per-provider token telemetry (provider/model/request kind/token counts). The new migration must be deployed before it becomes visible in production.
