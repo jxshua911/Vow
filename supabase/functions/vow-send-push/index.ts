@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
     const accessToken = await createGoogleAccessToken(serviceAccount);
     const results = await Promise.all((devices ?? []).map(async (device) => {
       const delivery = queueId ? deliveryByDevice.get(device.id) : null;
+      if (queueId && !delivery) throw new Error("Per-device notification delivery record is missing");
       if (queueId && delivery?.status === "sent") return { id: device.id, ok: true, remove: false, skipped: true };
       const nextAttempts = (delivery?.attempts ?? 0) + 1;
       if (queueId && delivery) {
