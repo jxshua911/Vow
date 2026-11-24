@@ -3,6 +3,12 @@ BEGIN;
 ALTER TABLE public.user_settings
   ADD COLUMN IF NOT EXISTS purge_started_at timestamptz;
 
+ALTER TABLE public.user_settings
+  DROP CONSTRAINT IF EXISTS user_settings_account_status_check;
+ALTER TABLE public.user_settings
+  ADD CONSTRAINT user_settings_account_status_check
+  CHECK (account_status IN ('active','deleted','purging'));
+
 -- Claiming a purge is atomic with account restoration. Once a row is marked
 -- purging, a concurrent restore cannot reopen an account while its data is
 -- being removed. A stale claim can be retried after 30 minutes.
