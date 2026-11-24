@@ -20,7 +20,7 @@ AS $function$
         AND e.status IN ('active', 'trialing') THEN 'active'
       WHEN e.provider IN ('google_play', 'apple', 'stripe')
         AND e.plan = 'premium'
-        AND e.status IN ('active', 'trialing', 'cancelled')
+        AND e.status IN ('active', 'trialing')
         AND e.current_period_end IS NOT NULL
         AND e.current_period_end > now() THEN 'active'
       WHEN e.provider IN ('google_play', 'apple', 'stripe')
@@ -58,6 +58,7 @@ DECLARE
   v_id uuid;
   v_grace_until timestamptz;
   v_entitled boolean;
+  v_plan_premium boolean;
 BEGIN
   IF p_user_id IS NULL
      OR p_provider NOT IN ('google_play','apple','stripe','manual')
@@ -75,6 +76,13 @@ BEGIN
   END;
 
   -- Cancellation preserves access only for a still-paid billing period.
+  v_plan_premium := p_status IN ('active','grace')
+    OR (
+      p_status = 'cancelled'
+      AND p_current_period_end IS NOT NULL
+      AND p_current_period_end > now()
+    );
+
   v_entitled := (
     p_status = 'active'
     AND (p_current_period_end IS NULL OR p_current_period_end > now())
@@ -146,7 +154,7 @@ BEGIN
   )
   VALUES (
     p_user_id,
-    CASE WHEN v_entitled THEN 'premium' ELSE 'free' END,
+    CASE WHEN v_plan_premium THEN 'premium' ELSE 'free' END,
     CASE WHEN v_entitled THEN 'active' ELSE 'inactive' END,
     p_provider,
     p_current_period_end,
