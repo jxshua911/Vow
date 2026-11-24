@@ -147,8 +147,10 @@ Deno.serve(async (req) => {
     const activeStates = new Set(["SUBSCRIPTION_STATE_ACTIVE", "SUBSCRIPTION_STATE_IN_GRACE_PERIOD"]);
     const pendingStates = new Set(["SUBSCRIPTION_STATE_PENDING", "SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED"]);
     const active = activeStates.has(state) && (!expiry || expiry.getTime() > Date.now());
+    const cancelledPaid = state === "SUBSCRIPTION_STATE_CANCELED" && Boolean(expiry && expiry.getTime() > Date.now());
     const status = active
       ? (state === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD" ? "grace" : "active")
+      : cancelledPaid ? "cancelled"
       : pendingStates.has(state) ? "pending" : "expired";
 
     const { data: record } = await serviceClient
