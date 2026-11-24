@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { track } from '@/lib/telemetry';
 import { getEntitlementSnapshot, subscribeToEntitlementChanges } from '@/lib/entitlements';
 import { AuthPage } from '@/components/AuthPage';
+import { AccountDeletionPendingPage } from '@/components/AccountDeletionPending';
 import { Onboarding } from '@/components/Onboarding';
 import { TermsAcceptance, VOW_TERMS_VERSION } from '@/components/TermsAcceptance';
 import { AppShell, type View } from '@/components/AppShell';
@@ -22,12 +23,52 @@ import { LegalPage } from '@/components/Legal';
 import { SupportPage } from '@/components/Support';
 import { UpgradePage } from '@/components/Upgrade';
 import { NativeCalendarSync } from '@/components/NativeCalendarSync';
-import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, requestNotificationPermission, setNotificationPreferences, isRemotePushConfigured, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
+import { cancelAllVowNotifications, clearCloudPushRegistration, getNotificationPermission, isRemotePushConfigured, setupCloudPushActionListener, setupCloudPushNotifications, syncUserUpcomingSessionNotifications, setNotificationUser } from '@/lib/notifications';
 import type { UserSettings } from '@/types/database';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LanguageContext } from '@/lib/i18n';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { VOW_BUILD_TIER } from '@/lib/buildTier';
+
+const LAST_AUTH_USER_KEY = 'vow:last-auth-user-id';
+
+function clearUserLocalData(userId: string, clearIdentity = false): void {
+  if (typeof window === 'undefined' || !userId) return;
+  const userPrefixes = [
+    `vow:offline-settings:${userId}`,
+    `vow:offline-goals:${userId}`,
+    `vow:offline-goal-detail:${userId}:`,
+    `vow:offline-milestones:${userId}:`,
+    `vow:offline-sessions:${userId}:`,
+    `vow:goal-planner-draft:${userId}`,
+    `vow:calendar-events:${userId}`,
+    `vow:last-known-entitlement:${userId}`,
+    `vow:notification-preferences:${userId}`,
+    `vow:demo-mode:${userId}`,
+    `vow:terms-accepted:${userId}:`,
+  ];
+  const accountWideKeys = new Set([
+    'vow:connections',
+    'vow:native-calendar-sync',
+    'vow:google-calendar-oauth-result',
+    'vow:icon-colour',
+    'vow:fcm-token',
+    'vow:calendar-events',
+  ]);
+  try {
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (!key) continue;
+      if (accountWideKeys.has(key) || key.startsWith('vow:native-calendar-session:')
+        || userPrefixes.some((prefix) => key.startsWith(prefix))) {
+        window.localStorage.removeItem(key);
+      }
+    }
+    if (clearIdentity) window.localStorage.removeItem(LAST_AUTH_USER_KEY);
+  } catch (error) {
+    console.warn('[VOW] Local account data cleanup could not complete:', error);
+  }
+}
 
 const SPLASH_MIN_MS = 1400;
 const SPLASH_FADE_OUT_MS = 420;
@@ -38,10 +79,14 @@ function AppContent() {
   const { session, loading } = useAuth();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [accountSuspended, setAccountSuspended] = useState(false);
+  const [accountDeletionPending, setAccountDeletionPending] = useState(false);
+  const [deletionExpiresAt, setDeletionExpiresAt] = useState<string | null>(null);
+  const [accountRestoreNotice, setAccountRestoreNotice] = useState<string | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
   const accountStateReady = useRef(false);
+  const lastKnownUserId = useRef<string | null>(null);
   const [viewHistory, setViewHistory] = useState<View[]>(['dashboard']);
   const viewHistoryRef = useRef<View[]>(['dashboard']);
   const [splashMounted, setSplashMounted] = useState(true);
@@ -130,9 +175,20 @@ function AppContent() {
 
   useEffect(() => {
     let cancelled = false;
+    if (session?.user.id) {
+      lastKnownUserId.current = session.user.id;
+      try { localStorage.setItem(LAST_AUTH_USER_KEY, session.user.id); } catch { /* best-effort local identity marker */ }
+    } else if (!loading) {
+      let previousUserId = lastKnownUserId.current;
+      try { previousUserId = previousUserId || localStorage.getItem(LAST_AUTH_USER_KEY); } catch { /* storage may be unavailable */ }
+      if (previousUserId) clearUserLocalData(previousUserId, true);
+      lastKnownUserId.current = null;
+    }
     if (!session) {
       accountStateReady.current = false;
       setSettings(null);
+      setAccountDeletionPending(false);
+      setDeletionExpiresAt(null);
       setSettingsLoading(false);
       setTermsAccepted(false);
       setTermsLoading(false);
@@ -151,16 +207,19 @@ function AppContent() {
             await supabase.auth.signOut({ scope: 'local' });
             return;
           }
-        } else if (accountState?.status === 'purge_required') {
-          const { data: purgeResult, error: purgeError } = await supabase.functions.invoke('vow-account-purge-expired', { body: {} });
-          if (purgeError || !['purged', 'already_purged'].includes(String(purgeResult?.status))) {
-            console.warn('[VOW] Expired account cleanup could not finish; signing out until cleanup can be retried.');
-            await supabase.auth.signOut({ scope: 'local' });
-            return;
-          }
-          await supabase.auth.signOut({ scope: 'local' });
+        } else if (accountState?.status === 'deletion_pending') {
+          setAccountDeletionPending(true);
+          setDeletionExpiresAt(typeof accountState.deletion_expires_at === 'string' ? accountState.deletion_expires_at : null);
+          accountStateReady.current = false;
+          // A deletion requested from the website must also silence this
+          // device and remove its local push registration immediately.
+          await cancelAllVowNotifications();
+          await clearCloudPushRegistration();
+          clearUserLocalData(session.user.id);
           return;
-        } else if (accountState?.status === 'purged') {
+        } else if (accountState?.status === 'purge_pending' || accountState?.status === 'purge_required' || accountState?.status === 'purged') {
+          // The scheduled server-side purge owns permanent deletion. The client
+          // must not try to purge through a user JWT or restore an expired account.
           await supabase.auth.signOut({ scope: 'local' });
           return;
         }
@@ -213,7 +272,7 @@ function AppContent() {
       }
     })();
     return () => { cancelled = true; };
-  }, [session]);
+  }, [session, loading]);
 
   useEffect(() => {
     if (!session) return;
@@ -276,33 +335,8 @@ function AppContent() {
   }, [session]);
 
   useEffect(() => {
-    if (!session || !termsAccepted || !Capacitor.isNativePlatform()) return;
-    const promptKey = `vow:notification-permission-prompted:${session.user.id}`;
-    try {
-      if (localStorage.getItem(promptKey) === 'true') return;
-    } catch {
-      // Continue; the OS permission state remains authoritative.
-    }
-
-    void requestNotificationPermission()
-      .then(async (permission) => {
-        // The first-run OS prompt is also the user's choice to enable VOW
-        // reminders. Keep the in-app preference aligned on that first grant;
-        // later manual opt-outs are respected because this prompt runs once.
-        if (permission === 'granted') {
-          try {
-            await setNotificationPreferences({ enabled: true });
-          } catch (preferenceError) {
-            console.warn('[VOW] Notification permission was granted, but the reminder preference could not be enabled:', preferenceError);
-          }
-        }
-        try { localStorage.setItem(promptKey, 'true'); } catch { /* ignore */ }
-      })
-      .catch((err) => {
-        console.warn('[VOW] Notification permission request failed:', err);
-        try { localStorage.setItem(promptKey, 'true'); } catch { /* ignore */ }
-      });
-  }, [session, termsAccepted]);
+    setNotificationUser(session?.user.id ?? null);
+  }, [session?.user.id]);
 
   useEffect(() => {
     if (!session || !termsAccepted) return;
@@ -344,6 +378,40 @@ function AppContent() {
     return () => { listener.then((handle) => handle.remove()); };
   }, [session, termsAccepted]);
 
+  async function handleRestoreAccount() {
+    const { data, error } = await supabase.functions.invoke('vow-account-restore', { body: {} });
+    if (error) throw error;
+    if (data?.status === 'purging') {
+      throw new Error('Permanent account deletion has already started, so VOW can no longer restore this account.');
+    }
+    if (!['restored', 'active'].includes(String(data?.status))) {
+      throw new Error('The restoration window has expired. VOW can no longer restore this account.');
+    }
+    const [settingsResult, termsResult] = await Promise.all([
+      supabase.from('user_settings').select('*').eq('user_id', session!.user.id).maybeSingle(),
+      supabase.from('vow_terms_acceptances').select('id').eq('user_id', session!.user.id).eq('terms_version', VOW_TERMS_VERSION).maybeSingle(),
+    ]);
+    if (settingsResult.error) throw settingsResult.error;
+    if (termsResult.error) throw termsResult.error;
+    setSettings(settingsResult.data as UserSettings | null);
+    setTermsAccepted(Boolean(termsResult.data));
+    setAccountDeletionPending(false);
+    setDeletionExpiresAt(null);
+    accountStateReady.current = true;
+    if (data?.resubscribe_required === true || data?.billing_status_unverified === true) {
+      const endDate = data.current_period_end ? new Date(data.current_period_end).toLocaleDateString() : null;
+      setAccountRestoreNotice(
+        data?.billing_status_unverified === true
+          ? 'We could not verify your Google Play renewal status. Your existing paid access may remain available'
+            + (endDate ? ` until ${endDate}` : ' for the remainder of your paid period')
+            + '. Check Google Play under Payments & subscriptions. If auto-renew is off, resubscribe to VOW there.'
+          : 'Your Google Play Premium access remains available'
+            + (endDate ? ` until ${endDate}` : ' for the remainder of your paid period')
+            + ', but the subscription will not renew. To continue Premium after that, resubscribe to VOW in Google Play under Payments & subscriptions.'
+      );
+    }
+  }
+
   async function handleOnboardingComplete() {
     if (!session) return;
     setSettingsLoading(true);
@@ -358,6 +426,7 @@ function AppContent() {
   let content: React.ReactNode;
   if (loading || (session && (settingsLoading || termsLoading))) content = <AppLoading />;
   else if (!session) content = <AuthPage suspended={accountSuspended} onSuspensionDismiss={() => setAccountSuspended(false)} />;
+  else if (accountDeletionPending) content = <AccountDeletionPendingPage expiresAt={deletionExpiresAt} onRestore={handleRestoreAccount} onSignOut={async () => { const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; }} />;
   else content = (
     <ProtectedRoute fallback={<AuthPage suspended={accountSuspended} onSuspensionDismiss={() => setAccountSuspended(false)} />}>
       {!termsAccepted ? (
@@ -380,7 +449,18 @@ function AppContent() {
       )}
     </ProtectedRoute>
   );
-  return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</LanguageContext.Provider>;
+  return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}>
+    {content}
+    {accountRestoreNotice && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-5 py-8" role="presentation">
+      <section role="dialog" aria-modal="true" aria-labelledby="restore-notice-title" className="w-full max-w-md border border-vow-border bg-vow-bg p-6 text-vow-ink shadow-xl">
+        <p className="vow-label mb-3">Billing update</p>
+        <h2 id="restore-notice-title" className="vow-heading text-xl">Your account is restored</h2>
+        <p className="mt-4 text-sm leading-relaxed text-vow-muted">{accountRestoreNotice}</p>
+        <button type="button" onClick={() => setAccountRestoreNotice(null)} className="vow-btn-primary mt-6 w-full justify-center">Got it</button>
+      </section>
+    </div>}
+    {splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}
+  </LanguageContext.Provider>;
 }
 
 function AppLoading() { return <div className="min-h-screen bg-vow-bg flex items-center justify-center" aria-label="Loading"><div className="vow-loading-dots"><span /><span /><span /></div></div>; }

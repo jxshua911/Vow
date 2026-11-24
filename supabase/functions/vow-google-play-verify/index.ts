@@ -160,8 +160,10 @@ Deno.serve(async (req) => {
 
     const expiry = lineItem.expiryTime ? new Date(lineItem.expiryTime) : null;
     const active = activeStates.has(state) && (!expiry || expiry.getTime() > Date.now());
+    const cancelledPaid = state === "SUBSCRIPTION_STATE_CANCELED" && Boolean(expiry && expiry.getTime() > Date.now());
     const status = active
       ? (state === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD" ? "grace" : "active")
+      : cancelledPaid ? "cancelled"
       : pendingStates.has(state) ? "pending" : "expired";
 
     const serviceClient = createClient(
@@ -171,7 +173,7 @@ Deno.serve(async (req) => {
 
     const { data: existing } = await serviceClient
       .from("vow_subscription_records")
-      .select("id, user_id, status")
+      .select("id, user_id, status, current_period_end")
       .eq("provider", "google_play")
       .eq("provider_purchase_id", purchaseToken)
       .maybeSingle();
@@ -183,7 +185,8 @@ Deno.serve(async (req) => {
     const purchaseDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(purchaseToken));
     const purchaseEventId = `gplay_${Array.from(new Uint8Array(purchaseDigest)).map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     const premiumEmailEventKey = `premium-email:google_play:${purchaseEventId}`;
-    const wasPremiumActive = existing?.status === "active" || existing?.status === "grace";
+    const wasPremiumActive = existing?.status === "active" || existing?.status === "grace"
+      || (existing?.status === "cancelled" && Boolean(existing.current_period_end && new Date(existing.current_period_end).getTime() > Date.now()));
     if (active && !wasPremiumActive) {
       const { error: emailEventInsertError } = await serviceClient.from("vow_payment_events").insert({
         user_id: user.id,
@@ -200,6 +203,21 @@ Deno.serve(async (req) => {
       }
     }
 
+    const storeRegionCode = typeof purchase.regionCode === "string" && /^[A-Z]{2}$/.test(purchase.regionCode.toUpperCase())
+      ? purchase.regionCode.toUpperCase()
+      : null;
+    let marketTier: string | null = null;
+    if (storeRegionCode) {
+      const { data: market, error: marketError } = await serviceClient
+        .from("vow_google_play_market_catalog")
+        .select("market_tier")
+        .eq("country_code", storeRegionCode)
+        .eq("is_enabled", true)
+        .maybeSingle();
+      if (marketError) throw new Error("GOOGLE_PLAY_MARKET_LOOKUP_FAILED");
+      marketTier = market?.market_tier ?? null;
+    }
+
     const { error: recordError } = await serviceClient.rpc("vow_set_subscription_record", {
       p_user_id: user.id,
       p_provider: "google_play",
@@ -214,6 +232,15 @@ Deno.serve(async (req) => {
     });
 
     if (recordError) throw new Error("SUBSCRIPTION_RECORD_FAILED");
+
+    if (storeRegionCode) {
+      const { error: marketAssignmentError } = await serviceClient
+        .from("vow_subscription_records")
+        .update({ store_region_code: storeRegionCode, market_tier: marketTier })
+        .eq("provider", "google_play")
+        .eq("provider_purchase_id", purchaseToken);
+      if (marketAssignmentError) throw new Error("GOOGLE_PLAY_MARKET_ASSIGNMENT_FAILED");
+    }
 
     // Google recommends server-side acknowledgement after verification.
     if (active && purchase.acknowledgementState === "ACKNOWLEDGEMENT_STATE_PENDING") {
@@ -264,10 +291,12 @@ Deno.serve(async (req) => {
 
     return json(200, {
       ok: true,
-      plan: active ? "premium" : "free",
+      plan: active || cancelledPaid ? "premium" : "free",
       status,
       currentPeriodEnd: lineItem.expiryTime ?? null,
       restored: Boolean(existing),
+      regionCode: storeRegionCode,
+      marketTier,
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : "GOOGLE_PLAY_VERIFICATION_FAILED";

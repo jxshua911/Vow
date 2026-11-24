@@ -23,6 +23,28 @@ function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: cors });
 }
 
+async function sendSubscriptionPush(userId: string, eventId: string, title: string, body: string) {
+  const secret = Deno.env.get("VOW_PUSH_INTERNAL_SECRET") || "";
+  const baseUrl = Deno.env.get("SUPABASE_URL") || "";
+  if (!secret || !baseUrl) return;
+  try {
+    const response = await fetch(baseUrl + "/functions/v1/vow-send-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-vow-push-secret": secret },
+      body: JSON.stringify({
+        user_id: userId,
+        title,
+        body,
+        category: "subscription",
+        data: { billingEventId: eventId },
+      }),
+    });
+    if (!response.ok) console.warn("[VOW] Google Play subscription push was not delivered:", response.status);
+  } catch {
+    console.warn("[VOW] Google Play subscription push could not be sent.");
+  }
+}
+
 async function googleAccessToken(account: ServiceAccount) {
   const now = Math.floor(Date.now() / 1000);
   const audience = account.token_uri ?? "https://oauth2.googleapis.com/token";
@@ -147,18 +169,36 @@ Deno.serve(async (req) => {
     const activeStates = new Set(["SUBSCRIPTION_STATE_ACTIVE", "SUBSCRIPTION_STATE_IN_GRACE_PERIOD"]);
     const pendingStates = new Set(["SUBSCRIPTION_STATE_PENDING", "SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED"]);
     const active = activeStates.has(state) && (!expiry || expiry.getTime() > Date.now());
+    const cancelledPaid = state === "SUBSCRIPTION_STATE_CANCELED" && Boolean(expiry && expiry.getTime() > Date.now());
     const status = active
       ? (state === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD" ? "grace" : "active")
+      : cancelledPaid ? "cancelled"
       : pendingStates.has(state) ? "pending" : "expired";
 
-    const { data: record } = await serviceClient
+    const { data: record, error: recordLookupError } = await serviceClient
       .from("vow_subscription_records")
-      .select("user_id")
+      .select("user_id,status,current_period_end,auto_renewing")
       .eq("provider", "google_play")
       .eq("provider_purchase_id", purchaseToken)
       .maybeSingle();
 
+    if (recordLookupError) throw new Error("PURCHASE_LINK_LOOKUP_FAILED");
     if (!record?.user_id) throw new Error("PURCHASE_NOT_LINKED");
+
+    const storeRegionCode = typeof purchase.regionCode === "string" && /^[A-Z]{2}$/.test(purchase.regionCode.toUpperCase())
+      ? purchase.regionCode.toUpperCase()
+      : null;
+    let marketTier: string | null = null;
+    if (storeRegionCode) {
+      const { data: market, error: marketError } = await serviceClient
+        .from("vow_google_play_market_catalog")
+        .select("market_tier")
+        .eq("country_code", storeRegionCode)
+        .eq("is_enabled", true)
+        .maybeSingle();
+      if (marketError) throw new Error("GOOGLE_PLAY_MARKET_LOOKUP_FAILED");
+      marketTier = market?.market_tier ?? null;
+    }
 
     const { error: writeError } = await serviceClient.rpc("vow_set_subscription_record", {
       p_user_id: record.user_id,
@@ -173,6 +213,25 @@ Deno.serve(async (req) => {
       p_auto_renewing: lineItem.autoRenewingPlan?.autoRenewEnabled ?? null,
     });
     if (writeError) throw new Error("SUBSCRIPTION_STATE_WRITE_FAILED");
+
+    if (storeRegionCode) {
+      const { error: marketAssignmentError } = await serviceClient
+        .from("vow_subscription_records")
+        .update({ store_region_code: storeRegionCode, market_tier: marketTier })
+        .eq("provider", "google_play")
+        .eq("provider_purchase_id", purchaseToken);
+      if (marketAssignmentError) throw new Error("GOOGLE_PLAY_MARKET_ASSIGNMENT_FAILED");
+    }
+
+    const previousStatus = String(record.status || "");
+    if (status === "cancelled" && previousStatus !== "cancelled") {
+      const endDate = expiry ? expiry.toLocaleDateString("en-US") : "the end of your paid period";
+      await sendSubscriptionPush(record.user_id, messageId, "Premium renewal stopped", `Your Google Play subscription will not renew. Premium remains active until ${endDate}.`);
+    } else if (status === "expired" && previousStatus !== "expired") {
+      await sendSubscriptionPush(record.user_id, messageId, "VOW Premium has ended", "Your Google Play Premium subscription has ended. You can resubscribe at any time.");
+    } else if (status === "active" && !["active", "grace", "cancelled"].includes(previousStatus)) {
+      await sendSubscriptionPush(record.user_id, messageId, "VOW Premium is active", "Your Google Play Premium subscription is active. Your benefits are ready.");
+    }
 
     await serviceClient.from("vow_google_play_notifications")
       .update({

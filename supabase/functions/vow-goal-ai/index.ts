@@ -10,7 +10,7 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
 };
-const MAX = { plan: 4500, planRetry: 3200, clarify: 1200, chat: 700 };
+const MAX = { plan: 4500, planRetry: 3200, clarify: 1200 };
 const MAX_BODY_BYTES = 128 * 1024;
 const json = (x: unknown, s = 200, e: Record<string, string> = {}) =>
   new Response(JSON.stringify(x), { status: s, headers: { ...CORS, ...e } });
@@ -183,7 +183,7 @@ function clarificationFallback(goal: string, category: string, selectedDays: str
     ],
   };
 }
-type CooldownKind = "clarify" | "plan" | "chat" | "review";
+type CooldownKind = "clarify" | "plan" | "review";
 
 async function cooldown(uid: string, k: CooldownKind) {
   try {
@@ -262,7 +262,7 @@ async function releasePlanningEntitlement(req: Request, reservationId: string | 
 }
 async function record(
   req: Request,
-  mode: "goal-clarify" | "goal-plan" | "chat",
+  mode: "goal-clarify" | "goal-plan",
   outcome: "success" | "error" | "blocked",
   latencyMs: number,
   errorCode?: string
@@ -461,7 +461,7 @@ function providerErrorCode(raw: string): string {
   return "unspecified";
 }
 
-async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean) {
+async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY_MISSING");
 
@@ -505,6 +505,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
 
     if (response.ok) {
       const payload = JSON.parse(raw);
+      await onUsage?.(payload?.model || "openai/gpt-oss-20b", payload?.usage ?? {});
       const message = payload?.choices?.[0]?.message;
       const content = message?.content;
       if (typeof content !== "string" || !content.trim()) throw new Error("GROQ_EMPTY_RESPONSE");
@@ -555,7 +556,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
   }
 }
 
-async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) throw new Error("OPENAI_API_KEY_MISSING");
 
@@ -581,6 +582,7 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
     const raw = await r.text();
     if (r.ok) {
       const payload = JSON.parse(raw);
+      await onUsage?.(payload?.model || "gpt-4o-mini", payload?.usage ?? {});
       const message = payload?.choices?.[0]?.message;
       const content = message?.content;
       if (typeof content !== "string" || !content.trim()) throw new Error("OPENAI_EMPTY_RESPONSE");
@@ -632,7 +634,7 @@ function providerOrder(): AiProvider[] {
   return [...prioritized, ...enabled.filter((provider) => !prioritized.includes(provider))];
 }
 
-async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("MISTRAL_API_KEY");
   if (!key) throw new Error("MISTRAL_API_KEY_MISSING");
   const model = Deno.env.get("MISTRAL_MODEL") || "mistral-small-latest";
@@ -686,6 +688,7 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
     }
 
     const payload = JSON.parse(raw);
+    await onUsage?.(payload?.model || model, payload?.usage ?? {});
     const content = payload?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) throw new Error("MISTRAL_EMPTY_RESPONSE");
     try {
@@ -711,7 +714,7 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
   }
 }
 
-async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("DASHSCOPE_API_KEY");
   if (!key) throw new Error("QWEN_API_KEY_MISSING");
   const baseUrl = (Deno.env.get("DASHSCOPE_BASE_URL") || "https://dashscope-us.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
@@ -740,6 +743,7 @@ async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
       throw new Error(r.status === 429 ? "QWEN_429" : `QWEN_PROVIDER_ERROR_${r.status}`);
     }
     const payload = JSON.parse(raw);
+    await onUsage?.(payload?.model || model, payload?.usage ?? {});
     const content = payload?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) throw new Error("QWEN_EMPTY_RESPONSE");
     return parse(content);
@@ -748,7 +752,7 @@ async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
   }
 }
 
-async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function callNova(req: Request, messages: any[], kind: keyof typeof MAX, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("AWS_BEARER_TOKEN_BEDROCK");
   if (!key) throw new Error("NOVA_API_KEY_MISSING");
   const region = Deno.env.get("AWS_BEDROCK_REGION") || "us-east-1";
@@ -788,6 +792,7 @@ async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
       throw new Error(r.status === 429 ? "NOVA_429" : `NOVA_PROVIDER_ERROR_${r.status}`);
     }
     const payload = JSON.parse(raw);
+    await onUsage?.(model, payload?.usage ?? {});
     const content = payload?.output?.message?.content
       ?.filter((x: any) => typeof x?.text === "string")
       ?.map((x: any) => x.text)
@@ -801,6 +806,34 @@ async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
 
 async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false, preferFallback = false) {
   const requestId = await claimGuardrail(req);
+  const usageRecorder = async (provider: string, model: string, usage: any) => {
+    const tokenValue = (...values: unknown[]) => {
+      for (const value of values) {
+        if (value === null || value === undefined || value === "") continue;
+        const parsed = Number(value);
+        if (Number.isFinite(parsed) && parsed >= 0) return Math.trunc(parsed);
+      }
+      return null;
+    };
+    const promptTokens = tokenValue(usage?.prompt_tokens, usage?.input_tokens, usage?.inputTokens);
+    const completionTokens = tokenValue(usage?.completion_tokens, usage?.output_tokens, usage?.outputTokens);
+    const totalTokens = tokenValue(usage?.total_tokens, usage?.totalTokens,
+      promptTokens !== null && completionTokens !== null ? promptTokens + completionTokens : null);
+    try {
+      const { error } = await client(req).rpc("vow_record_ai_provider_usage", {
+        p_request_id: requestId,
+        p_provider: provider,
+        p_model: String(model || "unknown").slice(0, 128),
+        p_request_kind: kind === "planRetry" ? "plan_retry" : kind,
+        p_prompt_tokens: promptTokens,
+        p_completion_tokens: completionTokens,
+        p_total_tokens: totalTokens,
+      });
+      if (error) console.warn("[VOW AI] Provider token telemetry was not saved:", error.message);
+    } catch (error) {
+      console.warn("[VOW AI] Provider token telemetry failed:", error instanceof Error ? error.message : "UNKNOWN_ERROR");
+    }
+  };
   try {
     const configuredProviders = providerOrder();
     const providers = preferFallback && configuredProviders.length > 1
@@ -831,12 +864,12 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
 
         const result =
           provider === "groq"
-            ? await callGroq(req, providerMessages, kind, researchRequired)
+            ? await callGroq(req, providerMessages, kind, researchRequired, (model, usage) => usageRecorder(provider, model, usage))
             : provider === "mistral"
-              ? await callMistral(req, providerMessages, kind)
+              ? await callMistral(req, providerMessages, kind, (model, usage) => usageRecorder(provider, model, usage))
               : provider === "qwen"
-                ? await callQwen(req, providerMessages, kind)
-                : await callNova(req, providerMessages, kind);
+                ? await callQwen(req, providerMessages, kind, (model, usage) => usageRecorder(provider, model, usage))
+                : await callNova(req, providerMessages, kind, (model, usage) => usageRecorder(provider, model, usage));
         console.log("[VOW AI] Provider succeeded", { provider });
         return result;
       } catch (providerError) {
@@ -863,7 +896,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
         : messages;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const result = await callOpenAI(req, fallbackMessages, kind);
+          const result = await callOpenAI(req, fallbackMessages, kind, (model, usage) => usageRecorder("openai", model, usage));
           console.log("[VOW AI] OpenAI emergency fallback succeeded", { attempt: attempt + 1 });
           return result;
         } catch (openaiError) {
@@ -1228,7 +1261,7 @@ function schedule(b: any, w: number, ds: string[], startDate: string, scheduleTi
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
-  let mode = "chat";
+  let mode: "goal-clarify" | "goal-plan" = "goal-plan";
   let uid = "";
   const startedAt = Date.now();
   let entitlementReservationId: string | null = null;
@@ -1255,15 +1288,13 @@ Deno.serve(async (req) => {
     if (!p || typeof p !== "object")
       return json({ error: "Invalid request body." }, 400);
     const requestedMode = p?.mode;
-    mode = ["goal-clarify", "goal-plan", "chat"].includes(requestedMode)
-      ? requestedMode
-      : "chat";
+    if (requestedMode !== "goal-clarify" && requestedMode !== "goal-plan")
+      return json({ error: "Unsupported AI mode. VOW only accepts goal clarification and plan generation requests." }, 400);
+    mode = requestedMode;
     const kind =
       mode === "goal-plan"
         ? "plan"
-        : mode === "goal-clarify"
-        ? "clarify"
-        : "chat";
+        : "clarify";
     const g = p?.goal || {};
     const domain = g?.domain && typeof g.domain === "object" ? g.domain : {};
     const { data: userSettings } = await client(req)
@@ -1282,7 +1313,7 @@ Deno.serve(async (req) => {
     if (rawTitle.length > 300 || rawWhy.length > 500 || rawMessage.length > 3000)
       return json({ error: "One or more planning inputs are too long." }, 413);
     const message0 = str(rawMessage, 3000);
-    if (mode !== "chat" && !str(g?.title || g?.outcome, 300))
+    if (!str(g?.title || g?.outcome, 300))
       return json(
         { error: "A goal description is required for planning." },
         400
@@ -1308,12 +1339,9 @@ Deno.serve(async (req) => {
         429,
         { "Retry-After": String(wait) }
       );
-    const adaptive = mode === "chat" && /missed|rebuild|changed|realistic|adapt|schedule/i.test(message0);
-    const feature = mode === "goal-clarify"
-      ? null
-      : adaptive
-      ? "adaptive_replan"
-      : "planning_action";
+    // The standalone chat feature has been retired. Only plan generation can
+    // consume a planning entitlement; clarification is a bounded discovery step.
+    const feature = mode === "goal-clarify" ? null : "planning_action";
     let entitlement: Record<string, unknown> = {
       allowed: true,
       reservation_id: null,
@@ -1425,44 +1453,15 @@ Deno.serve(async (req) => {
       knowledge,
       research,
     };
-    console.log("[VOW AI] Initial domain.category:", domain?.category);
-    let fallbackCategory = domain?.category;
-    console.log("[VOW AI] Initial domain.category:", domain?.category);
+    // Avoid a separate model call solely to classify the goal. The client
+    // already supplies deterministic domain evidence; unknown goals use a
+    // neutral fallback and the planning request handles the actual plan.
+    let fallbackCategory = str(domain?.category, 80);
     if (!fallbackCategory || fallbackCategory === "Unknown" || fallbackCategory === "General") {
-      try {
-        console.log("[VOW AI] Calling AI classification...");
-        const classResult = await ai(req, [
-          {
-            role: "system",
-            content: `Classify the user's goal into exactly one of these supported categories: Sports, Languages, Crafts/Hobbies, Education, Reading, Mindfulness, Technology/Projects, Career/Projects, Personal Development, Life Admin, Communication, Wellbeing, Creative Skills, Travel, Learning, Practical Skills, Finance, Productivity. Based on the goal title and any provided research or context, determine the single best-fitting category. Return ONLY JSON: {"category": "string"}. Do not return 'General'.`
-          },
-          { role: "user", content: `Goal: ${str(g?.title || g?.outcome, 300)}. Context: ${str(g?.why_it_matters, 500)}` }
-        ], "clarify", researchRequired);
-        console.log("[VOW AI] Classification result:", classResult);
-        
-        const validCategories = ["Sports", "Languages", "Crafts/Hobbies", "Education", "Reading", "Mindfulness", "Technology/Projects", "Career/Projects", "Personal Development", "Life Admin", "Communication", "Wellbeing", "Creative Skills", "Travel", "Learning", "Practical Skills", "Finance", "Productivity"];
-        
-    console.log("[VOW AI] Classification result:", JSON.stringify(classResult));
-        if (classResult && typeof classResult.category === "string" && validCategories.includes(classResult.category)) {
-           fallbackCategory = classResult.category;
-           domain.category = fallbackCategory;
-    console.log("[VOW AI] Final category saved:", domain.category);
-           domain.confidence = Math.max(Number(domain.confidence) || 0, 0.72);
-        } else {
-           fallbackCategory = "Personal Development";
-           domain.category = fallbackCategory;
-    console.log("[VOW AI] Final category saved:", domain.category);
-           domain.confidence = Math.max(Number(domain.confidence) || 0, 0.7);
-        }
-      } catch (e) {
-        console.warn("Groq fallback classification failed", e);
-        fallbackCategory = "Personal Development";
-        domain.category = fallbackCategory;
-    console.log("[VOW AI] Final category saved:", domain.category);
-        domain.confidence = Math.max(Number(domain.confidence) || 0, 0.7);
-      }
+      fallbackCategory = "Personal Development";
+      domain.category = fallbackCategory;
+      domain.confidence = Math.max(Number(domain.confidence) || 0, 0.5);
     }
-    console.log("[VOW AI] Final fallbackCategory:", fallbackCategory);
 
     if (mode === "goal-clarify") {
       let r: any;
@@ -1744,43 +1743,14 @@ Each week's sessions must advance that week's focus rather than repeating the sa
       entitlementFinalized = true;
       return json({ structured: result, text: JSON.stringify(result) });
     }
-    let r: any;
-    try {
-      r = await ai(req,
-        [
-          {
-            role: "system",
-            content:
-              "You are VOW AI, a multilingual coaching assistant. The user's selected language code is " + preferredLanguage + ". Understand the user's actual input language and respond naturally in that language unless the user explicitly asks for another. Do not fail because the user writes in French, Turkish, Greek, Swahili, Arabic, or another language. Use the supplied VOW knowledge base first, then web research when current or specialist information would improve the answer. Preserve user privacy and never reveal internal user data. Return a JSON object with a single string field named text containing the complete answer. Do not return the answer under response, answer, message, or any other key.",
-          },
-          { role: "user", content: JSON.stringify({ message, ...context }) },
-        ],
-        "chat",
-        researchRequired
-      );
-    } catch (e) {
-      console.warn("chat AI failed", e);
-      throw e;
-    }
-    await record(req, "chat", "success", Date.now() - startedAt);
-    await finalizePlanningEntitlement(req, entitlementReservationId);
-    entitlementFinalized = true;
-    const chatText = typeof r === "string"
-      ? str(r, 1600)
-      : str(r?.text ?? r?.output_text ?? r?.response ?? r?.answer, 1600);
-    return json({
-      text: chatText || "I couldn't generate a response right now.",
-    });
+    return json({ error: "Unsupported AI mode." }, 400);
   } catch (e) {
     if (entitlementReservationId && !entitlementFinalized) {
       await releasePlanningEntitlement(req, entitlementReservationId);
       entitlementReservationId = null;
     }
     const m = e instanceof Error ? e.message : String(e);
-    const telemetryMode =
-      mode === "goal-clarify" || mode === "goal-plan" || mode === "chat"
-        ? mode
-        : "chat";
+    const telemetryMode = mode;
     const blocked =
       m === "AI_CONCURRENCY_LIMIT" ||
       m === "AI_USER_DAILY_LIMIT" ||

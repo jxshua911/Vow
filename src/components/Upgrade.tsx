@@ -5,7 +5,6 @@ import { getEntitlementSnapshot, refreshEntitlementSnapshot, type EntitlementSna
 import { getPremiumProducts, openPremiumManagement, purchasePremium, restorePremium } from '@/lib/premiumPurchases';
 import { VOW_PREMIUM_MONTHLY } from '@/lib/premiumConfig';
 import { userFacingError } from '@/lib/userFacingError';
-import { supabase } from '@/lib/supabase';
 
 
 
@@ -13,7 +12,7 @@ const premiumBenefits = [
   'Unlimited active goals',
   'Unlimited planning actions',
   'Unlimited adaptive plan rebuilding',
-  'Deeper AI coaching and planning',
+  'More detailed, goal-specific AI plans',
   'Goal-specific planning methodology',
   'Advanced weekly review insights',
   'Full plan history',
@@ -88,20 +87,7 @@ export function UpgradePage() {
   async function handlePurchase() {
     setPurchaseState('');
     if (!Capacitor.isNativePlatform()) {
-      try {
-        const { data, error } = await supabase.functions.invoke('vow-create-checkout', {
-          body: { billing: 'monthly' },
-        });
-        if (error) throw error;
-        if (typeof data?.url !== 'string') throw new Error('Stripe checkout did not return a secure payment URL.');
-        const checkoutUrl = new URL(data.url);
-        if (checkoutUrl.protocol !== 'https:' || checkoutUrl.hostname !== 'checkout.stripe.com') {
-          throw new Error('Stripe returned an unexpected checkout address.');
-        }
-        window.location.assign(checkoutUrl.toString());
-      } catch (err) {
-        setPurchaseState(userFacingError(err, 'We could not start secure checkout. Please try again.'));
-      }
+      setPurchaseState('VOW Premium subscriptions are currently available through Google Play on Android. Open VOW on an Android device to subscribe.');
       return;
     }
     try {
@@ -119,21 +105,7 @@ export function UpgradePage() {
   async function handleManage() {
     setManageState('');
     if (!Capacitor.isNativePlatform()) {
-      try {
-        const { data, error } = await supabase.functions.invoke('vow-create-portal', { body: {} });
-        if (error || typeof data?.url !== 'string') {
-          setManageState('We could not open Stripe subscription management. If you subscribed through Google Play, manage it in Google Play; otherwise contact support.');
-          return;
-        }
-        const portalUrl = new URL(data.url);
-        if (portalUrl.protocol !== 'https:' || portalUrl.hostname !== 'billing.stripe.com') {
-          setManageState('Stripe returned an unexpected subscription-management address. Please contact support.');
-          return;
-        }
-        window.location.assign(portalUrl.toString());
-      } catch {
-        setManageState('We could not open Stripe subscription management. If you subscribed through Google Play, manage it in Google Play; otherwise contact support.');
-      }
+      setManageState('Google Play subscription management is available in VOW on Android.');
       return;
     }
     try {
@@ -192,7 +164,7 @@ export function UpgradePage() {
       <div className="grid grid-cols-1 gap-4 mb-6">
         <div className="relative border border-vow-ink rounded-xl p-5 pt-8">
           <p className="text-sm font-medium text-vow-ink mb-4">Premium</p>
-          <div className="text-3xl font-medium text-vow-ink mb-1">{monthlyProduct?.priceString || '$4.99'}</div>
+          <div className="text-3xl font-medium text-vow-ink mb-1">{monthlyProduct?.priceString || (Capacitor.isNativePlatform() ? 'Loading Google Play price…' : 'See price on Android')}</div>
           <p className="text-xs text-vow-muted mb-5">per month</p>
           <div className="space-y-2.5">{premiumBenefits.map((benefit) => <div key={benefit} className="flex items-start gap-2 text-sm text-vow-muted"><span aria-hidden="true" className="text-vow-ink">✓</span><span>{benefit}</span></div>)}</div>
         </div>
@@ -201,12 +173,12 @@ export function UpgradePage() {
         <p className="text-sm font-medium text-vow-ink">Premium checkout</p>
         {Capacitor.isNativePlatform()
           ? <><p className="text-xs text-vow-muted mt-1">Pricing is loaded from Google Play. Your subscription renews automatically for the monthly billing period unless you cancel in Google Play.</p><button type="button" onClick={() => void handlePurchase()} disabled={!selectedProduct} className="vow-btn-primary w-full mt-4 disabled:opacity-45">{selectedProduct ? `Continue with ${selectedProduct.priceString}` : 'Waiting for Google Play pricing…'}</button></>
-          : <><p className="text-xs text-vow-muted mt-1">Continue to Stripe’s secure checkout to start your monthly Premium subscription.</p><button type="button" onClick={() => void handlePurchase()} className="vow-btn-primary w-full mt-4">Continue to secure Stripe checkout</button></>}
+          : <><p className="text-xs text-vow-muted mt-1">Google Play subscriptions are available in the Android app. Your local price is shown by Google Play before you confirm.</p><button type="button" disabled className="vow-btn-primary w-full mt-4 opacity-45">Available on Android</button></>}
       </div>}
       {isPremium && <div className="mt-5 border border-vow-border rounded-xl p-5">
         <p className="text-sm font-medium text-vow-ink">Premium is active</p>
         <p className="text-xs text-vow-muted mt-1">Manage or cancel your subscription through Google Play.</p>
-        <button type="button" onClick={() => setConfirmCancel(true)} className="vow-btn-ghost mt-4">Manage or cancel subscription</button>
+        <button type="button" onClick={() => setConfirmCancel(true)} className="vow-btn-ghost mt-4">Manage Google Play subscription</button>
       </div>}
       <div className="flex flex-col sm:flex-row gap-3 mt-4">
         <button type="button" onClick={handleRestore} className="vow-btn-soft">Restore purchase</button>
@@ -222,7 +194,7 @@ export function UpgradePage() {
       <div className="bg-vow-bg border border-vow-border p-6 max-w-sm w-full rounded-xl">
         <h2 id="cancel-premium-title" className="vow-heading text-xl text-vow-ink mb-2">Are you sure you want to cancel Premium?</h2>
         <p className="text-sm text-vow-muted leading-relaxed mb-6">Google Play will handle the cancellation. You can keep your Premium access for the current billing period, subject to Google Play's subscription rules.</p>
-        <div className="flex gap-3"><button type="button" onClick={() => setConfirmCancel(false)} className="vow-btn-ghost flex-1">Keep Premium</button><button type="button" onClick={() => { setConfirmCancel(false); void handleManage(); }} className="vow-btn-primary flex-1">{Capacitor.isNativePlatform() ? 'Continue to Google Play' : 'Continue to Stripe'}</button></div>
+        <div className="flex gap-3"><button type="button" onClick={() => setConfirmCancel(false)} className="vow-btn-ghost flex-1">Keep Premium</button><button type="button" onClick={() => { setConfirmCancel(false); void handleManage(); }} className="vow-btn-primary flex-1">Continue to Google Play</button></div>
       </div>
     </div>}
   </div>;

@@ -1,8 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { SignJWT, importPKCS8 } from "npm:jose@6.1.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-vow-account-purge-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
 };
@@ -58,66 +59,187 @@ async function listUserObjects(
   return output;
 }
 
+async function revokeGoogle(token:string){try{await fetch("https://oauth2.googleapis.com/revoke",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({token})});}catch{ /* best-effort external revocation */ }}
+async function revokeStrava(token:string){try{await fetch("https://www.strava.com/oauth/deauthorize",{method:"POST",headers:{Authorization:`Bearer ${token}`}});}catch{ /* best-effort external revocation */ }}
+async function cancelStripe(subscriptionId:string,secret:string){const response=await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,{method:"POST",headers:{Authorization:`Bearer ${secret}`,"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({cancel_at_period_end:"true"})});if(!response.ok)throw new Error("STRIPE_SUBSCRIPTION_CANCELLATION_FAILED");}
+type GoogleServiceAccount = { client_email: string; private_key: string; token_uri?: string };
+async function googleAccessToken(account: GoogleServiceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const key = await importPKCS8(account.private_key, "RS256");
+  const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/androidpublisher" })
+    .setProtectedHeader({ alg: "RS256", typ: "JWT" })
+    .setIssuer(account.client_email)
+    .setAudience(account.token_uri ?? "https://oauth2.googleapis.com/token")
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .sign(key);
+  const tokenResponse = await fetch(account.token_uri ?? "https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+  });
+  if (!tokenResponse.ok) throw new Error("GOOGLE_OAUTH_FAILED");
+  const token = await tokenResponse.json();
+  if (typeof token.access_token !== "string" || !token.access_token) throw new Error("GOOGLE_ACCESS_TOKEN_MISSING");
+  return token.access_token as string;
+}
+async function cancelGooglePlaySubscription(purchaseToken: string, packageName: string, account: GoogleServiceAccount) {
+  const accessToken = await googleAccessToken(account);
+  const base = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}`;
+  const currentResponse = await fetch(base, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!currentResponse.ok) throw new Error("GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED");
+  const current = await currentResponse.json();
+  const lineItem = Array.isArray(current.lineItems) ? current.lineItems[0] : null;
+  if (lineItem?.autoRenewingPlan?.autoRenewEnabled === false) return;
+  const response = await fetch(base + ":cancel", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ cancellationContext: { cancellationType: "USER_REQUESTED_STOP_RENEWALS" } }),
+  });
+  if (!response.ok) throw new Error("GOOGLE_PLAY_SUBSCRIPTION_CANCELLATION_FAILED");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
 
   try {
-    const authorization = req.headers.get("Authorization");
-    if (!authorization?.startsWith("Bearer ")) return json({ error: "Authentication required." }, 401);
+    const suppliedSecret = req.headers.get("x-vow-account-purge-secret") || "";
+    if (!suppliedSecret) return json({ error: "Not authorized." }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    if (!supabaseUrl || !serviceRoleKey) {
       console.error("Account purge: Supabase runtime configuration is missing.");
       return json({ error: "Account deletion is temporarily unavailable." }, 503);
     }
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authorization } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) return json({ error: "Not authenticated." }, 401);
-
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: settings, error: settingsError } = await admin
-      .from("user_settings")
-      .select("account_status,deletion_expires_at")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (settingsError) throw new Error("ACCOUNT_PURGE_STATE_LOOKUP_FAILED");
-    if (!settings) return json({ status: "already_purged" });
-    if (
-      settings.account_status !== "deleted" ||
-      !settings.deletion_expires_at ||
-      new Date(settings.deletion_expires_at).getTime() > Date.now()
-    ) {
-      return json({ error: "The account is not eligible for permanent deletion yet." }, 409);
-    }
+    const { data: authorized, error: authorizationError } = await admin.rpc("vow_validate_account_purge_cron_secret", {
+      p_secret: suppliedSecret,
+    });
+    if (authorizationError || authorized !== true) return json({ error: "Not authorized." }, 401);
 
-    const objectPaths = await listUserObjects(admin, user.id);
-    for (let offset = 0; offset < objectPaths.length; offset += PAGE_SIZE) {
-      const batch = objectPaths.slice(offset, offset + PAGE_SIZE);
-      const { error } = await admin.storage.from(BUCKET).remove(batch);
-      if (error) {
-        console.error("Account purge: private resource cleanup failed.");
-        return json({ error: "Account deletion is temporarily unavailable." }, 503);
+    const { data: expiredAccounts, error: expiredLookupError } = await admin
+      .from("user_settings")
+      .select("user_id,deletion_expires_at")
+      .in("account_status", ["deleted", "purging"])
+      .not("deletion_expires_at", "is", null)
+      .lte("deletion_expires_at", new Date().toISOString())
+      .order("deletion_expires_at", { ascending: true })
+      .limit(50);
+    if (expiredLookupError) throw new Error("EXPIRED_ACCOUNT_LOOKUP_FAILED");
+
+    let purged = 0;
+    const failed: string[] = [];
+    for (const account of expiredAccounts || []) {
+      const userId = String(account.user_id || "");
+      if (!userId) continue;
+      try {
+        // Re-check eligibility immediately before destructive work. A restored
+        // account must never be deleted by a stale batch result.
+        const { data: current, error: currentError } = await admin
+          .from("user_settings")
+          .select("account_status,deletion_expires_at")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (currentError) throw new Error("ACCOUNT_STATE_RECHECK_FAILED");
+        if (!current || !["deleted", "purging"].includes(String(current.account_status)) || !current.deletion_expires_at
+            || new Date(current.deletion_expires_at).getTime() > Date.now()) continue;
+
+        // Lock the account row and atomically claim permanent deletion. If a
+        // restore won the race, this returns false; if purge won, restore is
+        // blocked until the purge completes. Stale claims are retried later.
+        const { data: purgeClaimed, error: purgeClaimError } = await admin.rpc("vow_claim_expired_account_purge", {
+          p_user_id: userId,
+        });
+        if (purgeClaimError) throw new Error("ACCOUNT_PURGE_CLAIM_FAILED");
+        if (purgeClaimed !== true) continue;
+
+        const objectPaths = await listUserObjects(admin, userId);
+        for (let offset = 0; offset < objectPaths.length; offset += PAGE_SIZE) {
+          const batch = objectPaths.slice(offset, offset + PAGE_SIZE);
+          const { error: storageError } = await admin.storage.from(BUCKET).remove(batch);
+          if (storageError) throw new Error("STORAGE_OBJECT_PURGE_FAILED");
+        }
+
+        // Remove user-linked moderation/IP records. Preserve only a minimal,
+        // unlinked payment audit record where accounting history is required.
+        const { error: moderationCleanupError } = await admin
+          .from("moderation_ip_bans")
+          .delete()
+          .eq("user_id", userId);
+        if (moderationCleanupError) throw new Error("MODERATION_DATA_PURGE_FAILED");
+
+        const { error: paymentAuditCleanupError } = await admin
+          .from("vow_payment_events")
+          .update({ user_id: null, metadata: {} })
+          .eq("user_id", userId);
+        if (paymentAuditCleanupError) throw new Error("PAYMENT_AUDIT_ANONYMIZATION_FAILED");
+
+        // External billing cancellation and OAuth revocation happen only after
+        // the 14-day restoration window has expired and data cleanup has succeeded.
+        const { data: billing, error: billingLookupError } = await admin
+          .from("vow_user_entitlements")
+          .select("provider,stripe_subscription_id,status")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (billingLookupError) throw new Error("BILLING_LOOKUP_FAILED");
+
+        if (billing?.provider === "stripe" && billing.stripe_subscription_id && ["active", "grace"].includes(billing.status)) {
+          const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") || "";
+          if (!stripeSecret) throw new Error("STRIPE_CANCELLATION_NOT_CONFIGURED");
+          await cancelStripe(billing.stripe_subscription_id, stripeSecret);
+        }
+
+        if (billing?.provider === "google_play" && ["active", "grace"].includes(billing.status)) {
+          const { data: playSubscription, error: playSubscriptionError } = await admin
+            .from("vow_subscription_records")
+            .select("provider_purchase_id,current_period_end,auto_renewing")
+            .eq("user_id", userId)
+            .eq("provider", "google_play")
+            .in("status", ["active", "grace", "cancelled"])
+            .order("current_period_end", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (playSubscriptionError) throw new Error("GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED");
+          if (playSubscription?.auto_renewing !== false) {
+            const purchaseToken = String(playSubscription?.provider_purchase_id || "").trim();
+            if (!purchaseToken) throw new Error("GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED");
+            const serviceAccountJson = Deno.env.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON") || "";
+            const packageName = Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME") || "com.vow.app";
+            if (!serviceAccountJson) throw new Error("GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED");
+            try {
+              const account = JSON.parse(serviceAccountJson) as GoogleServiceAccount;
+              await cancelGooglePlaySubscription(purchaseToken, packageName, account);
+            } catch {
+              throw new Error("GOOGLE_PLAY_SUBSCRIPTION_CANCELLATION_FAILED");
+            }
+          }
+        }
+
+        const [{ data: google }, { data: strava }] = await Promise.all([
+          admin.from("google_calendar_connections").select("access_token,refresh_token").eq("user_id", userId).maybeSingle(),
+          admin.from("strava_connections").select("access_token,refresh_token").eq("user_id", userId).maybeSingle(),
+        ]);
+        await Promise.all([
+          google?.refresh_token ? revokeGoogle(google.refresh_token) : Promise.resolve(),
+          google?.access_token ? revokeGoogle(google.access_token) : Promise.resolve(),
+          strava?.access_token ? revokeStrava(strava.access_token) : Promise.resolve(),
+        ]);
+
+        const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
+        if (deleteError) throw new Error("AUTH_USER_DELETE_FAILED");
+        purged += 1;
+      } catch (error) {
+        failed.push(userId);
+        console.error("[VOW] Permanent account purge failed:", error instanceof Error ? error.message : "UNKNOWN_ERROR");
       }
     }
 
-    const { data: purgeResult, error: purgeError } = await admin.rpc("vow_purge_expired_account", {
-      p_user_id: user.id,
-    });
-    if (purgeError || !["purged", "already_purged"].includes(String(purgeResult?.status))) {
-      console.error("Account purge: relational data cleanup failed.");
-      return json({ error: "Account deletion is temporarily unavailable." }, 503);
-    }
-
-    return json({ status: purgeResult.status });
+    return json({ processed: (expiredAccounts || []).length, purged, failed: failed.length });
   } catch (error) {
     console.error("Account purge failed:", error instanceof Error ? error.message : "UNKNOWN_ERROR");
     return json({ error: "Account deletion is temporarily unavailable." }, 503);

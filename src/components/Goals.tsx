@@ -5,13 +5,14 @@ import type { Goal, Milestone, Session, GoalStatus } from '@/types/database';
 import { formatTime, formatDate, formatRelative } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
 import { GoalPlanner } from './GoalPlanner';
-import { GoalAI } from './GoalAI';
 import { cancelActionRemindersForSession, cancelReminder, notificationId, syncSessionActionReminders, syncUserUpcomingSessionNotifications } from '@/lib/notifications';
 import { Capacitor } from '@capacitor/core';
 import { addSessionToNativeCalendar, deleteSessionFromNativeCalendar, replaceSessionInNativeCalendar } from '@/lib/nativeCalendar';
 import { GoalResources } from './GoalResources';
 import { SessionActions } from './SessionActions';
 import { Check, Circle, CheckCircle2, SkipForward, Move, Pause, ChevronDown, ArrowLeft, Clock, Calendar } from '@/lib/ui-icons';
+import { VowDateTimePicker, VowSelect } from './VowControls';
+import { useVowDialog } from './VowDialog';
 
 function getSessionVideoUrls(notes: string | null): string[] {
   return [...new Set((notes || '').split('\n').filter((line) => line.startsWith('Video: ')).flatMap((line) => {
@@ -142,6 +143,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
   const [editScheduledAt, setEditScheduledAt] = useState('');
   const [editTimingMode, setEditTimingMode] = useState<'timed' | 'flexible-day' | 'unscheduled'>('timed');
   const [editDayOfWeek, setEditDayOfWeek] = useState('Monday');
+  const { confirm, alert, dialog } = useVowDialog();
   const [editDurationMinutes, setEditDurationMinutes] = useState('');
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [expandedMilestone, setExpandedMilestone] = useState<string | 'all' | null>(null);
@@ -234,7 +236,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
   }
 
   async function deleteSession(sess: Session) {
-    if (!session || !confirm('Delete this session from VOW and remove its linked Google/phone-calendar events?')) return;
+    if (!session || !await confirm('Delete this session from VOW and remove its linked Google/phone-calendar events?')) return;
     if (sess.external_event_id && navigator.onLine) {
       const { error: googleDeleteError } = await supabase.functions.invoke('google-calendar-events', {
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -242,14 +244,14 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       });
       if (googleDeleteError) {
         console.error('[VOW] Could not delete linked Google Calendar event:', googleDeleteError);
-        alert('VOW could not remove the linked Google Calendar event, so the session was kept. Reconnect Google Calendar and try again.');
+        await alert('VOW could not remove the linked Google Calendar event, so the session was kept. Reconnect Google Calendar and try again.');
         return;
       }
     }
     const { error } = await supabase.from('sessions').delete().eq('id', sess.id).eq('user_id', session.user.id);
     if (error) {
       console.error('[VOW] Could not delete session:', error);
-      alert('Could not delete this session. Please try again.');
+      await alert('Could not delete this session. Please try again.');
       return;
     }
     await cancelReminder(notificationId(sess.id));
@@ -259,14 +261,14 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
         await deleteSessionFromNativeCalendar(sess);
       } catch (calendarError) {
         console.error('[VOW] Session deleted but native calendar cleanup failed:', calendarError);
-        alert('The session was deleted from VOW, but its phone-calendar event could not be removed. Check calendar permission and remove the leftover event from your calendar.');
+        await alert('The session was deleted from VOW, but its phone-calendar event could not be removed. Check calendar permission and remove the leftover event from your calendar.');
       }
     }
     await load();
   }
   async function mergeSessions(source: Session, target: Session) {
     if (!session || source.id === target.id || source.goal_id !== target.goal_id || mergeBusy) return;
-    if (!confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will keep the chosen appointment time and add the durations together. This cannot be automatically undone.`)) return;
+    if (!await confirm(`Combine “${source.title}” into “${target.title}”? Both sessions’ actions and resource links will be preserved. The combined session will keep the chosen appointment time and add the durations together. This cannot be automatically undone.`)) return;
     setMergeBusy(true);
     setActionError(null);
     let combinedScheduledAt = target.scheduled_at;
@@ -382,18 +384,18 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     if (!editingSession || !session) return;
     const nextDuration = Number(editDurationMinutes);
     if (!Number.isInteger(nextDuration) || nextDuration < 5 || nextDuration > 1440) {
-      alert('Choose a duration between 5 minutes and 24 hours.');
+      await alert('Choose a duration between 5 minutes and 24 hours.');
       return;
     }
     let nextIso: string | null = null;
     let nextDay: string | null = null;
     if (editTimingMode === 'timed') {
       const nextDate = new Date(editScheduledAt);
-      if (!Number.isFinite(nextDate.getTime())) { alert('Choose a valid date and time.'); return; }
+      if (!Number.isFinite(nextDate.getTime())) { await alert('Choose a valid date and time.'); return; }
       nextIso = nextDate.toISOString();
       nextDay = nextDate.toLocaleDateString('en-US', { weekday: 'long' });
     } else if (editTimingMode === 'flexible-day') {
-      if (!sessionDays.includes(editDayOfWeek)) { alert('Choose a weekday for this flexible session.'); return; }
+      if (!sessionDays.includes(editDayOfWeek)) { await alert('Choose a weekday for this flexible session.'); return; }
       nextDay = editDayOfWeek;
     }
     const previousDate = editingSession.scheduled_at;
@@ -410,7 +412,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     }).eq('id', editingSession.id).eq('user_id', session.user.id);
     if (error) {
       console.error('[VOW] Could not adjust session:', error);
-      alert('Could not save this schedule change. Please try again.');
+      await alert('Could not save this schedule change. Please try again.');
       return;
     }
     if (nextIso && editingSession.external_event_id && navigator.onLine) {
@@ -467,7 +469,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     onBack();
   }
   async function deleteGoal() {
-    if (!session || !confirm('Permanently delete this goal and all associated data? This cannot be undone.')) return;
+    if (!session || !await confirm('Permanently delete this goal and all associated data? This cannot be undone.')) return;
     setActionError(null);
     const { data: linkedSessions, error: sessionsError } = await supabase
       .from('sessions')
@@ -476,7 +478,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       .eq('user_id', session.user.id);
     if (sessionsError) {
       console.error('[VOW] Could not load sessions before goal deletion:', sessionsError);
-      alert('Could not safely prepare this goal for deletion. Please try again.');
+      await alert('Could not safely prepare this goal for deletion. Please try again.');
       return;
     }
 
@@ -514,7 +516,7 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
     const { error } = await supabase.from('goals').delete().eq('id', goalId).eq('user_id', session.user.id);
     if (error) {
       console.error('[VOW] Failed to delete goal:', error);
-      alert('Could not delete goal. Please try again.');
+      await alert('Could not delete goal. Please try again.');
       return;
     }
 
@@ -565,15 +567,11 @@ function GoalDetail({ goalId, onBack, onContinueDraft, readOnly }: { goalId: str
       {readOnly ? <p className="text-xs text-vow-muted">Reconnect to continue answering and build this plan.</p> : <button type="button" onClick={onContinueDraft} className="vow-btn-primary">Continue answering</button>}
     </section>}
     {goal.status !== 'draft' && <GoalResources goalId={goalId} />}
-    {goal.status !== 'draft' && <section className="border border-vow-border p-4 sm:p-5 my-8 min-w-0">
-      <p className="vow-label mb-2">Planning assistant</p>
-      <p className="text-sm leading-relaxed text-vow-muted mb-3">Your planning consultant, right here with this goal. Ask about your saved plan, your next action, missed sessions, or adapting your schedule.</p>
-      {readOnly ? <p className="text-xs text-vow-muted">Reconnect to consult VOW AI. Your saved goal and plan remain available offline.</p> : <GoalAI goal={goal} />}
-    </section>}
     {goal.status !== 'draft' && <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Milestones</h2><button onClick={() => setExpandedMilestone(expandedMilestone === 'all' ? null : 'all')} className="vow-btn-soft text-xs">{expandedMilestone ? 'Collapse all' : 'Expand all'}</button></div><div className="border-t border-vow-border">{milestones.map((ms) => { const isExpanded = expandedMilestone === 'all' || expandedMilestone === ms.id; const Icon = ms.status === 'completed' ? CheckCircle2 : Circle; return <div key={ms.id} className="border-b border-vow-border py-4"><button className="w-full text-left flex items-start gap-3" onClick={() => setExpandedMilestone(isExpanded ? null : ms.id)}><Icon className="w-4 h-4 mt-0.5" /><div className="flex-1"><p className="text-sm text-vow-ink">{ms.title}</p><p className="text-xs text-vow-muted mt-1">{formatDate(ms.deadline)}</p>{isExpanded && <p className="text-xs text-vow-muted mt-2">{ms.description}</p>}</div><ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></button>{!readOnly && <button onClick={() => toggleMilestoneStatus(ms)} className="vow-btn-soft text-xs ml-7 mt-2">{ms.status === 'completed' ? 'Mark pending' : 'Mark completed'}</button>}</div>; })}</div></div>}
     {goal.status !== 'draft' && <div className="mb-10"><div className="flex items-center justify-between mb-4"><h2 className="vow-label">Sessions</h2></div><div className="border-t border-vow-border">{sessions.map((sess) => { const Icon = statusIcons[sess.status] || Circle; const noteLines = (sess.notes || '').split('\n'); const videoUrls = getSessionVideoUrls(sess.notes); const sessionTask = noteLines.find((line) => line.startsWith('Task: '))?.slice(6) || sess.title; const sessionPurpose = noteLines.find((line) => line.startsWith('Purpose: '))?.slice(9); const sessionTarget = noteLines.find((line) => line.startsWith('Target: '))?.slice(8); const sessionSteps = noteLines.filter((line) => /^Step \d+: /.test(line)).map((line) => line.replace(/^Step \d+: /, '')); return <div key={sess.id} className="border-b border-vow-border py-4 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3"><Icon className="w-4 h-4 text-vow-muted shrink-0" /><div className="min-w-0 flex-1"><p className="w-full min-w-0 text-sm leading-snug text-vow-ink break-words [overflow-wrap:anywhere]">{sessionTask}</p><p className="text-xs text-vow-muted mt-1">{sess.scheduled_at ? `${formatDate(sess.scheduled_at)} · ${formatTime(sess.scheduled_at)}` : sess.day_of_week ? `Flexible · ${sess.day_of_week}` : 'Unscheduled'} · {sess.duration_minutes} min</p>{sessionPurpose && <p className="text-xs text-vow-muted mt-2 break-words">{sessionPurpose}</p>}{sessionTarget && <p className="text-xs text-vow-muted mt-1 break-words">Finish condition: {sessionTarget}</p>}{sessionSteps.length > 0 && <ol className="list-decimal pl-5 mt-3 space-y-1">{sessionSteps.map((step, index) => <li key={index} className="text-xs text-vow-muted break-words">{step}</li>)}</ol>}{videoUrls.length > 0 && <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">{videoUrls.map((videoUrl, videoIndex) => <a key={videoUrl} href={videoUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-xs text-vow-ink underline underline-offset-2">{videoUrl.includes('/results?') ? `Find session videos ${videoUrls.length > 1 ? videoIndex + 1 : ''} on YouTube ↗` : `Watch session video ${videoUrls.length > 1 ? videoIndex + 1 : ''} on YouTube ↗`}</a>)}</div>}<SessionActions session={sess} readOnly={readOnly} /></div>{!readOnly && sess.status === 'scheduled' && <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 pt-1"><button onClick={() => updateSessionStatus(sess.id, 'completed')} className="vow-btn-primary text-xs">Complete session</button><button type="button" aria-expanded={expandedSessionActions === sess.id} onClick={() => setExpandedSessionActions(expandedSessionActions === sess.id ? null : sess.id)} className="vow-btn-soft text-xs">{expandedSessionActions === sess.id ? 'Hide options' : 'More options'}</button>{expandedSessionActions === sess.id && <div className="w-full flex flex-wrap gap-2 pt-1 border-t border-vow-border"><button onClick={() => updateSessionStatus(sess.id, 'skipped')} className="vow-btn-soft text-xs">Skip</button><button onClick={() => openSessionEditor(sess)} className="vow-btn-soft text-xs">Reschedule</button><button onClick={() => { setMergingSession(sess); setMergeTargetId(sessions.find((candidate) => candidate.id !== sess.id && candidate.status === "scheduled")?.id || ""); }} className="vow-btn-soft text-xs" disabled={sessions.filter((candidate) => candidate.id !== sess.id && candidate.status === "scheduled").length === 0}>Combine</button><button onClick={() => void deleteSession(sess)} className="vow-btn-soft text-xs">Delete</button></div>}</div>}</div>; })}</div></div>}
     {actionError && <p role="alert" className="text-sm text-red-600 mt-4">{actionError}</p>}{!readOnly && <div className="border-t border-vow-border pt-6 mt-10 flex flex-wrap gap-3">{goal.status === 'draft' ? <button onClick={deleteGoal} className="vow-btn-ghost text-red-600">Delete draft</button> : <><button onClick={completeGoal} className="vow-btn-primary"><Check className="w-4 h-4" />Complete goal</button><button onClick={() => setShowPauseModal(true)} className="vow-btn-ghost"><Pause className="w-4 h-4" />Pause planning</button><button onClick={() => setShowAbandonModal(true)} className="vow-btn-ghost">Abandon goal</button><button onClick={deleteGoal} className="vow-btn-ghost text-red-600">Delete goal</button></>}</div>}
-    {!readOnly && mergingSession && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Combine sessions</h2><p className="text-sm text-vow-muted mb-4">Choose the session to keep. The selected session receives both sets of saved actions and the source session’s notes and links. The combined duration is capped at 24 hours.</p><label className="vow-label block mb-2" htmlFor="merge-session-target">Keep this session</label><select id="merge-session-target" value={mergeTargetId} onChange={(event) => setMergeTargetId(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-5">{sessions.filter((candidate) => candidate.id !== mergingSession.id && candidate.status === 'scheduled').map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title} · {formatDate(candidate.scheduled_at)} · {candidate.duration_minutes} min</option>)}</select><div className="flex gap-3"><button onClick={() => { setMergingSession(null); setMergeTargetId(''); }} className="vow-btn-ghost" disabled={mergeBusy}>Cancel</button><button onClick={() => { const target = sessions.find((candidate) => candidate.id === mergeTargetId); if (target) void mergeSessions(mergingSession, target); }} className="vow-btn-primary flex-1" disabled={mergeBusy || !mergeTargetId}>{mergeBusy ? 'Combining…' : 'Confirm combination'}</button></div></div></div>}{!readOnly && editingSession && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"><h2 className="vow-heading text-lg text-vow-ink mb-2">Adjust this session</h2><p className="text-sm text-vow-muted mb-4">{editingSession.title}. Change how and when you want to do it. Your saved actions and completion state stay intact.</p><label className="vow-label block mb-2">Scheduling</label><div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">{([{value:"timed",label:"Specific time"},{value:"flexible-day",label:"Flexible day"},{value:"unscheduled",label:"Leave in queue"}] as const).map(option => <button key={option.value} type="button" aria-pressed={editTimingMode === option.value} onClick={() => setEditTimingMode(option.value)} className={editTimingMode === option.value ? "border border-vow-ink bg-vow-ink text-vow-bg px-3 py-2 text-xs" : "border border-vow-border text-vow-ink px-3 py-2 text-xs"}>{option.label}</button>)}</div>{editTimingMode === "timed" && <><label className="vow-label block mb-2" htmlFor="session-schedule-time">Date and time</label><input id="session-schedule-time" type="datetime-local" value={editScheduledAt} onChange={(event) => setEditScheduledAt(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-4" /></>}{editTimingMode === "flexible-day" && <><label className="vow-label block mb-2" htmlFor="session-weekday">Weekday</label><select id="session-weekday" value={editDayOfWeek} onChange={(event) => setEditDayOfWeek(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-4">{sessionDays.map(day => <option key={day} value={day}>{day}</option>)}</select><p className="text-xs text-vow-muted mb-4">No clock time or reminder is assigned.</p></>}{editTimingMode === "unscheduled" && <p className="text-xs text-vow-muted mb-4">This session will return to your queue with no assigned day or time.</p>}<label className="vow-label block mb-2" htmlFor="session-duration">Duration (minutes)</label><input id="session-duration" type="number" min="5" max="1440" step="5" value={editDurationMinutes} onChange={(event) => setEditDurationMinutes(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-5" /><div className="flex gap-3"><button onClick={() => setEditingSession(null)} className="vow-btn-ghost">Cancel</button><button onClick={saveSessionChanges} className="vow-btn-primary flex-1">Save changes</button></div></div></div>}
+    {!readOnly && mergingSession && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Combine sessions</h2><p className="text-sm text-vow-muted mb-4">Choose the session to keep. The selected session receives both sets of saved actions and the source session’s notes and links. The combined duration is capped at 24 hours.</p><label className="vow-label block mb-2" htmlFor="merge-session-target">Keep this session</label><VowSelect value={mergeTargetId} onChange={setMergeTargetId} ariaLabel="Keep this session" className="mb-5" options={sessions.filter((candidate) => candidate.id !== mergingSession.id && candidate.status === "scheduled").map((candidate) => ({ value: candidate.id, label: `${candidate.title} · ${formatDate(candidate.scheduled_at)} · ${candidate.duration_minutes} min` }))} placeholder="Choose session" /><div className="flex gap-3"><button onClick={() => { setMergingSession(null); setMergeTargetId(''); }} className="vow-btn-ghost" disabled={mergeBusy}>Cancel</button><button onClick={() => { const target = sessions.find((candidate) => candidate.id === mergeTargetId); if (target) void mergeSessions(mergingSession, target); }} className="vow-btn-primary flex-1" disabled={mergeBusy || !mergeTargetId}>{mergeBusy ? 'Combining…' : 'Confirm combination'}</button></div></div></div>}{!readOnly && editingSession && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"><h2 className="vow-heading text-lg text-vow-ink mb-2">Adjust this session</h2><p className="text-sm text-vow-muted mb-4">{editingSession.title}. Change how and when you want to do it. Your saved actions and completion state stay intact.</p><label className="vow-label block mb-2">Scheduling</label><div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">{([{value:"timed",label:"Specific time"},{value:"flexible-day",label:"Flexible day"},{value:"unscheduled",label:"Leave in queue"}] as const).map(option => <button key={option.value} type="button" aria-pressed={editTimingMode === option.value} onClick={() => setEditTimingMode(option.value)} className={editTimingMode === option.value ? "border border-vow-ink bg-vow-ink text-vow-bg px-3 py-2 text-xs" : "border border-vow-border text-vow-ink px-3 py-2 text-xs"}>{option.label}</button>)}</div>{editTimingMode === "timed" && <><label className="vow-label block mb-2" htmlFor="session-schedule-time">Date and time</label><VowDateTimePicker value={editScheduledAt} onChange={setEditScheduledAt} label="Session schedule" className="mb-4" /></>}{editTimingMode === "flexible-day" && <><label className="vow-label block mb-2" htmlFor="session-weekday">Weekday</label><VowSelect value={editDayOfWeek} onChange={setEditDayOfWeek} ariaLabel="Session weekday" className="mb-4" options={sessionDays.map((day) => ({ value: day, label: day }))} placeholder="Choose weekday" /><p className="text-xs text-vow-muted mb-4">No clock time or reminder is assigned.</p></>}{editTimingMode === "unscheduled" && <p className="text-xs text-vow-muted mb-4">This session will return to your queue with no assigned day or time.</p>}<label className="vow-label block mb-2" htmlFor="session-duration">Duration (minutes)</label><input id="session-duration" type="number" min="5" max="1440" step="5" value={editDurationMinutes} onChange={(event) => setEditDurationMinutes(event.target.value)} className="w-full border border-vow-border bg-transparent px-3 py-3 text-sm text-vow-ink mb-5" /><div className="flex gap-3"><button onClick={() => setEditingSession(null)} className="vow-btn-ghost">Cancel</button><button onClick={saveSessionChanges} className="vow-btn-primary flex-1">Save changes</button></div></div></div>}
     {!readOnly && showPauseModal && <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50"><div className="bg-vow-bg border border-vow-border p-6 max-w-md w-full"><h2 className="vow-heading text-lg text-vow-ink mb-2">Pause planning</h2><p className="text-sm text-vow-muted mb-4">Choose the reason that best describes what changed. VOW will save it and return you to your goals.</p><div className="space-y-2">{['Schedule changed','Need to adjust the plan','Taking a short break'].map((reason) => <button key={reason} onClick={() => handlePause(reason)} className="w-full text-left border border-vow-border px-4 py-3 text-sm hover:bg-vow-surface">{reason}</button>)}</div><button onClick={() => setShowPauseModal(false)} className="vow-btn-ghost mt-4">Cancel</button></div></div>}
+    {dialog}
   </div>;
 }

@@ -5,6 +5,8 @@ import type { JournalEntry, Goal } from '@/types/database';
 import { formatDateLong } from '@/lib/dates';
 import { PageHeader, NewButton } from './AppShell';
 import { Link2, Trash2, X } from '@/lib/ui-icons';
+import { VowSelect } from './VowControls';
+import { useVowDialog } from './VowDialog';
 
 function Modal({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
   return <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-label={title}><div className="bg-vow-bg border border-vow-border p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto"><div className="flex items-center justify-between mb-6"><h2 className="vow-heading text-lg text-vow-ink">{title}</h2><button type="button" onClick={onClose} className="text-vow-muted hover:text-vow-ink" aria-label="Close"><X className="w-4 h-4" /></button></div>{children}</div></div>;
@@ -17,6 +19,7 @@ export function JournalPage({ embedded = false }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [showCompose, setShowCompose] = useState(false);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+  const { confirm, dialog } = useVowDialog();
   const load = useCallback(async () => {
     if (!session) return;
     const [entriesRes, goalsRes] = await Promise.all([
@@ -26,7 +29,7 @@ export function JournalPage({ embedded = false }: { embedded?: boolean }) {
     setEntries(entriesRes.data || []); setGoals(goalsRes.data || []); setLoading(false);
   }, [session]);
   useEffect(() => { load(); }, [load]);
-  async function handleDelete(id: string) { if (!confirm('Delete this journal entry? This cannot be undone.')) return; await supabase.from('journal_entries').delete().eq('id', id); load(); }
+  async function handleDelete(id: string) { if (!await confirm('Delete this journal entry? This cannot be undone.', 'Delete journal entry', 'Delete entry')) return; const { error } = await supabase.from('journal_entries').delete().eq('id', id); if (error) { console.error('[VOW] Journal entry deletion failed:', error); return; } await load(); }
   async function handleCreate(body: string, tag: string | null, linkedGoalId: string | null) {
     if (!session) return;
     const { error } = await supabase.from('journal_entries').insert({ user_id: session.user.id, body, tag, linked_goal_id: linkedGoalId });
@@ -50,6 +53,7 @@ export function JournalPage({ embedded = false }: { embedded?: boolean }) {
   const prompt = promptGoal ? `What did you do today that moved “${promptGoal.outcome}” forward? What got in the way, and what will you change next?` : null;
   const entryCtaLabel = entries.length > 0 ? 'New Journal Entry' : 'Create Journal Entry';
   return <div>
+    {dialog}
     {embedded ? <div className="flex items-start justify-between gap-4 mb-8"><div><h2 className="vow-heading text-2xl text-vow-ink mb-1">Journal</h2><p className="text-xs text-vow-muted">Reflect honestly and keep the story behind your commitments.</p></div><NewButton onClick={() => setShowCompose(true)} label={entryCtaLabel} /></div> : <PageHeader title="Journal" subtitle="Reflect honestly. Link the reflection to the commitment it belongs to." action={<NewButton onClick={() => setShowCompose(true)} label={entryCtaLabel} />} />}
     <p className="text-xs text-vow-muted mb-8 leading-relaxed max-w-xl">Your journal is private. Entries stay in your account. Link reflections to goals so VOW can show the story behind progress, setbacks and completed commitments.</p>
     {prompt && !embedded && <section className="border border-vow-border p-5 mb-8"><div className="flex items-start gap-3"><div className="w-4 h-4 mt-0.5 shrink-0 border border-vow-ink rounded-full" aria-hidden="true" /><div className="min-w-0 flex-1"><p className="vow-label mb-2">Reflect on your active goal</p><p className="text-sm text-vow-ink leading-relaxed">{prompt}</p></div></div></section>}
@@ -67,5 +71,5 @@ function ComposeModal({ goals, titleLabel, onCreate, onClose, initialEntry }: { 
   const [tag, setTag] = useState(initialEntry?.tag || '');
   const [linkedGoalId, setLinkedGoalId] = useState<string | null>(initialEntry?.linked_goal_id || null); const selectedGoal = goals.find((goal) => goal.id === linkedGoalId);
   function handleSubmit(e: React.FormEvent) { e.preventDefault(); if (!body.trim()) return; onCreate(body.trim(), tag.trim() || null, linkedGoalId); }
-  return <Modal onClose={onClose} title={titleLabel}><form onSubmit={handleSubmit} className="space-y-5"><div><label className="vow-label block mb-2">Entry</label><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} required autoFocus className="vow-input resize-none" placeholder={selectedGoal ? `Reflect on “${selectedGoal.outcome}”…` : 'Write freely...'} /></div><div><label className="vow-label block mb-2">Link to goal</label><select value={linkedGoalId || ''} onChange={(e) => setLinkedGoalId(e.target.value || null)} className="vow-input"><option value="">No goal — private reflection</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.outcome}</option>)}</select></div><div><label className="vow-label block mb-2">Tag (optional)</label><input value={tag} onChange={(e) => setTag(e.target.value)} className="vow-input" placeholder="e.g. reflection" /></div><div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="vow-btn-ghost">Cancel</button><button type="submit" disabled={!body.trim()} className="vow-btn-primary flex-1">{initialEntry ? "Save changes" : "Save reflection"}</button></div></form></Modal>;
+  return <Modal onClose={onClose} title={titleLabel}><form onSubmit={handleSubmit} className="space-y-5"><div><label className="vow-label block mb-2">Entry</label><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} required autoFocus className="vow-input resize-none" placeholder={selectedGoal ? `Reflect on “${selectedGoal.outcome}”…` : 'Write freely...'} /></div><div><label className="vow-label block mb-2">Link to goal</label><VowSelect value={linkedGoalId || ""} onChange={(value) => setLinkedGoalId(value || null)} ariaLabel="Link journal entry to goal" placeholder="No goal — private reflection" options={[{ value: "", label: "No goal — private reflection" }, ...goals.map((goal) => ({ value: goal.id, label: goal.outcome }))]} /></div><div><label className="vow-label block mb-2">Tag (optional)</label><input value={tag} onChange={(e) => setTag(e.target.value)} className="vow-input" placeholder="e.g. reflection" /></div><div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="vow-btn-ghost">Cancel</button><button type="submit" disabled={!body.trim()} className="vow-btn-primary flex-1">{initialEntry ? "Save changes" : "Save reflection"}</button></div></form></Modal>;
 }

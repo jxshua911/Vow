@@ -6,11 +6,31 @@ import { supabase } from '@/lib/supabase';
 import type { Session, SessionAction } from '@/types/database';
 
 export type NotificationPermission = PermissionStatus['display'];
-export type NotificationPreferences = { enabled: boolean; sound: boolean; vibration: boolean };
+export type NotificationPreferences = {
+  enabled: boolean;
+  sound: boolean;
+  vibration: boolean;
+  sessions: boolean;
+  weeklyReviews: boolean;
+  deadlines: boolean;
+  streaks: boolean;
+};
 
 const CHANNEL_PREFIX = 'vow-reminders';
-const PREF_KEY = 'vow:notification-preferences';
-const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: false, sound: true, vibration: true };
+const PREF_KEY_PREFIX = 'vow:notification-preferences:';
+let activeNotificationUserId: string | null = null;
+
+export function setNotificationUser(userId: string | null): void {
+  activeNotificationUserId = userId;
+}
+
+function preferenceKey(userId: string | null): string {
+  return `${PREF_KEY_PREFIX}${userId || 'signed-out'}`;
+}
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  enabled: false, sound: true, vibration: true,
+  sessions: true, weeklyReviews: true, deadlines: true, streaks: true,
+};
 const PUSH_TOKEN_KEY = 'vow:fcm-token';
 let pushListenersReady = false;
 let pushRegistrationWaiter: { resolve: () => void; reject: (error: Error) => void; timeoutId: number } | null = null;
@@ -44,15 +64,19 @@ function isVowNotification(notification: { title: string; extra?: unknown }): bo
   return notification.title.startsWith('VOW ·');
 }
 
-export function getNotificationPreferences(): NotificationPreferences {
+export function getNotificationPreferences(userId: string | null = activeNotificationUserId): NotificationPreferences {
   try {
-    const stored = localStorage.getItem(PREF_KEY);
+    const stored = localStorage.getItem(preferenceKey(userId));
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<NotificationPreferences>;
       return {
         enabled: parsed.enabled === true,
         sound: parsed.sound !== false,
         vibration: parsed.vibration !== false,
+        sessions: parsed.sessions !== false,
+        weeklyReviews: parsed.weeklyReviews !== false,
+        deadlines: parsed.deadlines !== false,
+        streaks: parsed.streaks !== false,
       };
     }
   } catch {
@@ -61,21 +85,74 @@ export function getNotificationPreferences(): NotificationPreferences {
   return DEFAULT_PREFERENCES;
 }
 
-export async function setNotificationPreferences(preferences: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
-  const next = { ...getNotificationPreferences(), ...preferences };
-  try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+async function persistRemoteReminderPreference(preferences: NotificationPreferences, userId: string | null): Promise<void> {
+  if (!userId) return;
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const { error } = await supabase.from('reminder_preferences').upsert({
+    user_id: userId,
+    enabled: preferences.enabled,
+    sessions_enabled: preferences.sessions,
+    weekly_reviews_enabled: preferences.weeklyReviews,
+    deadlines_enabled: preferences.deadlines,
+    streaks_enabled: preferences.streaks,
+    timezone,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+  if (error) throw error;
+}
 
-  if (!Capacitor.isNativePlatform()) return next;
+export async function loadRemoteNotificationPreferences(userId: string | null): Promise<NotificationPreferences> {
+  const local = getNotificationPreferences(userId);
+  if (!userId) return local;
+  const { data, error } = await supabase.from('reminder_preferences')
+    .select('enabled,sessions_enabled,weekly_reviews_enabled,deadlines_enabled,streaks_enabled')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return local;
+  const next: NotificationPreferences = {
+    ...local,
+    enabled: data.enabled === true,
+    sessions: data.sessions_enabled !== false,
+    weeklyReviews: data.weekly_reviews_enabled !== false,
+    deadlines: data.deadlines_enabled !== false,
+    streaks: data.streaks_enabled !== false,
+  };
+  try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
+  return next;
+}
 
-  if (!next.enabled) {
-    await cancelAllVowNotifications();
-    await clearCloudPushRegistration();
+export async function setNotificationPreferences(preferences: Partial<NotificationPreferences>, userId: string | null = activeNotificationUserId): Promise<NotificationPreferences> {
+  const next = { ...getNotificationPreferences(userId), ...preferences };
+
+  if (!Capacitor.isNativePlatform()) {
+    try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
     return next;
   }
 
-  if (await getNotificationPermission() === 'granted') {
-    await syncCurrentUserUpcomingSessionNotifications();
+  if (!next.enabled) {
+    // Turn off server delivery first. Even if device-token cleanup later fails,
+    // the server will no longer send routine reminders to this account.
+    await persistRemoteReminderPreference(next, userId);
+    try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
+    await clearCloudPushRegistration();
+    await cancelAllVowNotifications();
+    return next;
   }
+
+  if (await getNotificationPermission() !== 'granted') {
+    return { ...next, enabled: false };
+  }
+
+  await persistRemoteReminderPreference(next, userId);
+  try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
+
+  const token = await getStoredPushToken();
+  if (token && isRemotePushConfigured()) {
+    const { error } = await supabase.rpc('vow_touch_push_device', { p_token: token, p_build_tier: VOW_BUILD_TIER, p_channel_id: channelId(next) });
+    if (error) throw error;
+  }
+  await syncCurrentUserUpcomingSessionNotifications();
   return next;
 }
 
@@ -137,7 +214,7 @@ export async function scheduleReminder(id: number, title: string, body: string, 
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
 
   const preferences = getNotificationPreferences();
-  if (!preferences.enabled || await getNotificationPermission() !== 'granted') return;
+  if (!preferences.enabled || !preferences.sessions || await getNotificationPermission() !== 'granted') return;
 
   await setupNotifications(preferences);
 
@@ -145,9 +222,15 @@ export async function scheduleReminder(id: number, title: string, body: string, 
   // essential when a session is moved or its notification settings change.
   await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => undefined);
 
-  const exactAlarmGranted = Capacitor.getPlatform() === 'android'
-    ? (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'
-    : undefined;
+  let exactAlarmGranted: boolean | undefined;
+  if (Capacitor.getPlatform() === 'android') {
+    try {
+      exactAlarmGranted = (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted';
+    } catch (error) {
+      console.warn('[VOW] Exact-alarm state could not be checked; scheduling an inexact reminder:', error);
+      exactAlarmGranted = false;
+    }
+  }
 
   const result = await LocalNotifications.schedule({
     notifications: [{
@@ -184,7 +267,7 @@ export async function cancelActionRemindersForSession(sessionId: string): Promis
 export async function syncSessionActionReminders(sessionId: string, sessionTitle: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   const preferences = getNotificationPreferences();
-  if (!preferences.enabled) return;
+  if (!preferences.enabled || !preferences.sessions) return;
   if (await getNotificationPermission() !== 'granted') return;
   const { data, error } = await supabase.from('session_actions').select('*').eq('session_id', sessionId).eq('status', 'pending').not('scheduled_at', 'is', null);
   if (error) throw error;
@@ -236,7 +319,7 @@ export async function syncUpcomingSessionNotifications(sessions: Session[]): Pro
   if (!Capacitor.isNativePlatform()) return;
 
   const preferences = getNotificationPreferences();
-  if (!preferences.enabled) {
+  if (!preferences.enabled || !preferences.sessions) {
     await cancelAllVowNotifications();
     return;
   }
@@ -293,7 +376,11 @@ async function syncCurrentUserUpcomingSessionNotifications(): Promise<void> {
 export async function syncUserUpcomingSessionNotifications(userId: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
-  const preferences = getNotificationPreferences();
+  // Server preferences are authoritative. Load them before syncing so an
+  // early app-start sync cannot overwrite a user's saved category choices
+  // with local defaults from a fresh install.
+  const preferences = await loadRemoteNotificationPreferences(userId);
+  await persistRemoteReminderPreference(preferences, userId);
   if (!preferences.enabled) {
     await cancelAllVowNotifications();
     return;
@@ -345,6 +432,7 @@ async function registerCloudPushNotifications(): Promise<void> {
         const { error } = await supabase.rpc('vow_touch_push_device', {
           p_token: value,
           p_build_tier: VOW_BUILD_TIER,
+          p_channel_id: channelId(getNotificationPreferences()),
         });
         if (error) throw error;
         finishPushRegistration();
@@ -383,14 +471,19 @@ export async function clearCloudPushRegistration(): Promise<void> {
 
   const token = await getStoredPushToken();
   try {
-    if (token) {
-      await supabase.from('vow_push_devices').delete().eq('token', token);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (token && user) {
+      const { error } = await supabase.from('vow_push_devices').delete().eq('token', token).eq('user_id', user.id);
+      if (error) throw error;
     }
   } catch (error) {
-    console.warn('[VOW] Push registration cleanup failed:', error);
+    console.error('[VOW] Push registration cleanup failed; keeping the local token so cleanup can be retried:', error);
+    throw error;
   }
 
-  try { await PushNotifications.unregister(); } catch { /* ignore */ }
+  try { await PushNotifications.unregister(); } catch (error) {
+    console.warn('[VOW] Device push unregistration could not be confirmed:', error);
+  }
   await clearStoredPushToken();
 }
 
