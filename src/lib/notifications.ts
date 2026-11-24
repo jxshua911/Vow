@@ -6,7 +6,15 @@ import { supabase } from '@/lib/supabase';
 import type { Session, SessionAction } from '@/types/database';
 
 export type NotificationPermission = PermissionStatus['display'];
-export type NotificationPreferences = { enabled: boolean; sound: boolean; vibration: boolean };
+export type NotificationPreferences = {
+  enabled: boolean;
+  sound: boolean;
+  vibration: boolean;
+  sessions: boolean;
+  weeklyReviews: boolean;
+  deadlines: boolean;
+  streaks: boolean;
+};
 
 const CHANNEL_PREFIX = 'vow-reminders';
 const PREF_KEY_PREFIX = 'vow:notification-preferences:';
@@ -19,7 +27,10 @@ export function setNotificationUser(userId: string | null): void {
 function preferenceKey(userId: string | null): string {
   return `${PREF_KEY_PREFIX}${userId || 'signed-out'}`;
 }
-const DEFAULT_PREFERENCES: NotificationPreferences = { enabled: false, sound: true, vibration: true };
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  enabled: false, sound: true, vibration: true,
+  sessions: true, weeklyReviews: true, deadlines: true, streaks: true,
+};
 const PUSH_TOKEN_KEY = 'vow:fcm-token';
 let pushListenersReady = false;
 let pushRegistrationWaiter: { resolve: () => void; reject: (error: Error) => void; timeoutId: number } | null = null;
@@ -62,6 +73,10 @@ export function getNotificationPreferences(userId: string | null = activeNotific
         enabled: parsed.enabled === true,
         sound: parsed.sound !== false,
         vibration: parsed.vibration !== false,
+        sessions: parsed.sessions !== false,
+        weeklyReviews: parsed.weeklyReviews !== false,
+        deadlines: parsed.deadlines !== false,
+        streaks: parsed.streaks !== false,
       };
     }
   } catch {
@@ -70,16 +85,41 @@ export function getNotificationPreferences(userId: string | null = activeNotific
   return DEFAULT_PREFERENCES;
 }
 
-async function persistRemoteReminderPreference(enabled: boolean, userId: string | null): Promise<void> {
+async function persistRemoteReminderPreference(preferences: NotificationPreferences, userId: string | null): Promise<void> {
   if (!userId) return;
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const { error } = await supabase.from('reminder_preferences').upsert({
     user_id: userId,
-    enabled,
+    enabled: preferences.enabled,
+    sessions_enabled: preferences.sessions,
+    weekly_reviews_enabled: preferences.weeklyReviews,
+    deadlines_enabled: preferences.deadlines,
+    streaks_enabled: preferences.streaks,
     timezone,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' });
   if (error) throw error;
+}
+
+export async function loadRemoteNotificationPreferences(userId: string | null): Promise<NotificationPreferences> {
+  const local = getNotificationPreferences(userId);
+  if (!userId) return local;
+  const { data, error } = await supabase.from('reminder_preferences')
+    .select('enabled,sessions_enabled,weekly_reviews_enabled,deadlines_enabled,streaks_enabled')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return local;
+  const next: NotificationPreferences = {
+    ...local,
+    enabled: data.enabled === true,
+    sessions: data.sessions_enabled !== false,
+    weeklyReviews: data.weekly_reviews_enabled !== false,
+    deadlines: data.deadlines_enabled !== false,
+    streaks: data.streaks_enabled !== false,
+  };
+  try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
+  return next;
 }
 
 export async function setNotificationPreferences(preferences: Partial<NotificationPreferences>, userId: string | null = activeNotificationUserId): Promise<NotificationPreferences> {
@@ -93,7 +133,7 @@ export async function setNotificationPreferences(preferences: Partial<Notificati
   if (!next.enabled) {
     // Turn off server delivery first. Even if device-token cleanup later fails,
     // the server will no longer send routine reminders to this account.
-    await persistRemoteReminderPreference(false, userId);
+    await persistRemoteReminderPreference(next, userId);
     try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
     await clearCloudPushRegistration();
     await cancelAllVowNotifications();
@@ -104,7 +144,7 @@ export async function setNotificationPreferences(preferences: Partial<Notificati
     return { ...next, enabled: false };
   }
 
-  await persistRemoteReminderPreference(true, userId);
+  await persistRemoteReminderPreference(next, userId);
   try { localStorage.setItem(preferenceKey(userId), JSON.stringify(next)); } catch { /* ignore */ }
 
   const token = await getStoredPushToken();
@@ -174,7 +214,7 @@ export async function scheduleReminder(id: number, title: string, body: string, 
   if (!Capacitor.isNativePlatform() || at.getTime() <= Date.now()) return;
 
   const preferences = getNotificationPreferences();
-  if (!preferences.enabled || await getNotificationPermission() !== 'granted') return;
+  if (!preferences.enabled || !preferences.sessions || await getNotificationPermission() !== 'granted') return;
 
   await setupNotifications(preferences);
 
@@ -227,7 +267,7 @@ export async function cancelActionRemindersForSession(sessionId: string): Promis
 export async function syncSessionActionReminders(sessionId: string, sessionTitle: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   const preferences = getNotificationPreferences();
-  if (!preferences.enabled) return;
+  if (!preferences.enabled || !preferences.sessions) return;
   if (await getNotificationPermission() !== 'granted') return;
   const { data, error } = await supabase.from('session_actions').select('*').eq('session_id', sessionId).eq('status', 'pending').not('scheduled_at', 'is', null);
   if (error) throw error;
@@ -279,7 +319,7 @@ export async function syncUpcomingSessionNotifications(sessions: Session[]): Pro
   if (!Capacitor.isNativePlatform()) return;
 
   const preferences = getNotificationPreferences();
-  if (!preferences.enabled) {
+  if (!preferences.enabled || !preferences.sessions) {
     await cancelAllVowNotifications();
     return;
   }
@@ -337,7 +377,7 @@ export async function syncUserUpcomingSessionNotifications(userId: string): Prom
   if (!Capacitor.isNativePlatform()) return;
 
   const preferences = getNotificationPreferences();
-  await persistRemoteReminderPreference(preferences.enabled, userId);
+  await persistRemoteReminderPreference(preferences, userId);
   if (!preferences.enabled) {
     await cancelAllVowNotifications();
     return;
