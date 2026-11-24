@@ -85,7 +85,8 @@ BEGIN
   fire_at := GREATEST(NEW.scheduled_at - interval '15 minutes', now());
   local_fire_time := fire_at AT TIME ZONE reminder_timezone;
   IF quiet_start_time IS NOT NULL AND quiet_end_time IS NOT NULL AND
-     CASE WHEN quiet_start_time < quiet_end_time
+     CASE WHEN quiet_start_time = quiet_end_time THEN false
+       WHEN quiet_start_time < quiet_end_time
        THEN local_fire_time >= quiet_start_time AND local_fire_time < quiet_end_time
        ELSE local_fire_time >= quiet_start_time OR local_fire_time < quiet_end_time
      END THEN
@@ -180,7 +181,8 @@ BEGIN
     AND s.scheduled_at > now()
     AND NOT (
       NEW.quiet_start IS NOT NULL AND NEW.quiet_end IS NOT NULL
-      AND CASE WHEN NEW.quiet_start < NEW.quiet_end
+      AND CASE WHEN NEW.quiet_start = NEW.quiet_end THEN false
+        WHEN NEW.quiet_start < NEW.quiet_end
         THEN (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time >= NEW.quiet_start
           AND (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time < NEW.quiet_end
         ELSE (GREATEST(s.scheduled_at - interval '15 minutes', now()) AT TIME ZONE COALESCE(NULLIF(NEW.timezone, ''), 'UTC'))::time >= NEW.quiet_start
@@ -244,7 +246,8 @@ BEGIN
       AND local_now::time >= time '18:00'
       AND local_now::time < time '18:05'
       AND NOT (quiet_start IS NOT NULL AND quiet_end IS NOT NULL AND
-        CASE WHEN quiet_start < quiet_end
+        CASE WHEN quiet_start = quiet_end THEN false
+          WHEN quiet_start < quiet_end
           THEN local_now::time >= quiet_start AND local_now::time < quiet_end
           ELSE local_now::time >= quiet_start OR local_now::time < quiet_end
         END)
@@ -276,7 +279,8 @@ BEGIN
     JOIN public.goals g ON g.user_id = d.user_id
     WHERE d.local_time >= time '09:00' AND d.local_time < time '09:05'
       AND NOT (d.quiet_start IS NOT NULL AND d.quiet_end IS NOT NULL AND
-        CASE WHEN d.quiet_start < d.quiet_end
+        CASE WHEN d.quiet_start = d.quiet_end THEN false
+          WHEN d.quiet_start < d.quiet_end
           THEN d.local_time >= d.quiet_start AND d.local_time < d.quiet_end
           ELSE d.local_time >= d.quiet_start OR d.local_time < d.quiet_end
         END)
@@ -316,7 +320,8 @@ BEGIN
       AND local_now::time >= time '19:00'
       AND local_now::time < time '19:05'
       AND NOT (quiet_start IS NOT NULL AND quiet_end IS NOT NULL AND
-        CASE WHEN quiet_start < quiet_end
+        CASE WHEN quiet_start = quiet_end THEN false
+          WHEN quiet_start < quiet_end
           THEN local_now::time >= quiet_start AND local_now::time < quiet_end
           ELSE local_now::time >= quiet_start OR local_now::time < quiet_end
         END)
