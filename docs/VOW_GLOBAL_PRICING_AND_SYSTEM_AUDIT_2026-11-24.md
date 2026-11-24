@@ -211,5 +211,16 @@ The goal is to clear every non-billing gate before the public test rollout:
 6. Resolve every reproducible P0/P1 defect and record the test evidence. Only then call non-billing systems release-ready.
 7. Keep Google Play Console country availability, local price points, merchant/tax readiness and license-tester purchase/restore/renewal/cancellation as the separate billing workstream.
 
+### Latest workflow and migration-log audit (24 November 2026, 15:48 UTC)
+- Latest PR head `c56dc755836851e42cdb319c7c0bd9382eacb794` passed both workflows:
+  - [Capacitor Mobile CI run 45429248084](https://github.com/jxshua911/Vow/actions/runs/45429248084): Edge Function typecheck, unit tests, ESLint, TypeScript typecheck and production build all passed.
+  - [Android CI run 45429245818](https://github.com/jxshua911/Vow/actions/runs/45429245818): app typecheck, lint, unit tests, production build, Supabase Android config validation, Android debug APK build and artifact upload all passed.
+- Latest APK artifact: `vow-android-debug-apk`, artifact ID `14936938635`, SHA-256 `ab3af33b6454d35177e89ab0eff54324985e6dbbbd075163ebf3e81e4a90f148`; [workflow run](https://github.com/jxshua911/Vow/actions/runs/45429245818). This APK is not yet physically tested.
+- Retrieved the actual Supabase development-branch workflow log. The exact failure is: `Remote migration versions not found in local migrations directory.` The workflow cloned Git ref `capacitor-mobile` and stopped during remote/local migration reconciliation. It did not reach application of new migrations.
+- Production migration history reports `20261119054150_harden_account_lifecycle_and_notifications`; that exact versioned file is absent from both the remediation branch and `capacitor-mobile`. The similarly named `20261119140000_harden_account_lifecycle_and_notifications.sql` is a different migration version and is not assumed equivalent.
+- The development branch status remains `MIGRATIONS_FAILED`. Do not mark it healthy or attempt a no-op placeholder, migration-history deletion, branch reset, or production deployment. Recover the exact SQL from the original change/source history or reconstruct it only after comparing every resulting production schema object and function with the recorded migration intent.
+- Production account-purge cron is active and its latest observed invocations returned HTTP 200. This confirms that existing purge scheduling is operating; it does not validate the new remediation branch or the full restore/purge lifecycle.
+- Latest deployed function inventory still does not include the branch's new `vow-dispatch-notifications` or `vow-account-restore` functions. Do not confuse branch source with deployed production code.
+
 ### Pilot-readiness principle
 Do not recruit testers into a broken build. Once the non-billing gates pass, start a small, controlled closed test with a known build number, a short task-based test script, a single feedback channel and a clear bug-report template. Public content and waitlist acquisition can proceed in parallel, but tester access should be granted only to the validated build.
