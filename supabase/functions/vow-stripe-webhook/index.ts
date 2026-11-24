@@ -10,6 +10,28 @@ const CORS = {
 
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: CORS });
 
+async function sendSubscriptionPush(userId: string, eventId: string, title: string, body: string) {
+  const secret = Deno.env.get("VOW_PUSH_INTERNAL_SECRET") || "";
+  const baseUrl = Deno.env.get("SUPABASE_URL") || "";
+  if (!secret || !baseUrl) return;
+  try {
+    const response = await fetch(baseUrl + "/functions/v1/vow-send-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-vow-push-secret": secret },
+      body: JSON.stringify({
+        user_id: userId,
+        title,
+        body,
+        category: "subscription",
+        data: { billingEventId: eventId },
+      }),
+    });
+    if (!response.ok) console.warn("[VOW] Subscription push notice was not delivered:", response.status);
+  } catch {
+    console.warn("[VOW] Subscription push notice could not be sent.");
+  }
+}
+
 function hex(bytes: Uint8Array) {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -107,6 +129,14 @@ Deno.serve(async (req) => {
                 ? "pending"
                 : "expired";
 
+        const { data: previousSubscription, error: previousSubscriptionError } = await db
+          .from("vow_subscription_records")
+          .select("status,auto_renewing")
+          .eq("provider", "stripe")
+          .eq("provider_purchase_id", subscriptionId)
+          .maybeSingle();
+        if (previousSubscriptionError) throw new Error("SUBSCRIPTION_HISTORY_LOOKUP_FAILED");
+
         const wasPremiumActive = existing?.plan === "premium" && existing?.status === "active";
         if (status === "active") {
           premiumEmailContext = { userId, billingPeriod };
@@ -153,6 +183,17 @@ Deno.serve(async (req) => {
           })
           .eq("user_id", userId);
         if (customerUpdateError) throw new Error("SUBSCRIPTION_CUSTOMER_LINK_WRITE_FAILED");
+
+        if (status === "active" && !wasPremiumActive) {
+          await sendSubscriptionPush(userId, String(event.id), "VOW Premium is active", "Your Premium subscription is active. Your benefits are ready.");
+        } else if (object?.cancel_at_period_end === true && previousSubscription?.auto_renewing !== false) {
+          const endDate = object?.current_period_end
+            ? new Date(Number(object.current_period_end) * 1000).toLocaleDateString("en-US")
+            : "the end of your paid period";
+          await sendSubscriptionPush(userId, String(event.id), "Premium renewal stopped", `Your Premium subscription will not renew. Access remains active until ${endDate}.`);
+        } else if (status === "cancelled" && previousSubscription?.status !== "cancelled") {
+          await sendSubscriptionPush(userId, String(event.id), "VOW Premium has ended", "Your Premium subscription has ended. You can resubscribe at any time.");
+        }
       }
     }
 
