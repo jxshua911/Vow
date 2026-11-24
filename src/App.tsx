@@ -81,6 +81,7 @@ function AppContent() {
   const [accountSuspended, setAccountSuspended] = useState(false);
   const [accountDeletionPending, setAccountDeletionPending] = useState(false);
   const [deletionExpiresAt, setDeletionExpiresAt] = useState<string | null>(null);
+  const [accountRestoreNotice, setAccountRestoreNotice] = useState<string | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
@@ -396,8 +397,8 @@ function AppContent() {
     accountStateReady.current = true;
     if (data?.resubscribe_required === true) {
       const endDate = data.current_period_end ? new Date(data.current_period_end).toLocaleDateString() : null;
-      window.alert(
-        'Your VOW account has been restored. Your Google Play Premium access remains available'
+      setAccountRestoreNotice(
+        'Your Google Play Premium access remains available'
         + (endDate ? ` until ${endDate}` : ' for the remainder of your paid period')
         + ', but the subscription will not renew. To continue Premium after that, resubscribe to VOW in Google Play under Payments & subscriptions.'
       );
@@ -441,7 +442,18 @@ function AppContent() {
       )}
     </ProtectedRoute>
   );
-  return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}>{content}{splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}</LanguageContext.Provider>;
+  return <LanguageContext.Provider value={settings?.preferred_language || localStorage.getItem('vow:language') || 'en'}>
+    {content}
+    {accountRestoreNotice && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-5 py-8" role="presentation">
+      <section role="dialog" aria-modal="true" aria-labelledby="restore-notice-title" className="w-full max-w-md border border-vow-border bg-vow-bg p-6 text-vow-ink shadow-xl">
+        <p className="vow-label mb-3">Billing update</p>
+        <h2 id="restore-notice-title" className="vow-heading text-xl">Your account is restored</h2>
+        <p className="mt-4 text-sm leading-relaxed text-vow-muted">{accountRestoreNotice}</p>
+        <button type="button" onClick={() => setAccountRestoreNotice(null)} className="vow-btn-primary mt-6 w-full justify-center">Got it</button>
+      </section>
+    </div>}
+    {splashMounted && <SplashOverlay fadingOut={splashFadingOut} />}
+  </LanguageContext.Provider>;
 }
 
 function AppLoading() { return <div className="min-h-screen bg-vow-bg flex items-center justify-center" aria-label="Loading"><div className="vow-loading-dots"><span /><span /><span /></div></div>; }
