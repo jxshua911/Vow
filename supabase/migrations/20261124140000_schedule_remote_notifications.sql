@@ -40,6 +40,11 @@ SET search_path = ''
 AS $function$
 DECLARE
   reminders_enabled boolean := false;
+  reminder_timezone text := 'UTC';
+  quiet_start_time time;
+  quiet_end_time time;
+  fire_at timestamptz;
+  local_fire_time time;
 BEGIN
   IF TG_OP = 'UPDATE' AND (
     OLD.status IS DISTINCT FROM NEW.status
@@ -56,12 +61,25 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT COALESCE(rp.enabled, false) AND COALESCE(rp.sessions_enabled, true)
-    INTO reminders_enabled
+  SELECT COALESCE(rp.enabled, false) AND COALESCE(rp.sessions_enabled, true),
+         COALESCE(NULLIF(rp.timezone, ''), 'UTC'),
+         rp.quiet_start,
+         rp.quiet_end
+    INTO reminders_enabled, reminder_timezone, quiet_start_time, quiet_end_time
     FROM public.reminder_preferences rp
    WHERE rp.user_id = NEW.user_id;
 
   IF NOT COALESCE(reminders_enabled, false) THEN
+    RETURN NEW;
+  END IF;
+
+  fire_at := GREATEST(NEW.scheduled_at - interval '15 minutes', now());
+  local_fire_time := fire_at AT TIME ZONE reminder_timezone;
+  IF quiet_start_time IS NOT NULL AND quiet_end_time IS NOT NULL AND
+     CASE WHEN quiet_start_time < quiet_end_time
+       THEN local_fire_time >= quiet_start_time AND local_fire_time < quiet_end_time
+       ELSE local_fire_time >= quiet_start_time OR local_fire_time < quiet_end_time
+     END THEN
     RETURN NEW;
   END IF;
 
@@ -72,7 +90,7 @@ BEGIN
     NEW.user_id,
     'session',
     'session:' || NEW.id::text,
-    GREATEST(NEW.scheduled_at - interval '15 minutes', now()),
+    fire_at,
     'Your VOW session is coming up',
     NEW.title,
     jsonb_build_object('sessionId', NEW.id::text, 'goalId', NEW.goal_id::text),
