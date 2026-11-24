@@ -378,7 +378,7 @@ function AppContent() {
   }, [session, termsAccepted]);
 
   async function handleRestoreAccount() {
-    const { data, error } = await supabase.rpc('vow_restore_account');
+    const { data, error } = await supabase.functions.invoke('vow-account-restore', { body: {} });
     if (error) throw error;
     if (!['restored', 'active'].includes(String(data?.status))) {
       throw new Error('The restoration window has expired. VOW can no longer restore this account.');
@@ -394,6 +394,14 @@ function AppContent() {
     setAccountDeletionPending(false);
     setDeletionExpiresAt(null);
     accountStateReady.current = true;
+    if (data?.resubscribe_required === true) {
+      const endDate = data.current_period_end ? new Date(data.current_period_end).toLocaleDateString() : null;
+      window.alert(
+        'Your VOW account has been restored. Your Google Play Premium access remains available'
+        + (endDate ? ` until ${endDate}` : ' for the remainder of your paid period')
+        + ', but the subscription will not renew. To continue Premium after that, resubscribe to VOW in Google Play under Payments & subscriptions.'
+      );
+    }
   }
 
   async function handleOnboardingComplete() {
