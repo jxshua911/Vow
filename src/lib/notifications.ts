@@ -337,6 +337,7 @@ export async function syncUserUpcomingSessionNotifications(userId: string): Prom
   if (!Capacitor.isNativePlatform()) return;
 
   const preferences = getNotificationPreferences();
+  await persistRemoteReminderPreference(preferences.enabled, userId);
   if (!preferences.enabled) {
     await cancelAllVowNotifications();
     return;
