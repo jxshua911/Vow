@@ -74,9 +74,6 @@ Deno.serve(async(req)=>{
   const auth=authClient(req);const {data:{user},error:userError}=await auth.auth.getUser();
   if(userError||!user)return json({error:"AUTH_REQUIRED"},401);
   const admin=adminClient();
-  const {error:pushDeviceCleanupError}=await admin.from("vow_push_devices").delete().eq("user_id",user.id);
-  if(pushDeviceCleanupError)return json({error:"PUSH_REGISTRATION_CLEANUP_FAILED"},500);
-  await admin.from("reminder_preferences").update({enabled:false,updated_at:new Date().toISOString()}).eq("user_id",user.id);
   let deletedAt=new Date().toISOString();
   let deletionExpiresAt=new Date(Date.now()+14*24*60*60*1000).toISOString();
   const {data:existingSettings,error:settingsReadError}=await admin.from("user_settings")
@@ -119,6 +116,10 @@ Deno.serve(async(req)=>{
     console.error("[VOW] Subscription renewal cancellation failed:",error instanceof Error?error.message:"UNKNOWN_ERROR");
     return json({error:"SUBSCRIPTION_CANCELLATION_FAILED",message:"Account deletion was not completed because subscription renewal could not be safely stopped. Please try again or contact support."},503);
   }
+
+  const {error:pushDeviceCleanupError}=await admin.from("vow_push_devices").delete().eq("user_id",user.id);
+  if(pushDeviceCleanupError)console.warn("[VOW] Account is pending deletion but push-device cleanup needs retry.");
+  await admin.from("reminder_preferences").update({enabled:false,updated_at:new Date().toISOString()}).eq("user_id",user.id);
 
   if(Date.parse(deletionExpiresAt)>Date.now()){
     try{
