@@ -381,6 +381,9 @@ function AppContent() {
   async function handleRestoreAccount() {
     const { data, error } = await supabase.functions.invoke('vow-account-restore', { body: {} });
     if (error) throw error;
+    if (data?.status === 'purging') {
+      throw new Error('Permanent account deletion has already started, so VOW can no longer restore this account.');
+    }
     if (!['restored', 'active'].includes(String(data?.status))) {
       throw new Error('The restoration window has expired. VOW can no longer restore this account.');
     }
