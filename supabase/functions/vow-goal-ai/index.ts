@@ -461,7 +461,7 @@ function providerErrorCode(raw: string): string {
   return "unspecified";
 }
 
-async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean) {
+async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _researchRequired: boolean, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY_MISSING");
 
@@ -505,6 +505,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
 
     if (response.ok) {
       const payload = JSON.parse(raw);
+      await onUsage?.(payload?.model || "openai/gpt-oss-20b", payload?.usage ?? {});
       const message = payload?.choices?.[0]?.message;
       const content = message?.content;
       if (typeof content !== "string" || !content.trim()) throw new Error("GROQ_EMPTY_RESPONSE");
@@ -555,7 +556,7 @@ async function callGroq(req: Request, messages: any[], kind: keyof typeof MAX, _
   }
 }
 
-async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) throw new Error("OPENAI_API_KEY_MISSING");
 
@@ -581,6 +582,7 @@ async function callOpenAI(req: Request, messages: any[], kind: keyof typeof MAX)
     const raw = await r.text();
     if (r.ok) {
       const payload = JSON.parse(raw);
+      await onUsage?.(payload?.model || "gpt-4o-mini", payload?.usage ?? {});
       const message = payload?.choices?.[0]?.message;
       const content = message?.content;
       if (typeof content !== "string" || !content.trim()) throw new Error("OPENAI_EMPTY_RESPONSE");
@@ -632,7 +634,7 @@ function providerOrder(): AiProvider[] {
   return [...prioritized, ...enabled.filter((provider) => !prioritized.includes(provider))];
 }
 
-async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("MISTRAL_API_KEY");
   if (!key) throw new Error("MISTRAL_API_KEY_MISSING");
   const model = Deno.env.get("MISTRAL_MODEL") || "mistral-small-latest";
@@ -686,6 +688,7 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
     }
 
     const payload = JSON.parse(raw);
+    await onUsage?.(payload?.model || model, payload?.usage ?? {});
     const content = payload?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) throw new Error("MISTRAL_EMPTY_RESPONSE");
     try {
@@ -711,7 +714,7 @@ async function callMistral(req: Request, messages: any[], kind: keyof typeof MAX
   }
 }
 
-async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("DASHSCOPE_API_KEY");
   if (!key) throw new Error("QWEN_API_KEY_MISSING");
   const baseUrl = (Deno.env.get("DASHSCOPE_BASE_URL") || "https://dashscope-us.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
@@ -740,6 +743,7 @@ async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
       throw new Error(r.status === 429 ? "QWEN_429" : `QWEN_PROVIDER_ERROR_${r.status}`);
     }
     const payload = JSON.parse(raw);
+    await onUsage?.(payload?.model || model, payload?.usage ?? {});
     const content = payload?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) throw new Error("QWEN_EMPTY_RESPONSE");
     return parse(content);
@@ -748,7 +752,7 @@ async function callQwen(req: Request, messages: any[], kind: keyof typeof MAX) {
   }
 }
 
-async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
+async function callNova(req: Request, messages: any[], kind: keyof typeof MAX, onUsage?: (model: string, usage: any) => Promise<void>) {
   const key = Deno.env.get("AWS_BEARER_TOKEN_BEDROCK");
   if (!key) throw new Error("NOVA_API_KEY_MISSING");
   const region = Deno.env.get("AWS_BEDROCK_REGION") || "us-east-1";
@@ -788,6 +792,7 @@ async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
       throw new Error(r.status === 429 ? "NOVA_429" : `NOVA_PROVIDER_ERROR_${r.status}`);
     }
     const payload = JSON.parse(raw);
+    await onUsage?.(model, payload?.usage ?? {});
     const content = payload?.output?.message?.content
       ?.filter((x: any) => typeof x?.text === "string")
       ?.map((x: any) => x.text)
@@ -801,6 +806,33 @@ async function callNova(req: Request, messages: any[], kind: keyof typeof MAX) {
 
 async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researchRequired = false, preferFallback = false) {
   const requestId = await claimGuardrail(req);
+  const usageRecorder = async (provider: string, model: string, usage: any) => {
+    const tokenValue = (...values: unknown[]) => {
+      for (const value of values) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed) && parsed >= 0) return Math.trunc(parsed);
+      }
+      return null;
+    };
+    const promptTokens = tokenValue(usage?.prompt_tokens, usage?.input_tokens, usage?.inputTokens);
+    const completionTokens = tokenValue(usage?.completion_tokens, usage?.output_tokens, usage?.outputTokens);
+    const totalTokens = tokenValue(usage?.total_tokens, usage?.totalTokens,
+      promptTokens !== null && completionTokens !== null ? promptTokens + completionTokens : null);
+    try {
+      const { error } = await client(req).rpc("vow_record_ai_provider_usage", {
+        p_request_id: requestId,
+        p_provider: provider,
+        p_model: String(model || "unknown").slice(0, 128),
+        p_request_kind: kind === "planRetry" ? "plan_retry" : kind,
+        p_prompt_tokens: promptTokens,
+        p_completion_tokens: completionTokens,
+        p_total_tokens: totalTokens,
+      });
+      if (error) console.warn("[VOW AI] Provider token telemetry was not saved:", error.message);
+    } catch (error) {
+      console.warn("[VOW AI] Provider token telemetry failed:", error instanceof Error ? error.message : "UNKNOWN_ERROR");
+    }
+  };
   try {
     const configuredProviders = providerOrder();
     const providers = preferFallback && configuredProviders.length > 1
@@ -831,12 +863,12 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
 
         const result =
           provider === "groq"
-            ? await callGroq(req, providerMessages, kind, researchRequired)
+            ? await callGroq(req, providerMessages, kind, researchRequired, (model, usage) => usageRecorder(provider, model, usage))
             : provider === "mistral"
-              ? await callMistral(req, providerMessages, kind)
+              ? await callMistral(req, providerMessages, kind, (model, usage) => usageRecorder(provider, model, usage))
               : provider === "qwen"
-                ? await callQwen(req, providerMessages, kind)
-                : await callNova(req, providerMessages, kind);
+                ? await callQwen(req, providerMessages, kind, (model, usage) => usageRecorder(provider, model, usage))
+                : await callNova(req, providerMessages, kind, (model, usage) => usageRecorder(provider, model, usage));
         console.log("[VOW AI] Provider succeeded", { provider });
         return result;
       } catch (providerError) {
@@ -863,7 +895,7 @@ async function ai(req: Request, messages: any[], kind: keyof typeof MAX, researc
         : messages;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const result = await callOpenAI(req, fallbackMessages, kind);
+          const result = await callOpenAI(req, fallbackMessages, kind, (model, usage) => usageRecorder("openai", model, usage));
           console.log("[VOW AI] OpenAI emergency fallback succeeded", { attempt: attempt + 1 });
           return result;
         } catch (openaiError) {
