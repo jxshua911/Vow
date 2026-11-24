@@ -1,5 +1,30 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { importPKCS8, SignJWT } from "npm:jose@6.1.0";
+
+type GoogleServiceAccount = { client_email: string; private_key: string; token_uri?: string };
+async function googleAccessToken(account: GoogleServiceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const tokenUri = account.token_uri ?? "https://oauth2.googleapis.com/token";
+  const key = await importPKCS8(account.private_key, "RS256");
+  const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/androidpublisher" })
+    .setProtectedHeader({ alg: "RS256", typ: "JWT" })
+    .setIssuer(account.client_email)
+    .setAudience(tokenUri)
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .sign(key);
+  const response = await fetch(tokenUri, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+  });
+  if (!response.ok) throw new Error("GOOGLE_OAUTH_FAILED");
+  const result = await response.json();
+  if (typeof result.access_token !== "string" || !result.access_token) throw new Error("GOOGLE_ACCESS_TOKEN_MISSING");
+  return result.access_token as string;
+}
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -63,7 +88,23 @@ Deno.serve(async (req) => {
         .order("current_period_end", { ascending: false }).limit(1).maybeSingle();
       if (subscriptionError) return json({ error: "GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED" }, 503);
       currentPeriodEnd = subscription?.current_period_end || null;
-      resubscribeRequired = subscription?.auto_renewing === false
+      let autoRenewing = subscription?.auto_renewing;
+      const purchaseToken = String(subscription?.provider_purchase_id || "").trim();
+      const serviceAccountRaw = Deno.env.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON") || "";
+      if (purchaseToken && serviceAccountRaw) {
+        const account = JSON.parse(serviceAccountRaw) as GoogleServiceAccount;
+        const accessToken = await googleAccessToken(account);
+        const packageName = Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME") || "com.vow.app";
+        const endpoint = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/"
+          + encodeURIComponent(packageName) + "/purchases/subscriptionsv2/tokens/" + encodeURIComponent(purchaseToken);
+        const googleResponse = await fetch(endpoint, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!googleResponse.ok) return json({ error: "GOOGLE_PLAY_SUBSCRIPTION_CHECK_FAILED" }, 503);
+        const purchase = await googleResponse.json();
+        const lineItem = Array.isArray(purchase.lineItems) ? purchase.lineItems[0] : null;
+        autoRenewing = lineItem?.autoRenewingPlan?.autoRenewEnabled ?? autoRenewing;
+        currentPeriodEnd = lineItem?.expiryTime || currentPeriodEnd;
+      }
+      resubscribeRequired = autoRenewing === false
         && Boolean(currentPeriodEnd && new Date(currentPeriodEnd).getTime() > Date.now());
     }
 
