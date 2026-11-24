@@ -60,7 +60,7 @@ Benchmarked Todoist, TickTick, Notion, Structured, Habitify, Sunsama and Motion 
 - Session and periodic notification generation currently drops a reminder when its fire time falls inside quiet hours. It does not defer the reminder to the next allowed time. Decide whether the intended policy is “skip” or “reschedule”; if reschedule, implement and test it.
 - Per-category preference columns are created by the un-applied migration, but the app settings UI does not yet let users control them.
 - Account/security/subscription messages are intentionally treated as critical by the branch sender and bypass routine reminder preferences. Keep these separate from optional routine reminders and explain this in settings.
-- The dispatcher currently marks a queue item as sent when at least one device succeeds, even if another registered device fails. A robust multi-device retry needs per-device delivery state; simply retrying the whole notification would duplicate it on devices that already received it.
+- Fixed in the latest remediation work: a per-device delivery ledger now records pending/sent/failed delivery state. Partial success retries only failed devices, avoiding normal duplicate sends to devices already marked sent. A process crash after FCM accepts a message but before the delivery row is updated can still cause an at-least-once duplicate; exactly-once push delivery cannot be guaranteed by FCM.
 - The dispatcher cron, Vault secret, sender internal secret and Firebase credentials must be verified in a development environment before production deployment.
 
 **Status:** local reminders exist; remote queue/scheduler implementation is branch-only; remote delivery is not release-ready.
@@ -148,5 +148,31 @@ The Samsung Galaxy S24 Ultra regression suite remains outstanding. Test login, g
 - The standalone `GoalAI` component was not imported by any active screen. It has been removed, and the `vow-goal-ai` endpoint no longer accepts the standalone chat mode.
 - Removed an extra AI model call that was used only to classify a goal when the client supplied an unknown category. The planner now uses supplied deterministic domain evidence or a neutral fallback, then spends its model call on clarification or actual plan generation.
 - The two-step goal flow remains intentional: clarification questions (when needed) followed by the actual plan. It is not a second free-form AI chat.
-- Mistral remains the default primary provider, followed by configured provider fallbacks. Token-level per-provider accounting is still not present in the persistent usage table and remains an AI observability task.
+- Mistral remains the default primary provider, followed by configured provider fallbacks. Added a private per-provider usage ledger and RPC for provider, model, request kind and prompt/completion/total token counts. This migration must be deployed before telemetry appears in production. The separate chat route and unused chat component have been removed, and an extra classification-only model call has been eliminated.
 - AI and notification changes require a fresh CI run and sandbox/device QA before being called release-ready.
+
+
+## 24 November 2026 — implementation completion update
+
+### Notifications — implementation target 9/10
+- Profile controls for sessions, weekly reviews, deadlines and streaks persist to server-side preferences.
+- Session, weekly-review, deadline and streak notifications use the server queue and five-minute dispatcher.
+- Quiet hours now defer eligible reminders until the next allowed local time; session reminders are not sent after the session begins.
+- Per-device delivery ledger supports safe retries after partial FCM success.
+- Account deletion and restoration events have best-effort critical push notifications; account deletion push is sent before device-token cleanup.
+- Remaining: resolve migration drift, deploy after validation, verify Vault/FCM credentials and run full S24 Ultra timing/delivery tests.
+
+### Regional pricing — implementation target 9/10
+- Google Play only; one monthly product/base plan with localized price display from Google Play.
+- 49-country market catalogue and verified regionCode persistence are implemented in the remediation branch.
+- Stripe checkout has been removed from the Upgrade surface; Apple is deferred.
+- Remaining: configure country availability and exact local prices in Play Console, complete merchant/tax setup and test purchases/restores with license testers.
+
+### AI — cost and reliability remediation
+- Removed the unused standalone GoalAI component and disabled the backend chat mode.
+- Removed the extra classification-only model call; the goal planner uses supplied domain evidence or a deterministic fallback.
+- Mistral remains primary with configured fallbacks; plan quality validation and one bounded repair remain.
+- Added per-provider token telemetry (provider/model/request kind/token counts). The new migration must be deployed before it becomes visible in production.
+- Remaining: verify provider secrets/quotas, inspect real usage after telemetry is live, and test clarify/plan/repair flows against each configured provider.
+
+Important: 9/10 means implementation completeness on the remediation branch, not production deployment or release readiness. Migration reconciliation and end-to-end QA remain separate gates.
