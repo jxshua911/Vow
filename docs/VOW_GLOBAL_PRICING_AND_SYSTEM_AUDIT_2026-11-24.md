@@ -96,8 +96,10 @@ The branch adds canonical week/month/year duration tokens and tests legacy week 
 
 - Live `supabase_migrations.schema_migrations` latest entry: `20261119054150`.
 - The three 24 November migrations for paid-entitlement preservation, remote notifications and purge/restore race safety are not in live migration history.
-- Supabase development branch `capacitor-mobile` reports `MIGRATIONS_FAILED`; its preview project reports `ACTIVE_HEALTHY`.
-- Do not merge or apply migrations to production until the failed branch state and migration drift are reconciled in a clean development environment.
+- Confirmed Git/database drift: the `capacitor-mobile` Git tree's latest migration is `20261117045925_persist_user_display_name.sql`, while production migration history contains `20261119054150_harden_account_lifecycle_and_notifications`. The matching 19 November production migration file is absent from that Git tree.
+- PR #18 adds a distinct `20261119140000_harden_account_lifecycle_and_notifications.sql` file. It has a different migration version; it must not be assumed to be a safe replacement for the missing production migration until the two schema changes are reconciled.
+- Supabase development branch `capacitor-mobile` reports `MIGRATIONS_FAILED` (last branch update reported 27 October); its preview project reports `ACTIVE_HEALTHY`. The available connector exposes the status but not the branch's migration-step error log, so the original failure cause is not yet confirmed.
+- Do not merge or apply migrations to production until the missing migration is recovered/reconciled, the failed branch logs are inspected, and all migrations pass on a clean development database.
 
 ### Advisors
 
