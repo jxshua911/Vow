@@ -137,3 +137,16 @@ The Samsung Galaxy S24 Ultra regression suite remains outstanding. Test login, g
 ## Release decision
 
 **Not release-ready.** The branch contains useful implementation work, but the production database and Edge Functions do not yet contain the remote-notification architecture or regional-pricing enforcement. PR #18 remains draft and unmerged. Do not deploy the new migrations or Edge Functions until the migration failure is resolved and development tests pass.
+
+
+## 24 November 2026 — Google Play-only pricing and AI cost update
+
+- Current billing scope is Google Play only. Stripe and Apple are deferred; the Android Upgrade surface no longer starts Stripe checkout.
+- Added a Google Play market catalogue migration for 49 proposed markets and added server-side subscription fields for verified store region and mapped tier.
+- Purchase verification and RTDN now read Google's verified `regionCode`, map it through the catalogue, and persist the country/tier on the subscription record. This is not deployed to production until migration drift is resolved.
+- Google Play remains the source of truth for the local amount charged. The app displays the localized product price returned by Google Play; exact country prices and availability still need Play Console configuration.
+- The standalone `GoalAI` component was not imported by any active screen. It has been removed, and the `vow-goal-ai` endpoint no longer accepts the standalone chat mode.
+- Removed an extra AI model call that was used only to classify a goal when the client supplied an unknown category. The planner now uses supplied deterministic domain evidence or a neutral fallback, then spends its model call on clarification or actual plan generation.
+- The two-step goal flow remains intentional: clarification questions (when needed) followed by the actual plan. It is not a second free-form AI chat.
+- Mistral remains the default primary provider, followed by configured provider fallbacks. Token-level per-provider accounting is still not present in the persistent usage table and remains an AI observability task.
+- AI and notification changes require a fresh CI run and sandbox/device QA before being called release-ready.
