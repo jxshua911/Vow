@@ -85,8 +85,13 @@ async function googleAccessToken(account: GoogleServiceAccount) {
 }
 async function cancelGooglePlaySubscription(purchaseToken: string, packageName: string, account: GoogleServiceAccount) {
   const accessToken = await googleAccessToken(account);
-  const endpoint = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}:cancel`;
-  const response = await fetch(endpoint, {
+  const base = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}`;
+  const currentResponse = await fetch(base, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!currentResponse.ok) throw new Error("GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED");
+  const current = await currentResponse.json();
+  const lineItem = Array.isArray(current.lineItems) ? current.lineItems[0] : null;
+  if (lineItem?.autoRenewingPlan?.autoRenewEnabled === false) return;
+  const response = await fetch(base + ":cancel", {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ cancellationContext: { cancellationType: "USER_REQUESTED_STOP_RENEWALS" } }),
