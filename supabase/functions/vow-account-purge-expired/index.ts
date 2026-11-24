@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { SignJWT, importPKCS8 } from "npm:jose@6.1.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,7 +148,7 @@ Deno.serve(async (req) => {
         // the 14-day restoration window has expired. A restored account keeps its
         // existing provider subscription and connected services.
         const {data:billing}=await admin.from("vow_user_entitlements").select("provider,stripe_subscription_id,status").eq("user_id",userId).maybeSingle();
-        if(billing?.provider==="stripe"&&billing.stripe_subscription_id&&["active","grace"].includes(billing.status)){const stripeSecret=Deno.env.get("STRIPE_SECRET_KEY")||"";if(!stripeSecret)return json({error:"STRIPE_CANCELLATION_NOT_CONFIGURED"},503);try{await cancelStripe(billing.stripe_subscription_id,stripeSecret);}catch{return json({error:"STRIPE_SUBSCRIPTION_CANCELLATION_FAILED"},502);}}
+        if(billing?.provider==="stripe"&&billing.stripe_subscription_id&&["active","grace"].includes(billing.status)){const stripeSecret=Deno.env.get("STRIPE_SECRET_KEY")||"";if(!stripeSecret)throw new Error("STRIPE_CANCELLATION_NOT_CONFIGURED");await cancelStripe(billing.stripe_subscription_id,stripeSecret);}
         if(billing?.provider==="google_play"&&["active","grace"].includes(billing.status)){
         const {data:playSubscription,error:playSubscriptionError}=await admin.from("vow_subscription_records")
         .select("provider_purchase_id,current_period_end,auto_renewing")
@@ -157,18 +158,18 @@ Deno.serve(async (req) => {
         .order("current_period_end",{ascending:false})
         .limit(1)
         .maybeSingle();
-        if(playSubscriptionError)return json({error:"GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED"},500);
+        if(playSubscriptionError)throw new Error("GOOGLE_PLAY_SUBSCRIPTION_LOOKUP_FAILED");
         if(playSubscription?.auto_renewing!==false){
         const purchaseToken=String(playSubscription?.provider_purchase_id||"").trim();
-        if(!purchaseToken)return json({error:"GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED"},503);
+        if(!purchaseToken)throw new Error("GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED");
         const serviceAccountJson=Deno.env.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")||"";
         const packageName=Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME")||"com.vow.app";
-        if(!serviceAccountJson)return json({error:"GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED"},503);
-        try{
-        const account=JSON.parse(serviceAccountJson) as GoogleServiceAccount;
-        await cancelGooglePlaySubscription(purchaseToken,packageName,account);
-        }catch{
-        return json({error:"GOOGLE_PLAY_SUBSCRIPTION_CANCELLATION_FAILED"},502);
+        if(!serviceAccountJson)throw new Error("GOOGLE_PLAY_CANCELLATION_NOT_CONFIGURED");
+        try {
+          const account = JSON.parse(serviceAccountJson) as GoogleServiceAccount;
+          await cancelGooglePlaySubscription(purchaseToken, packageName, account);
+        } catch {
+          throw new Error("GOOGLE_PLAY_SUBSCRIPTION_CANCELLATION_FAILED");
         }
         }
         }
