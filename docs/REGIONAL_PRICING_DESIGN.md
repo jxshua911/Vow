@@ -51,13 +51,13 @@ The proposed US$6.99 Standard tier is close to Todoist's US$7 monthly price and 
 | Accessible | **US$4.99** |
 | Entry | **US$2.99** |
 
-These are monthly reference prices. Local-currency amounts must be rounded to familiar local price points and checked for tax treatment, store fees, currency volatility and payment costs. Annual billing is not approved by this document; the current Stripe checkout function is monthly-only.
+These are monthly USD-equivalent reference prices. Local-currency amounts must be configured as country-specific Google Play base-plan prices and checked for tax treatment, store fees, currency volatility and payment costs. Annual billing is out of scope for this first launch; the Google Play monthly base plan is the only subscription option.
 
 ## 4. Europe: first-wave market coverage proposal
 
 Target **37 European markets** in the first broad rollout: EU-27, the three EFTA countries covered by the Eurostat comparison (Iceland, Norway and Switzerland), the United Kingdom, and six EU candidate markets (Albania, Bosnia and Herzegovina, Montenegro, North Macedonia, Serbia and Türkiye).
 
-This is a commercial coverage proposal, not a statement that all 37 markets have identical legal, merchant, payment or tax readiness. Country availability must be checked separately for Google Play, Stripe and VOW's merchant setup.
+This is a commercial coverage proposal, not a statement that all 37 markets have identical legal, merchant, payment or tax readiness. Country availability must be checked in Google Play Console and against VOW's merchant/payment profile.
 
 ### Preliminary Europe-to-tier allocation
 
@@ -102,10 +102,9 @@ Separate four concepts that must never be conflated:
 
 ### Suggested server-owned data model
 
-- `vow_market_catalog`: ISO country code, market status, tier, local currency, tax/display rules, provider availability, effective dates and approved monthly/annual provider price identifiers.
-- `vow_user_market_assignments`: user ID, assigned country, tier, evidence source, verified timestamp, review status and next-review date.
-- `vow_market_assignment_events`: append-only audit trail containing old/new market, actor, evidence type, timestamp and decision reason.
-- Subscription records: provider, provider product/price/base-plan ID, billing period, verified store country/region, paid-through date and renewal state.
+- vow_google_play_market_catalog: ISO country code, approved VOW tier, enablement flag and update timestamp. This is server-owned and is not client-editable.
+- Subscription records: provider, Google Play product/base-plan, billing period, Google-verified store region, mapped market tier, paid-through date and renewal state.
+- Google Play Console remains the source of local currency price points; VOW does not calculate a charge from a client-selected country.
 
 The client may request a country for display or relocation review, but it must never authoritatively choose the tier, price ID, currency, entitlement or billing country.
 
@@ -136,13 +135,14 @@ Primary Google documentation:
 
 ## 7. Implementation status in VOW (verified 24 November 2026)
 
-- Regional tier proposal and anti-arbitrage design: documented only.
-- A server-owned Google Play market catalogue maps 49 proposed launch markets to the approved tier ladder.
-- The remediation branch adds `store_region_code` and `market_tier` to verified Google Play subscription records.
-- The remediation branch reads Google's verified `regionCode` in both purchase verification and RTDN lifecycle processing, then records the country/tier against the subscription.
-- The Android upgrade screen uses Google Play's localized product price and no longer offers Stripe checkout.
+- Regional tier proposal and anti-arbitrage design: documented and implemented on the remediation branch.
+- A server-owned Google Play market catalogue migration maps 49 proposed launch markets to the approved tier ladder.
+- The remediation branch adds store_region_code and market_tier to verified Google Play subscription records.
+- Both purchase verification and RTDN read Google's verified regionCode and persist the country/tier against the subscription.
+- The Android upgrade screen displays Google Play's localized product price and no longer offers Stripe checkout.
+- Per-provider AI token telemetry is migration-backed and records model, provider, request type and token counts for successful provider responses.
 - Production migrations and Edge Functions are not deployed. Play Console country availability and exact local-currency prices are not configured or verified yet.
-- Billing activation, purchase sandbox testing, and Play Console merchant/tax readiness remain the final manual gates.
+- Play Console pricing, merchant/tax readiness and sandbox billing tests remain the final pricing/billing gates.
 
 ## 8. Release gates
 
